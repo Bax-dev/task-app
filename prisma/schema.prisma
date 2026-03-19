@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  REJECTED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  TASK_COMMENTED
+  INVITATION_RECEIVED
+  INVITATION_ACCEPTED
+  PROJECT_CREATED
+  SPACE_CREATED
+  MEMBER_JOINED
+}
+
+enum ActivityStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String?
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships          Membership[]
+  createdTasks         Task[]           @relation("TaskCreatedBy")
+  taskAssignments      TaskAssignment[]
+  createdProjects      Project[]        @relation("ProjectCreatedBy")
+  createdOrganizations Organization[]   @relation("OrgCreatedBy")
+  createdSpaces        Space[]          @relation("SpaceCreatedBy")
+  notifications        Notification[]
+  notes                Note[]           @relation("NoteCreatedBy")
+  activityLogs         ActivityLog[]    @relation("ActivityLogCreatedBy")
+}
+
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy    User          @relation("OrgCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+  spaces       Space[]
+  invitations  Invitation[]
+  notes        Note[]
+  activityLogs ActivityLog[]
+
+  @@index([createdById])
+  @@index([slug])
+}
+
+model Membership {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  organizationId String   @db.Uuid
+  role           Role     @default(MEMBER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Invitation {
+  id             String           @id @default(uuid()) @db.Uuid
+  email          String
+  token          String           @unique
+  organizationId String           @db.Uuid
+  invitedById    String           @db.Uuid
+  role           Role             @default(MEMBER)
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([token])
+  @@index([email])
+}
+
+model Space {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  description    String?
+  color          String   @default("#7c3aed")
+  icon           String   @default("folder")
+  organizationId String   @db.Uuid
+  createdById    String   @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("SpaceCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  projects     Project[]
+
+  @@index([organizationId])
+  @@index([createdById])
+}
+
+model Project {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  description    String?
+  spaceId        String   @db.Uuid
+  createdById    String   @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  createdBy    User     @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  tasks        Task[]
+
+  @@index([spaceId])
+  @@index([createdById])
+}
+
+model Task {
+  id              String       @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?
+  status          TaskStatus   @default(TODO)
+  priority        TaskPriority @default(MEDIUM)
+  dueDate         DateTime?
+  rejectionReason String?
+  projectId       String       @db.Uuid
+  createdById     String       @db.Uuid
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User             @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  assignments  TaskAssignment[]
+  activityLogs ActivityLog[]
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([status])
+  @@index([priority])
+}
+
+model TaskAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  taskId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@index([taskId])
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model Note {
+  id             String   @id @default(uuid()) @db.Uuid
+  title          String
+  content        String   @default("")
+  organizationId String   @db.Uuid
+  createdById    String   @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("NoteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdById])
+}
+
+model ActivityLog {
+  id             String         @id @default(uuid()) @db.Uuid
+  description    String
+  status         ActivityStatus @default(IN_PROGRESS)
+  note           String?
+  taskId         String?        @db.Uuid
+  organizationId String         @db.Uuid
+  createdById    String         @db.Uuid
+  loggedAt       DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("ActivityLogCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([taskId])
+  @@index([loggedAt])
+}
