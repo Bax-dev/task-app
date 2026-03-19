@@ -4,7 +4,7 @@ module.exports = {
       name: 'taskflow',
       script: 'node_modules/.bin/next',
       args: 'start',
-      cwd: '/home/taskflow/app',
+      cwd: '/home/ec2-user/task-app',
       instances: 2,
       exec_mode: 'cluster',
       wait_ready: true,
