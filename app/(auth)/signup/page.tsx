@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import SignupForm from '@/components/auth/SignupForm';
@@ -27,7 +28,9 @@ export default function SignupPage() {
             </p>
           </div>
 
-          <SignupForm />
+          <Suspense fallback={null}>
+            <SignupForm />
+          </Suspense>
         </div>
       </div>
     </div>
