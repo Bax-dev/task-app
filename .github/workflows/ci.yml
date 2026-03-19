@@ -177,7 +177,8 @@ jobs:
             fi
 
             echo "==> Installing dependencies (including devDependencies for build)..."
-            NODE_ENV=development npm ci
+            rm -rf node_modules
+            NODE_ENV=development npm install --no-package-lock --include=optional
 
             echo "==> Generating Prisma client..."
             npx prisma generate
