@@ -174,7 +174,7 @@ export default function NotesPage() {
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <button
-                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -191,7 +191,7 @@ export default function NotesPage() {
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => handleDeleteNote(note.id)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
                       >
                         Delete
                       </AlertDialogAction>

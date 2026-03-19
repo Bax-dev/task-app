@@ -156,7 +156,7 @@ export default function TeamPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="text-muted-foreground hover:text-destructive"
+                                className="text-muted-foreground hover:text-foreground"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -173,7 +173,7 @@ export default function TeamPage() {
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() => handleRemoveMember(member.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
                                 >
                                   Remove
                                 </AlertDialogAction>

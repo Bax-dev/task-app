@@ -27,7 +27,7 @@ export default function AcceptInvitePage({
 
   const handleAccept = async () => {
     try {
-      await acceptInvitation({ token }).unwrap();
+      await acceptInvitation(token).unwrap();
       toast.success('Invitation accepted! Welcome to the organization.');
       router.push('/dashboard');
     } catch (error: any) {

@@ -11,11 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings, User, Bell } from 'lucide-react';
+import { LogOut, Settings, User, Bell, Menu } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation } from '@/store/api';
 
-export default function Navbar() {
+export default function Navbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const router = useRouter();
 
   const { data: user } = useGetMeQuery();
@@ -42,7 +42,16 @@ export default function Navbar() {
     : user?.email?.[0]?.toUpperCase() || 'U';
 
   return (
-    <nav className="border-b border-border bg-card/50 backdrop-blur-sm h-16 flex items-center justify-end px-6 gap-2">
+    <nav className="border-b border-border bg-card/50 backdrop-blur-sm h-16 flex items-center px-4 sm:px-6 gap-2">
+      {/* Mobile menu toggle */}
+      {onMenuToggle && (
+        <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuToggle}>
+          <Menu className="w-5 h-5" />
+        </Button>
+      )}
+
+      <div className="flex-1" />
+
       {/* Notification Bell */}
       <Button variant="ghost" size="icon" className="relative" asChild>
         <Link href="/notifications">
@@ -60,7 +69,7 @@ export default function Navbar() {
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
               <span className="text-xs font-bold text-primary">{initials}</span>
             </div>
-            <span className="text-sm">{displayName}</span>
+            <span className="text-sm hidden sm:inline">{displayName}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">

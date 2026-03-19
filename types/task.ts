@@ -12,6 +12,7 @@ export interface Task {
   createdBy?: { id: string; name: string | null; email: string };
   assignments?: { user: { id: string; name: string | null; email: string } }[];
   project?: { id: string; name: string; spaceId: string; space?: { id: string; name: string; organizationId: string } };
+  attachments?: { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string }[];
 }
 
 export interface CreateTaskDTO {

@@ -16,6 +16,7 @@ import {
   Loader2,
   FileText,
   Activity,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,7 +54,7 @@ const SPACE_COLORS = [
   '#db2777', '#9333ea', '#0891b2', '#65a30d', '#ea580c',
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
@@ -88,11 +89,16 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 border-r border-border bg-card flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-border">
-        <Link href="/dashboard">
+    <aside className="w-64 h-full border-r border-border bg-card flex flex-col overflow-hidden">
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <Link href="/dashboard" onClick={onClose}>
           <h1 className="text-2xl font-bold text-primary">TaskFlow</h1>
         </Link>
+        {onClose && (
+          <button onClick={onClose} className="md:hidden text-muted-foreground hover:text-foreground">
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       <nav className="p-3 space-y-1">
@@ -100,7 +106,7 @@ export default function Sidebar() {
           const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           const Icon = item.icon;
           return (
-            <Link key={item.href} href={item.href}>
+            <Link key={item.href} href={item.href} onClick={onClose}>
               <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
                 isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
               }`}>

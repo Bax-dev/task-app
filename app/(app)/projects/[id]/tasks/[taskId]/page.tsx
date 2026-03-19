@@ -128,7 +128,7 @@ export default function TaskDetailPage({
         {!isGuest && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
                 <Trash2 className="w-5 h-5" />
               </Button>
             </AlertDialogTrigger>
@@ -149,7 +149,7 @@ export default function TaskDetailPage({
                       toast.error(error?.data?.message || error?.message || 'Failed to delete');
                     }
                   }}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
                 >
                   Delete
                 </AlertDialogAction>
@@ -271,7 +271,7 @@ export default function TaskDetailPage({
                   <button
                     onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
                     disabled={isAssigning}
-                    className="hover:text-destructive transition-colors"
+                    className="hover:text-foreground transition-colors"
                     title="Unassign"
                   >
                     <X className="w-3.5 h-3.5" />

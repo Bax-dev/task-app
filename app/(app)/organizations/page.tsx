@@ -100,7 +100,7 @@ export default function OrganizationsPage() {
                         </Link>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive h-8 w-8">
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-8 w-8">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
@@ -113,7 +113,7 @@ export default function OrganizationsPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(org.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                              <AlertDialogAction onClick={() => handleDelete(org.id)} className="bg-muted-foreground text-background hover:bg-muted-foreground/90">
                                 Delete
                               </AlertDialogAction>
                             </AlertDialogFooter>
@@ -150,7 +150,7 @@ function OrgCard({ org, onDelete }: { org: any; onDelete: (id: string) => void }
         </Link>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive h-8 w-8">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-8 w-8">
               <Trash2 className="w-4 h-4" />
             </Button>
           </AlertDialogTrigger>
@@ -163,7 +163,7 @@ function OrgCard({ org, onDelete }: { org: any; onDelete: (id: string) => void }
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => onDelete(org.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogAction onClick={() => onDelete(org.id)} className="bg-muted-foreground text-background hover:bg-muted-foreground/90">
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>

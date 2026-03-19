@@ -60,13 +60,13 @@ export const apiSlice = createApi({
     forgotPassword: builder.mutation<void, { email: string }>({
       query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
     }),
-    verifyOtp: builder.mutation<void, { email: string; otp: string }>({
+    verifyOtp: builder.mutation<void, { email: string; otp: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/verify-otp', method: 'POST', body }),
     }),
-    resendOtp: builder.mutation<void, { email: string }>({
+    resendOtp: builder.mutation<void, { email: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/resend-otp', method: 'POST', body }),
     }),
-    resetPassword: builder.mutation<void, { email: string; otp: string; password: string }>({
+    resetPassword: builder.mutation<void, { email: string; otp: string; newPassword: string }>({
       query: (body) => ({ url: '/auth/reset-password', method: 'POST', body }),
     }),
     updateProfile: builder.mutation<User, { name?: string; email?: string }>({
@@ -100,7 +100,7 @@ export const apiSlice = createApi({
       query: (orgId) => `/organizations/${orgId}/members`,
       providesTags: (_, __, orgId) => [{ type: 'Members', id: orgId }],
     }),
-    addOrgMember: builder.mutation<void, { orgId: string; userId: string; role?: string }>({
+    addOrgMember: builder.mutation<void, { orgId: string; email: string; role?: string }>({
       query: ({ orgId, ...body }) => ({ url: `/organizations/${orgId}/members/add`, method: 'POST', body }),
       invalidatesTags: (_, __, { orgId }) => [{ type: 'Members', id: orgId }],
     }),

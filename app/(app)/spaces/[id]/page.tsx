@@ -154,7 +154,7 @@ export default function SpaceDetailPage({
           {!isGuest && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
                 <Trash2 className="w-4 h-4" />
               </Button>
             </AlertDialogTrigger>
@@ -167,7 +167,7 @@ export default function SpaceDetailPage({
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => handleDeleteSpace()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <AlertDialogAction onClick={() => handleDeleteSpace()} className="bg-muted-foreground text-background hover:bg-muted-foreground/90">
                   Delete
                 </AlertDialogAction>
               </AlertDialogFooter>

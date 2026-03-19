@@ -6,6 +6,7 @@ export interface Space {
   icon: string;
   organizationId: string;
   createdAt: string;
+  organization?: { id: string; name: string; slug?: string };
   _count?: { projects: number };
   projects?: any[];
 }

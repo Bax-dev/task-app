@@ -308,7 +308,7 @@ export default function ActivityLogsPage() {
                       <button onClick={() => openEdit(log)} className="p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => handleDeleteLog(log.id)} className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600 transition-colors">
+                      <button onClick={() => handleDeleteLog(log.id)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -372,7 +372,7 @@ export default function ActivityLogsPage() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-1 justify-end">
                           <button onClick={() => openEdit(log)} className="text-xs px-2 py-1 rounded bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors">Edit</button>
-                          <button onClick={() => handleDeleteLog(log.id)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors">Delete</button>
+                          <button onClick={() => handleDeleteLog(log.id)} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground hover:bg-muted/80 transition-colors">Delete</button>
                         </div>
                       </td>
                     </tr>

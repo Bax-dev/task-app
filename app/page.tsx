@@ -17,6 +17,7 @@ import {
 import AnimatedCounter from '@/components/landing/AnimatedCounter';
 import FeatureTabs from '@/components/landing/FeatureTabs';
 import TestimonialCarousel from '@/components/landing/TestimonialCarousel';
+import MobileNav from '@/components/landing/MobileNav';
 
 export default function Home() {
   const jsonLd = {
@@ -70,12 +71,13 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/login" className="text-foreground hover:text-primary transition-colors font-medium text-sm">
+            <Link href="/login" className="hidden sm:inline text-foreground hover:text-primary transition-colors font-medium text-sm">
               Log in
             </Link>
-            <Link href="/signup">
+            <Link href="/signup" className="hidden sm:inline-block">
               <Button size="sm">Get Started Free</Button>
             </Link>
+            <MobileNav />
           </div>
         </div>
       </nav>
@@ -108,15 +110,15 @@ export default function Home() {
                 </Button>
               </a>
             </div>
-            <div className="flex items-center gap-6 text-sm text-muted-foreground pt-2">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground pt-2">
               <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500" /> No credit card
+                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> No credit card
               </span>
               <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500" /> Unlimited projects
+                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> Unlimited projects
               </span>
               <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500" /> 5 team members free
+                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> 5 team members free
               </span>
             </div>
           </div>
