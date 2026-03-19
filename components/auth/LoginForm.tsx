@@ -22,7 +22,7 @@ export default function LoginForm() {
     try {
       await login({ email, password }).unwrap();
       toast.success('Logged in successfully!');
-      router.push(redirect || '/dashboard');
+      window.location.href = redirect || '/dashboard';
     } catch (error: any) {
       toast.error(error?.data?.message || error?.message || 'Invalid credentials');
     }

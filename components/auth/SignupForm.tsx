@@ -28,7 +28,7 @@ export default function SignupForm() {
     try {
       await register({ name, email, password }).unwrap();
       toast.success('Account created successfully!');
-      router.push(redirect || '/dashboard');
+      window.location.href = redirect || '/dashboard';
     } catch (error: any) {
       toast.error(error?.data?.message || error?.message || 'Registration failed');
     }

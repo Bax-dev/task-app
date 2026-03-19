@@ -143,6 +143,7 @@ jobs:
             cd ~/task-app
 
             echo "==> Pulling latest code..."
+            git stash 2>/dev/null || true
             git pull origin main
 
             echo "==> Writing .env file..."
