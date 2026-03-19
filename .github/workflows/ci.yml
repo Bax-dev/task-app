@@ -124,7 +124,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
           script: |
-            cd /home/taskflow/app
+            cd ~/task-app
 
             echo "==> Pulling latest code..."
             git pull origin main
