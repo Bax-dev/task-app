@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { FolderOpen, Loader2, Plus } from 'lucide-react';
+import { FolderOpen, Loader2, Plus, Search } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { useGetProjectsQuery, useGetOrganizationsQuery, useGetOrgSpacesQuery, useCreateProjectMutation } from '@/store/api';
 
 export default function ProjectsPage() {
+  const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -153,10 +154,29 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {projects.length > 0 ? (
+      {projects.length > 0 && (
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search projects..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 max-w-sm"
+          />
+        </div>
+      )}
+
+      {(() => {
+        const filtered = projects.filter((p: any) =>
+          p.name.toLowerCase().includes(search.toLowerCase()) ||
+          p.description?.toLowerCase().includes(search.toLowerCase()) ||
+          p.space?.name?.toLowerCase().includes(search.toLowerCase()) ||
+          p.space?.organization?.name?.toLowerCase().includes(search.toLowerCase())
+        );
+        return filtered.length > 0 ? (
         view === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((project: any) => (
+            {filtered.map((project: any) => (
               <Link key={project.id} href={`/projects/${project.id}`} className="group">
                 <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
                   <h3 className="text-lg font-bold text-primary group-hover:underline mb-2">{project.name}</h3>
@@ -184,7 +204,7 @@ export default function ProjectsPage() {
                 </tr>
               </thead>
               <tbody>
-                {projects.map((project: any) => (
+                {filtered.map((project: any) => (
                   <tr key={project.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
                     <td className="px-6 py-4">
                       <Link href={`/projects/${project.id}`} className="font-medium text-primary hover:underline">
@@ -211,13 +231,19 @@ export default function ProjectsPage() {
             </table>
           </div>
         )
+      ) : projects.length > 0 ? (
+        <div className="text-center py-12">
+          <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No projects match &quot;{search}&quot;</p>
+        </div>
       ) : (
         <div className="text-center py-12">
           <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-bold text-foreground mb-2">No projects yet</h3>
           <p className="text-muted-foreground">Create a project from your organization page</p>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

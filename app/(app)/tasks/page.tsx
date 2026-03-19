@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus } from 'lucide-react';
+import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus, Search } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
@@ -30,6 +30,7 @@ import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUp
 export default function TasksPage() {
   const dispatch = useAppDispatch();
   const view = useAppSelector(selectView('tasks'));
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -106,7 +107,18 @@ export default function TasksPage() {
     { key: 'REJECTED', label: 'Rejected', tasks: rejectedTasks, dot: 'bg-red-500', icon: <XCircle className="w-4 h-4 text-red-500" /> },
   ];
 
-  const filteredSections = statusFilter === 'ALL' ? sections : sections.filter(s => s.key === statusFilter);
+  const searchLower = search.toLowerCase();
+  const searchedSections = sections.map(s => ({
+    ...s,
+    tasks: search
+      ? s.tasks.filter((t: any) =>
+          t.title.toLowerCase().includes(searchLower) ||
+          t.description?.toLowerCase().includes(searchLower) ||
+          t.project?.name?.toLowerCase().includes(searchLower)
+        )
+      : s.tasks,
+  }));
+  const filteredSections = statusFilter === 'ALL' ? searchedSections : searchedSections.filter(s => s.key === statusFilter);
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
@@ -220,6 +232,17 @@ export default function TasksPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Search tasks..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 max-w-sm"
+        />
       </div>
 
       {/* Status Filter Toggle Bar */}

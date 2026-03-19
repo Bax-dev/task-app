@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Loader2, Mail, Trash2 } from 'lucide-react';
+import { Users, Loader2, Mail, Trash2, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -27,6 +28,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 
 export default function TeamPage() {
+  const [search, setSearch] = useState('');
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const { user } = useAuth();
 
@@ -113,6 +115,17 @@ export default function TeamPage() {
         </div>
       ) : (
         <>
+          {/* Search */}
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search members..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 max-w-sm"
+            />
+          </div>
+
           {/* Members Table */}
           <div className="mb-8">
             <h2 className="text-xl font-bold text-foreground mb-4">
@@ -129,7 +142,11 @@ export default function TeamPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((member: any) => (
+                  {members.filter((member: any) =>
+                    member.name?.toLowerCase().includes(search.toLowerCase()) ||
+                    member.email?.toLowerCase().includes(search.toLowerCase()) ||
+                    member.role?.toLowerCase().includes(search.toLowerCase())
+                  ).map((member: any) => (
                     <tr key={member.id} className="border-b border-border">
                       <td className="px-6 py-4 text-sm font-medium text-foreground">
                         <div className="flex items-center gap-3">

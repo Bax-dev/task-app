@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, Users, Loader2, Trash2, Building2 } from 'lucide-react';
+import { Plus, Users, Loader2, Trash2, Building2, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
@@ -24,6 +26,7 @@ export default function OrganizationsPage() {
   const dispatch = useAppDispatch();
   const view = useAppSelector(selectView('organizations'));
 
+  const [search, setSearch] = useState('');
   const { data: organizations = [], isLoading } = useGetOrganizationsQuery();
 
   const [deleteOrganization] = useDeleteOrganizationMutation();
@@ -63,10 +66,27 @@ export default function OrganizationsPage() {
         </div>
       </div>
 
-      {organizations.length > 0 ? (
+      {organizations.length > 0 && (
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search organizations..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 max-w-sm"
+          />
+        </div>
+      )}
+
+      {(() => {
+        const filtered = organizations.filter((org: any) =>
+          org.name.toLowerCase().includes(search.toLowerCase()) ||
+          org.slug?.toLowerCase().includes(search.toLowerCase())
+        );
+        return filtered.length > 0 ? (
         view === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {organizations.map((org: any) => (
+            {filtered.map((org: any) => (
               <OrgCard key={org.id} org={org} onDelete={(id) => handleDelete(id)} />
             ))}
           </div>
@@ -83,7 +103,7 @@ export default function OrganizationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {organizations.map((org: any) => (
+                {filtered.map((org: any) => (
                   <tr key={org.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
                     <td className="px-6 py-4">
                       <Link href={`/organizations/${org.id}`} className="font-medium text-primary hover:underline">
@@ -127,6 +147,11 @@ export default function OrganizationsPage() {
             </table>
           </div>
         )
+      ) : organizations.length > 0 ? (
+        <div className="text-center py-12">
+          <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No organizations match &quot;{search}&quot;</p>
+        </div>
       ) : (
         <div className="text-center py-12">
           <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -136,7 +161,8 @@ export default function OrganizationsPage() {
             <Button>Create Organization</Button>
           </Link>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

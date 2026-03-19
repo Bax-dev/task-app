@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, FileText, Loader2, Trash2 } from 'lucide-react';
+import { Plus, FileText, Loader2, Trash2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,6 +39,7 @@ import { useAuth } from '@/hooks/use-auth';
 export default function NotesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
+  const [search, setSearch] = useState('');
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
@@ -148,9 +149,24 @@ export default function NotesPage() {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
-      ) : notes.length > 0 ? (
+      ) : (() => {
+        const filtered = notes.filter((n: any) =>
+          n.title.toLowerCase().includes(search.toLowerCase()) ||
+          n.createdBy?.name?.toLowerCase().includes(search.toLowerCase())
+        );
+        return filtered.length > 0 ? (
+        <>
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search notes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 max-w-sm"
+          />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {notes.map((note: any) => (
+          {filtered.map((note: any) => (
             <div key={note.id} className="relative group">
               <Link href={`/notes/${note.id}`}>
                 <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors h-full">
@@ -202,6 +218,23 @@ export default function NotesPage() {
             </div>
           ))}
         </div>
+        </>
+      ) : notes.length > 0 ? (
+        <>
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search notes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 max-w-sm"
+          />
+        </div>
+        <div className="text-center py-12">
+          <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No notes match &quot;{search}&quot;</p>
+        </div>
+        </>
       ) : (
         <div className="text-center py-12">
           <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -214,7 +247,8 @@ export default function NotesPage() {
             </Button>
           )}
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 }

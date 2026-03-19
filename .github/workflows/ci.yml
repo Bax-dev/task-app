@@ -154,6 +154,16 @@ jobs:
             echo "NEXT_PUBLIC_APP_URL=\"${NEXT_PUBLIC_APP_URL}\"" >> .env
             echo "NODE_ENV=\"production\"" >> .env
 
+            echo "==> Sourcing .env file..."
+            set -a
+            source .env
+            set +a
+
+            if [ -z "$DATABASE_URL" ]; then
+              echo "ERROR: DATABASE_URL is not set. Please configure it in GitHub Secrets."
+              exit 1
+            fi
+
             echo "==> Pulling latest code..."
             git pull origin main
 

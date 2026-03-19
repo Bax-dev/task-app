@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Activity, Plus, Loader2, Circle, PlayCircle, CheckCircle2, AlertTriangle, Trash2, Pencil, Paperclip, Upload } from 'lucide-react';
+import { Activity, Plus, Loader2, Circle, PlayCircle, CheckCircle2, AlertTriangle, Trash2, Pencil, Paperclip, Upload, Search } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
@@ -37,6 +37,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string;
 export default function ActivityLogsPage() {
   const dispatch = useAppDispatch();
   const view = useAppSelector(selectView('activity-logs'));
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [open, setOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<any>(null);
@@ -136,7 +137,16 @@ export default function ActivityLogsPage() {
     );
   }
 
-  const filteredLogs = statusFilter === 'ALL' ? logs : logs.filter((l: any) => l.status === statusFilter);
+  const searchLower = search.toLowerCase();
+  const searchedLogs = search
+    ? logs.filter((l: any) =>
+        l.description.toLowerCase().includes(searchLower) ||
+        l.note?.toLowerCase().includes(searchLower) ||
+        l.task?.title?.toLowerCase().includes(searchLower) ||
+        l.organization?.name?.toLowerCase().includes(searchLower)
+      )
+    : logs;
+  const filteredLogs = statusFilter === 'ALL' ? searchedLogs : searchedLogs.filter((l: any) => l.status === statusFilter);
 
   const statusCounts = {
     ALL: logs.length,
@@ -265,6 +275,17 @@ export default function ActivityLogsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Search activity logs..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 max-w-sm"
+        />
       </div>
 
       {/* Status Filter */}
