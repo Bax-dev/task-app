@@ -124,6 +124,11 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
           script: |
+            if [ ! -d ~/task-app ]; then
+              echo "==> Cloning repository..."
+              git clone https://github.com/Bax-dev/task-app.git ~/task-app
+            fi
+
             cd ~/task-app
 
             echo "==> Pulling latest code..."
