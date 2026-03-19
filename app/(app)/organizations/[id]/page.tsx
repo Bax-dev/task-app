@@ -68,11 +68,11 @@ export default function OrgDetailPage({
   if (!org) return null;
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{org.name}</h1>
-          <p className="text-muted-foreground mt-2">Manage spaces, projects, and team members</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{org.name}</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Manage spaces, projects, and team members</p>
         </div>
         <div className="flex gap-2">
           {isAdmin && (
@@ -125,8 +125,8 @@ export default function OrgDetailPage({
       </div>
 
       {/* Stats */}
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-card border border-border rounded-lg p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-muted-foreground text-sm">Spaces</p>
@@ -135,7 +135,7 @@ export default function OrgDetailPage({
             <Layout className="w-10 h-10 text-primary/20" />
           </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-6">
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-muted-foreground text-sm">Members</p>
@@ -144,7 +144,7 @@ export default function OrgDetailPage({
             <Users className="w-10 h-10 text-primary/20" />
           </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-6">
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
           <div>
             <p className="text-muted-foreground text-sm">Slug</p>
             <p className="text-lg font-mono font-bold text-foreground mt-1">{org.slug}</p>
@@ -156,13 +156,13 @@ export default function OrgDetailPage({
       {members.length > 0 && (
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-foreground mb-4">Team Members</h2>
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <table className="w-full">
+          <div className="bg-card border border-border rounded-lg overflow-x-auto">
+            <table className="w-full min-w-[500px]">
               <thead className="border-b border-border bg-secondary/30">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Email</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Role</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-sm font-medium text-muted-foreground">Name</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-sm font-medium text-muted-foreground">Email</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-sm font-medium text-muted-foreground">Role</th>
                 </tr>
               </thead>
               <tbody>
@@ -189,10 +189,10 @@ export default function OrgDetailPage({
       <div>
         <h2 className="text-2xl font-bold text-foreground mb-4">Spaces</h2>
         {spaces.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {spaces.map((space: any) => (
               <Link key={space.id} href={`/spaces/${space.id}`} className="group">
-                <div className="bg-card border border-border rounded-lg p-6 hover:border-primary/50 transition-colors">
+                <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: space.color + '20' }}>
                       <div className="w-4 h-4 rounded" style={{ backgroundColor: space.color }} />

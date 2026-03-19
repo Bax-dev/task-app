@@ -109,7 +109,7 @@ export default function TaskDetailPage({
   const unassignedMembers = members.filter((m: any) => !assignedIds.has(m.id));
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-6 md:p-8 max-w-3xl">
       <Link
         href={`/projects/${projectId}`}
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
@@ -118,9 +118,9 @@ export default function TaskDetailPage({
         Back to Project
       </Link>
 
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{task.title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{task.title}</h1>
           {task.description && (
             <p className="text-muted-foreground mt-2">{task.description}</p>
           )}
@@ -251,7 +251,7 @@ export default function TaskDetailPage({
       </Dialog>
 
       {/* Assignees - Admin only can manage */}
-      <div className="bg-card border border-border rounded-lg p-6 mb-6">
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
         <h3 className="font-semibold text-foreground mb-4">Assigned Members</h3>
 
         {task.assignments && task.assignments.length > 0 ? (
@@ -306,14 +306,14 @@ export default function TaskDetailPage({
 
       {/* Attachments */}
       {!isGuest && (
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
           <h3 className="font-semibold text-foreground mb-4">Attachments</h3>
           <FileUpload taskId={taskId} attachments={task.attachments || []} />
         </div>
       )}
 
       {/* Details */}
-      <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Created by</span>
           <span className="text-sm font-medium">{task.createdBy?.name || task.createdBy?.email || '-'}</span>

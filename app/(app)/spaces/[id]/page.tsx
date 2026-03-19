@@ -100,7 +100,7 @@ export default function SpaceDetailPage({
   if (!space) return null;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <Link
         href={`/organizations/${space.organization?.id || space.organizationId}`}
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
@@ -109,7 +109,7 @@ export default function SpaceDetailPage({
         Back to Organization
       </Link>
 
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: space.color + '20' }}>
             <div className="w-5 h-5 rounded" style={{ backgroundColor: space.color }} />
@@ -136,7 +136,7 @@ export default function SpaceDetailPage({
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <h1 className="text-3xl font-bold text-foreground">{space.name}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{space.name}</h1>
                 {!isGuest && (
                   <button
                     onClick={() => { setEditName(space.name); setIsEditing(true); }}
@@ -208,10 +208,10 @@ export default function SpaceDetailPage({
 
       {/* Projects in this space */}
       {space.projects && space.projects.length > 0 ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {space.projects.map((project: any) => (
             <Link key={project.id} href={`/projects/${project.id}`} className="group">
-              <div className="bg-card border border-border rounded-lg p-6 hover:border-primary/50 transition-colors">
+              <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
                 <h3 className="text-lg font-bold text-primary group-hover:underline mb-2">{project.name}</h3>
                 {project.description && (
                   <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>

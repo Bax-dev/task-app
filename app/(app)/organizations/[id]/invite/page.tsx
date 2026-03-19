@@ -61,7 +61,7 @@ export default function AddMemberPage({
   };
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 md:p-8 max-w-2xl">
       <Link
         href={`/organizations/${orgId}`}
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
@@ -70,7 +70,7 @@ export default function AddMemberPage({
         Back to {org?.name || 'Organization'}
       </Link>
 
-      <h1 className="text-3xl font-bold text-foreground mb-2">Add Team Member</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Add Team Member</h1>
       <p className="text-muted-foreground mb-8">
         Add an existing user directly or send an email invitation
       </p>
@@ -104,7 +104,7 @@ export default function AddMemberPage({
 
         {/* Tab 1: Add directly */}
         <TabsContent value="add">
-          <div className="bg-card border border-border rounded-lg p-6 mt-4">
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mt-4">
             <h3 className="font-semibold text-foreground mb-1">Add existing user</h3>
             <p className="text-sm text-muted-foreground mb-6">
               The person must already have a TaskFlow account. They&apos;ll be added instantly.
@@ -146,7 +146,7 @@ export default function AddMemberPage({
 
         {/* Tab 2: Send invitation */}
         <TabsContent value="invite">
-          <div className="bg-card border border-border rounded-lg p-6 mt-4">
+          <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mt-4">
             <h3 className="font-semibold text-foreground mb-1">Invite via email</h3>
             <p className="text-sm text-muted-foreground mb-6">
               Send an invitation link. They can sign up and join the organization.

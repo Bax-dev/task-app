@@ -52,7 +52,7 @@ export default function NewTaskPage({
   };
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 sm:p-6 md:p-8 max-w-2xl">
       <Link
         href={`/projects/${projectId}`}
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
@@ -61,7 +61,7 @@ export default function NewTaskPage({
         Back to Project
       </Link>
 
-      <h1 className="text-3xl font-bold text-foreground mb-8">New Task</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-6 sm:mb-8">New Task</h1>
 
       <form onSubmit={(e) => { e.preventDefault(); handleCreate(); }} className="space-y-6">
         <div className="space-y-2">
@@ -74,7 +74,7 @@ export default function NewTaskPage({
           <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" rows={4} />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Priority</Label>
             <Select value={priority} onValueChange={setPriority}>

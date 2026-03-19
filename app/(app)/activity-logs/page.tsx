@@ -149,11 +149,11 @@ export default function ActivityLogsPage() {
   const isPending = isCreating || isUpdatePending;
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Activity Logs</h1>
-          <p className="text-muted-foreground mt-2">Record and track what you&apos;re working on</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Activity Logs</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Record and track what you&apos;re working on</p>
         </div>
         <div className="flex items-center gap-3">
           <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'activity-logs', mode: v }))} />
@@ -253,7 +253,7 @@ export default function ActivityLogsPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
         {Object.entries(STATUS_CONFIG).map(([key, config]) => (
           <div key={key} className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
@@ -295,7 +295,7 @@ export default function ActivityLogsPage() {
       {logs.length > 0 ? (
         view === 'grid' ? (
           /* Grid View */
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredLogs.map((log: any) => {
               const config = STATUS_CONFIG[log.status] || STATUS_CONFIG.IN_PROGRESS;
               return (
@@ -340,8 +340,8 @@ export default function ActivityLogsPage() {
           </div>
         ) : (
           /* List View */
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <table className="w-full">
+          <div className="bg-card border border-border rounded-lg overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="border-b border-border bg-secondary/30">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Activity</th>

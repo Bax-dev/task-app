@@ -46,11 +46,11 @@ export default function OrganizationsPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Organizations</h1>
-          <p className="text-muted-foreground mt-2">Manage all your organizations and teams</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Organizations</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Manage all your organizations and teams</p>
         </div>
         <div className="flex items-center gap-3">
           <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'organizations', mode: v }))} />
@@ -65,14 +65,14 @@ export default function OrganizationsPage() {
 
       {organizations.length > 0 ? (
         view === 'grid' ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {organizations.map((org: any) => (
               <OrgCard key={org.id} org={org} onDelete={(id) => handleDelete(id)} />
             ))}
           </div>
         ) : (
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <table className="w-full">
+          <div className="bg-card border border-border rounded-lg overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="border-b border-border bg-secondary/30">
                 <tr>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Name</th>
@@ -143,7 +143,7 @@ export default function OrganizationsPage() {
 
 function OrgCard({ org, onDelete }: { org: any; onDelete: (id: string) => void }) {
   return (
-    <div className="bg-card border border-border rounded-lg p-6 hover:border-primary/50 transition-colors">
+    <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
       <div className="flex items-start justify-between mb-4">
         <Link href={`/organizations/${org.id}`} className="flex-1">
           <h3 className="text-lg font-bold text-primary hover:underline">{org.name}</h3>

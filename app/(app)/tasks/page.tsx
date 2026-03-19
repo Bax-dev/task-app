@@ -109,11 +109,11 @@ export default function TasksPage() {
   const filteredSections = statusFilter === 'ALL' ? sections : sections.filter(s => s.key === statusFilter);
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">My Tasks</h1>
-          <p className="text-muted-foreground mt-2">Tasks assigned to you across all projects</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Tasks</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Tasks assigned to you across all projects</p>
         </div>
         <div className="flex items-center gap-3">
           <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'tasks', mode: v }))} />
@@ -208,7 +208,7 @@ export default function TasksPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
         {sections.map((s) => (
           <div key={s.key} className="bg-card border border-border rounded-lg p-4">
             <div className="flex items-center gap-3">
@@ -260,7 +260,7 @@ export default function TasksPage() {
                     <h2 className="text-lg font-bold text-foreground">{section.label}</h2>
                     <span className="text-sm text-muted-foreground ml-1">({section.tasks.length})</span>
                   </div>
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {section.tasks.map((task: any) => {
                       const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'DONE';
                       return (
@@ -333,8 +333,8 @@ export default function TasksPage() {
                     <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">{section.label}</h2>
                     <span className="text-xs text-muted-foreground">({section.tasks.length})</span>
                   </div>
-                  <div className="bg-card border border-border rounded-lg overflow-hidden">
-                    <table className="w-full">
+                  <div className="bg-card border border-border rounded-lg overflow-x-auto">
+                    <table className="w-full min-w-[600px]">
                       <thead className="border-b border-border bg-secondary/30">
                         <tr>
                           <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Task</th>

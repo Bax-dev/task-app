@@ -74,15 +74,15 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Team</h1>
-          <p className="text-muted-foreground mt-2">Manage your organization members</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Team</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Manage your organization members</p>
         </div>
         <div className="flex items-center gap-4">
           <Select value={selectedOrg} onValueChange={setSelectedOrg}>
-            <SelectTrigger className="w-[250px]">
+            <SelectTrigger className="w-full sm:w-[250px]">
               <SelectValue placeholder="Select organization" />
             </SelectTrigger>
             <SelectContent>
@@ -118,8 +118,8 @@ export default function TeamPage() {
             <h2 className="text-xl font-bold text-foreground mb-4">
               Members ({members.length})
             </h2>
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <table className="w-full">
+            <div className="bg-card border border-border rounded-lg overflow-x-auto">
+              <table className="w-full min-w-[500px]">
                 <thead className="border-b border-border bg-secondary/30">
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Name</th>

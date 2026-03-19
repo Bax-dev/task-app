@@ -39,11 +39,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl">
-      <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
-      <p className="text-muted-foreground mb-8">Manage your account settings</p>
+    <div className="p-4 sm:p-6 md:p-8 max-w-2xl">
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Settings</h1>
+      <p className="text-muted-foreground mb-6 sm:mb-8">Manage your account settings</p>
 
-      <div className="bg-card border border-border rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
         <h2 className="text-xl font-bold text-foreground mb-4">Profile</h2>
 
         <form onSubmit={(e) => { e.preventDefault(); handleUpdate(); }} className="space-y-4">

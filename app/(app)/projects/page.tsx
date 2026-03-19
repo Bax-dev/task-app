@@ -66,11 +66,11 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Projects</h1>
-          <p className="text-muted-foreground mt-2">All projects across your organizations</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Projects</h1>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">All projects across your organizations</p>
         </div>
         <div className="flex items-center gap-3">
           <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'projects', mode: v }))} />
@@ -155,10 +155,10 @@ export default function ProjectsPage() {
 
       {projects.length > 0 ? (
         view === 'grid' ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map((project: any) => (
               <Link key={project.id} href={`/projects/${project.id}`} className="group">
-                <div className="bg-card border border-border rounded-lg p-6 hover:border-primary/50 transition-colors">
+                <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
                   <h3 className="text-lg font-bold text-primary group-hover:underline mb-2">{project.name}</h3>
                   {project.description && (
                     <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{project.description}</p>
@@ -172,11 +172,11 @@ export default function ProjectsPage() {
             ))}
           </div>
         ) : (
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <table className="w-full">
+          <div className="bg-card border border-border rounded-lg overflow-x-auto">
+            <table className="w-full min-w-[600px]">
               <thead className="border-b border-border bg-secondary/30">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Project</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-sm font-medium text-muted-foreground">Project</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Space</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Organization</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Tasks</th>

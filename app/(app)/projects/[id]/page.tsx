@@ -42,7 +42,7 @@ export default function ProjectPage({
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 md:p-8">
       <div className="mb-8">
         <Link
           href={`/spaces/${project.spaceId || project.space?.id}`}
@@ -51,9 +51,9 @@ export default function ProjectPage({
           <ArrowLeft className="w-4 h-4" />
           Back to Space
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{project.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{project.name}</h1>
             {project.description && (
               <p className="text-muted-foreground mt-2">{project.description}</p>
             )}

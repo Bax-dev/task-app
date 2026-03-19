@@ -20,6 +20,11 @@ vi.mock('@/lib/auth/session', () => ({
   createSession: vi.fn().mockResolvedValue('mock-token'),
 }));
 
+// Mock email module to avoid Resend API key requirement
+vi.mock('@/lib/email', () => ({
+  sendEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('Auth Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();

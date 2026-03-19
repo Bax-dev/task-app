@@ -166,8 +166,8 @@ export default function NoteEditorPage({
   }
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 md:p-8 max-w-5xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <Link
           href="/notes"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
@@ -262,7 +262,7 @@ export default function NoteEditorPage({
             <Input
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              className="text-3xl font-bold h-12"
+              className="text-2xl sm:text-3xl font-bold h-12"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleTitleSave();
@@ -278,7 +278,7 @@ export default function NoteEditorPage({
           </div>
         ) : (
           <div className="flex items-center gap-2 group">
-            <h1 className="text-3xl font-bold text-foreground">{note.title}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{note.title}</h1>
             {!isGuest && (
               <button
                 onClick={() => { setEditTitle(note.title); setIsEditingTitle(true); }}
