@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,50 +22,40 @@ import {
 } from '@/components/ui/dialog';
 import { FolderOpen, Loader2, Plus } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
-import { useViewStore } from '@/stores/view-store';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetProjectsQuery, useGetOrganizationsQuery, useGetOrgSpacesQuery, useCreateProjectMutation } from '@/store/api';
 
 export default function ProjectsPage() {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [spaceId, setSpaceId] = useState('');
-  const view = useViewStore((s) => s.getView('projects'));
-  const setViewMode = useViewStore((s) => s.setView);
+  const dispatch = useAppDispatch();
+  const view = useAppSelector(selectView('projects'));
   const [selectedOrg, setSelectedOrg] = useState('');
 
-  const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.get<any[]>('/api/projects'),
-  });
+  const { data: projects = [], isLoading } = useGetProjectsQuery();
 
-  const { data: organizations = [] } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [] } = useGetOrganizationsQuery();
 
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['organizations', selectedOrg, 'spaces'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${selectedOrg}/spaces`),
-    enabled: !!selectedOrg,
-  });
+  const { data: spaces = [] } = useGetOrgSpacesQuery(selectedOrg, { skip: !selectedOrg });
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/projects', { name, description: description || undefined, spaceId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['spaces'] });
+  const [createProject, { isLoading: isCreatingProject }] = useCreateProjectMutation();
+
+  const handleCreateProject = async () => {
+    try {
+      await createProject({ name, description: description || undefined, spaceId }).unwrap();
       toast.success('Project created!');
       setOpen(false);
       setName('');
       setDescription('');
       setSpaceId('');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create project');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -84,7 +73,7 @@ export default function ProjectsPage() {
           <p className="text-muted-foreground mt-2">All projects across your organizations</p>
         </div>
         <div className="flex items-center gap-3">
-          <ViewToggle view={view} onViewChange={(v) => setViewMode('projects', v)} />
+          <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'projects', mode: v }))} />
           <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -97,7 +86,7 @@ export default function ProjectsPage() {
               <DialogTitle>Create New Project</DialogTitle>
             </DialogHeader>
             <form
-              onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}
+              onSubmit={(e) => { e.preventDefault(); handleCreateProject(); }}
               className="space-y-4 mt-4"
             >
               <div className="space-y-2">
@@ -141,7 +130,7 @@ export default function ProjectsPage() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="My Project"
                   required
-                  disabled={createMutation.isPending}
+                  disabled={isCreatingProject}
                 />
               </div>
               <div className="space-y-2">
@@ -152,11 +141,11 @@ export default function ProjectsPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Brief description"
                   rows={3}
-                  disabled={createMutation.isPending}
+                  disabled={isCreatingProject}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending || !spaceId}>
-                {createMutation.isPending ? 'Creating...' : 'Create Project'}
+              <Button type="submit" className="w-full" disabled={isCreatingProject || !spaceId}>
+                {isCreatingProject ? 'Creating...' : 'Create Project'}
               </Button>
             </form>
           </DialogContent>

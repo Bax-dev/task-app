@@ -4,7 +4,7 @@ import { setSessionCookie, deleteSessionCookie } from '@/lib/auth/session';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { loginLimiter } from '@/lib/rate-limit';
-import { registerSchema, loginSchema, forgotPasswordSchema, verifyOTPSchema, resetPasswordSchema, resendOTPSchema } from '../types';
+import { registerSchema, loginSchema, forgotPasswordSchema, verifyOTPSchema, resetPasswordSchema, resendOTPSchema, googleAuthSchema } from '../types';
 import * as authService from '../services';
 
 export async function handleRegister(request: NextRequest) {
@@ -138,6 +138,28 @@ export async function handleResendOTP(request: NextRequest) {
       return errorResponse(error.message, 429);
     }
     return errorResponse(error.message, 500);
+  }
+}
+
+export async function handleGoogleAuth(request: NextRequest) {
+  try {
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const limit = loginLimiter.check(`google:${ip}`);
+    if (!limit.success) return rateLimitResponse(limit.resetIn);
+
+    const body = await request.json();
+    const validation = validateBody(googleAuthSchema, body);
+    if (!validation.success) return errorResponse(validation.error);
+
+    const result = await authService.googleAuth(validation.data.idToken);
+    await setSessionCookie(result.token);
+
+    return successResponse({ user: result.user });
+  } catch (error: any) {
+    if (error.message === 'Invalid Google token') {
+      return errorResponse(error.message, 401);
+    }
+    return errorResponse('Google authentication failed', 500);
   }
 }
 

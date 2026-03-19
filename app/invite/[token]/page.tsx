@@ -1,13 +1,13 @@
 'use client';
 
 import { use } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, XCircle, LogIn, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, ApiError } from '@/lib/api-client';
+import { useGetInvitationByTokenQuery, useAcceptInvitationMutation } from '@/store/api';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function AcceptInvitePage({
   params,
@@ -16,38 +16,28 @@ export default function AcceptInvitePage({
 }) {
   const { token } = use(params);
   const router = useRouter();
-  const queryClient = useQueryClient();
+  const { user, isLoading: authLoading } = useAuth();
 
   // Fetch invitation details (public, no auth needed)
-  const { data: invitation, isLoading, error } = useQuery({
-    queryKey: ['invitations', token],
-    queryFn: () => api.get<any>(`/api/invitations/${token}`),
-  });
-
-  // Check if user is logged in
-  const { data: user, isLoading: authLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: () => api.get<any>('/api/auth/me'),
-    retry: false,
-  });
+  const { data: invitation, isLoading, error } = useGetInvitationByTokenQuery(token);
 
   const isLoggedIn = !!user;
 
-  const acceptMutation = useMutation({
-    mutationFn: () => api.post('/api/invitations/accept', { token }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+  const [acceptInvitation, { isLoading: isAccepting }] = useAcceptInvitationMutation();
+
+  const handleAccept = async () => {
+    try {
+      await acceptInvitation({ token }).unwrap();
       toast.success('Invitation accepted! Welcome to the organization.');
       router.push('/dashboard');
-    },
-    onError: (error: ApiError) => {
-      if (error.status === 401) {
+    } catch (error: any) {
+      if (error?.status === 401) {
         toast.error('Please log in first to accept this invitation.');
       } else {
-        toast.error(error.message);
+        toast.error(error?.data?.message || error?.message || 'Failed to accept invitation');
       }
-    },
-  });
+    }
+  };
 
   if (isLoading || authLoading) {
     return (
@@ -127,12 +117,12 @@ export default function AcceptInvitePage({
         {isLoggedIn ? (
           /* User is logged in - show accept button */
           <Button
-            onClick={() => acceptMutation.mutate()}
-            disabled={acceptMutation.isPending}
+            onClick={handleAccept}
+            disabled={isAccepting}
             className="w-full"
             size="lg"
           >
-            {acceptMutation.isPending ? 'Accepting...' : 'Accept Invitation'}
+            {isAccepting ? 'Accepting...' : 'Accept Invitation'}
           </Button>
         ) : (
           /* User is NOT logged in - show login/signup options */

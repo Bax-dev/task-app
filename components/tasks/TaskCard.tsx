@@ -1,8 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api-client';
+import { useUpdateTaskMutation } from '@/store/api';
 
 interface Task {
   id: string;
@@ -21,15 +20,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function TaskCard({ task, projectId }: { task: Task; projectId: string }) {
-  const queryClient = useQueryClient();
-
-  const updateMutation = useMutation({
-    mutationFn: (data: { status?: string; priority?: string }) =>
-      api.patch(`/api/tasks/${task.id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tasks'] });
-    },
-  });
+  const [updateTask] = useUpdateTaskMutation();
 
   return (
     <Link href={`/projects/${projectId}/tasks/${task.id}`}>

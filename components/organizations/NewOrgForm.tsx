@@ -2,16 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useCreateOrganizationMutation } from '@/store/api';
 
 export default function NewOrgForm() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
 
@@ -27,23 +25,23 @@ export default function NewOrgForm() {
     setSlug(generateSlug(value));
   };
 
-  const createMutation = useMutation({
-    mutationFn: () => api.post('/api/organizations', { name, slug }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+  const [createOrganization, { isLoading: isCreating }] = useCreateOrganizationMutation();
+
+  const handleCreate = async () => {
+    try {
+      const data = await createOrganization({ name, slug }).unwrap();
       toast.success('Organization created!');
       router.push(`/organizations/${data.id}`);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create organization');
+    }
+  };
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        createMutation.mutate();
+        handleCreate();
       }}
       className="space-y-4"
     >
@@ -55,7 +53,7 @@ export default function NewOrgForm() {
           onChange={(e) => handleNameChange(e.target.value)}
           placeholder="My Organization"
           required
-          disabled={createMutation.isPending}
+          disabled={isCreating}
         />
       </div>
 
@@ -67,7 +65,7 @@ export default function NewOrgForm() {
           onChange={(e) => setSlug(e.target.value)}
           placeholder="my-organization"
           required
-          disabled={createMutation.isPending}
+          disabled={isCreating}
           pattern="^[a-z0-9-]+$"
         />
         <p className="text-xs text-muted-foreground">
@@ -75,8 +73,8 @@ export default function NewOrgForm() {
         </p>
       </div>
 
-      <Button type="submit" className="w-full" disabled={createMutation.isPending}>
-        {createMutation.isPending ? 'Creating...' : 'Create Organization'}
+      <Button type="submit" className="w-full" disabled={isCreating}>
+        {isCreating ? 'Creating...' : 'Create Organization'}
       </Button>
     </form>
   );

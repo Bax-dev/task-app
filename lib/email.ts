@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 interface EmailOptions {
   to: string;
@@ -6,14 +6,7 @@ interface EmailOptions {
   html: string;
 }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-  port: Number(process.env.SMTP_PORT) || 587,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendEmail(options: EmailOptions): Promise<void> {
   if (process.env.NODE_ENV === 'development') {
@@ -23,10 +16,16 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
     return;
   }
 
-  await transporter.sendMail({
+  const { error } = await resend.emails.send({
     from: process.env.EMAIL_FROM || 'noreply@taskflow.app',
-    ...options,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
   });
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
 }
 
 export function buildOTPEmail(otp: string, purpose: 'forgot-password' | 'verify-email'): { subject: string; html: string } {

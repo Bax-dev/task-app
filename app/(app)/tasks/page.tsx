@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,14 +22,14 @@ import {
 } from '@/components/ui/dialog';
 import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
-import { useViewStore } from '@/stores/view-store';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation } from '@/store/api';
 
 export default function TasksPage() {
-  const queryClient = useQueryClient();
-  const view = useViewStore((s) => s.getView('tasks'));
-  const setViewMode = useViewStore((s) => s.setView);
+  const dispatch = useAppDispatch();
+  const view = useAppSelector(selectView('tasks'));
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -40,28 +39,23 @@ export default function TasksPage() {
   const [status, setStatus] = useState('TODO');
   const [dueDate, setDueDate] = useState('');
 
-  const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ['tasks', 'mine'],
-    queryFn: () => api.get<any[]>('/api/tasks'),
-  });
+  const { data: tasks = [], isLoading } = useGetUserTasksQuery();
 
-  const { data: projects = [] } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.get<any[]>('/api/projects'),
-  });
+  const { data: projects = [] } = useGetProjectsQuery();
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/tasks', {
+  const [createTask, { isLoading: isCreatingTask }] = useCreateTaskMutation();
+  const [updateTask] = useUpdateTaskMutation();
+
+  const handleCreateTask = async () => {
+    try {
+      await createTask({
         title,
         description: description || undefined,
         projectId,
         priority,
         status,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      }).unwrap();
       toast.success('Task created!');
       setOpen(false);
       setTitle('');
@@ -70,18 +64,18 @@ export default function TasksPage() {
       setPriority('MEDIUM');
       setStatus('TODO');
       setDueDate('');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create task');
+    }
+  };
 
-  const statusUpdateMutation = useMutation({
-    mutationFn: ({ taskId, newStatus }: { taskId: string; newStatus: string }) =>
-      api.patch(`/api/tasks/${taskId}`, { status: newStatus }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const handleStatusUpdate = async (taskId: string, newStatus: string) => {
+    try {
+      await updateTask({ id: taskId, status: newStatus }).unwrap();
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -122,7 +116,7 @@ export default function TasksPage() {
           <p className="text-muted-foreground mt-2">Tasks assigned to you across all projects</p>
         </div>
         <div className="flex items-center gap-3">
-          <ViewToggle view={view} onViewChange={(v) => setViewMode('tasks', v)} />
+          <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'tasks', mode: v }))} />
           <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -135,7 +129,7 @@ export default function TasksPage() {
               <DialogTitle>Create New Task</DialogTitle>
             </DialogHeader>
             <form
-              onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}
+              onSubmit={(e) => { e.preventDefault(); handleCreateTask(); }}
               className="space-y-4 mt-4"
             >
               <div className="space-y-2">
@@ -161,7 +155,7 @@ export default function TasksPage() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Task title"
                   required
-                  disabled={createMutation.isPending}
+                  disabled={isCreatingTask}
                 />
               </div>
               <div className="space-y-2">
@@ -172,7 +166,7 @@ export default function TasksPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Description"
                   rows={3}
-                  disabled={createMutation.isPending}
+                  disabled={isCreatingTask}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -204,8 +198,8 @@ export default function TasksPage() {
                 <Label htmlFor="task-due">Due Date (optional)</Label>
                 <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending || !projectId}>
-                {createMutation.isPending ? 'Creating...' : 'Create Task'}
+              <Button type="submit" className="w-full" disabled={isCreatingTask || !projectId}>
+                {isCreatingTask ? 'Creating...' : 'Create Task'}
               </Button>
             </form>
           </DialogContent>
@@ -297,13 +291,13 @@ export default function TasksPage() {
                           )}
                           <div className="flex gap-1 pt-2 border-t border-border">
                             {task.status !== 'TODO' && (
-                              <button onClick={() => statusUpdateMutation.mutate({ taskId: task.id, newStatus: 'TODO' })} className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors">To Do</button>
+                              <button onClick={() => handleStatusUpdate(task.id, 'TODO')} className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors">To Do</button>
                             )}
                             {task.status !== 'IN_PROGRESS' && (
-                              <button onClick={() => statusUpdateMutation.mutate({ taskId: task.id, newStatus: 'IN_PROGRESS' })} className="text-xs px-2 py-1 rounded bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 transition-colors">In Progress</button>
+                              <button onClick={() => handleStatusUpdate(task.id, 'IN_PROGRESS')} className="text-xs px-2 py-1 rounded bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 transition-colors">In Progress</button>
                             )}
                             {task.status !== 'DONE' && (
-                              <button onClick={() => statusUpdateMutation.mutate({ taskId: task.id, newStatus: 'DONE' })} className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors">Done</button>
+                              <button onClick={() => handleStatusUpdate(task.id, 'DONE')} className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors">Done</button>
                             )}
                           </div>
                           {task.assignments && task.assignments.length > 0 && (
@@ -386,10 +380,10 @@ export default function TasksPage() {
                               <td className="px-4 py-3 text-right">
                                 <div className="flex gap-1 justify-end">
                                   {task.status !== 'DONE' && (
-                                    <button onClick={() => statusUpdateMutation.mutate({ taskId: task.id, newStatus: 'DONE' })} className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors">Done</button>
+                                    <button onClick={() => handleStatusUpdate(task.id, 'DONE')} className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-600 hover:bg-green-500/20 transition-colors">Done</button>
                                   )}
                                   {task.status !== 'IN_PROGRESS' && task.status !== 'DONE' && (
-                                    <button onClick={() => statusUpdateMutation.mutate({ taskId: task.id, newStatus: 'IN_PROGRESS' })} className="text-xs px-2 py-1 rounded bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 transition-colors">Start</button>
+                                    <button onClick={() => handleStatusUpdate(task.id, 'IN_PROGRESS')} className="text-xs px-2 py-1 rounded bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 transition-colors">Start</button>
                                   )}
                                 </div>
                               </td>

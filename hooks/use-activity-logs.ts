@@ -1,82 +1,32 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api-client';
-
-interface ActivityLog {
-  id: string;
-  description: string;
-  status: string;
-  note: string | null;
-  taskId: string | null;
-  organizationId: string;
-  createdById: string;
-  loggedAt: string;
-  createdAt: string;
-  createdBy?: { id: string; name: string | null; email: string };
-  task?: { id: string; title: string; projectId: string } | null;
-  organization?: { id: string; name: string };
-}
+import {
+  useGetUserActivityLogsQuery,
+  useGetOrgActivityLogsQuery,
+  useCreateActivityLogMutation,
+  useUpdateActivityLogMutation,
+  useDeleteActivityLogMutation,
+} from '@/store/api';
 
 export function useUserActivityLogs() {
-  return useQuery({
-    queryKey: ['activity-logs', 'mine'],
-    queryFn: () => api.get<ActivityLog[]>('/api/activity-logs'),
-  });
+  return useGetUserActivityLogsQuery();
 }
 
 export function useOrgActivityLogs(orgId: string) {
-  return useQuery({
-    queryKey: ['activity-logs', 'org', orgId],
-    queryFn: () => api.get<ActivityLog[]>(`/api/organizations/${orgId}/activity-logs`),
-    enabled: !!orgId,
-  });
+  return useGetOrgActivityLogsQuery(orgId, { skip: !orgId });
 }
 
 export function useCreateActivityLog() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: {
-      description: string;
-      status?: string;
-      note?: string | null;
-      taskId?: string | null;
-      organizationId: string;
-    }) => api.post<ActivityLog>('/api/activity-logs', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
-    },
-  });
+  const [trigger, state] = useCreateActivityLogMutation();
+  return { mutate: trigger, mutateAsync: trigger, ...state };
 }
 
 export function useUpdateActivityLog() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      id,
-      ...data
-    }: {
-      id: string;
-      description?: string;
-      status?: string;
-      note?: string | null;
-      taskId?: string | null;
-    }) => api.patch<ActivityLog>(`/api/activity-logs/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
-    },
-  });
+  const [trigger, state] = useUpdateActivityLogMutation();
+  return { mutate: trigger, mutateAsync: trigger, ...state };
 }
 
 export function useDeleteActivityLog() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => api.delete(`/api/activity-logs/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
-    },
-  });
+  const [trigger, state] = useDeleteActivityLogMutation();
+  return { mutate: trigger, mutateAsync: trigger, ...state };
 }

@@ -11,6 +11,10 @@ const taskInclude = {
   project: {
     select: { id: true, name: true, spaceId: true, space: { select: { id: true, name: true, organizationId: true } } },
   },
+  attachments: {
+    select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+    orderBy: { createdAt: 'desc' as const },
+  },
 };
 
 export async function createTask(data: {

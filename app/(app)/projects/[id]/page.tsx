@@ -1,11 +1,10 @@
 'use client';
 
 import { use } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api-client';
+import { useGetProjectQuery, useGetProjectTasksQuery, useGetOrgMembersQuery } from '@/store/api';
 import TaskBoard from '@/components/tasks/TaskBoard';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -17,22 +16,12 @@ export default function ProjectPage({
   const { id } = use(params);
   const { user: currentUser } = useAuth();
 
-  const { data: project, isLoading: projectLoading } = useQuery({
-    queryKey: ['projects', id],
-    queryFn: () => api.get<any>(`/api/projects/${id}`),
-  });
+  const { data: project, isLoading: projectLoading } = useGetProjectQuery(id);
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ['projects', id, 'tasks'],
-    queryFn: () => api.get<any[]>(`/api/projects/${id}/tasks`),
-  });
+  const { data: tasks = [], isLoading: tasksLoading } = useGetProjectTasksQuery(id);
 
   const orgId = project?.space?.organizationId;
-  const { data: members = [] } = useQuery({
-    queryKey: ['organizations', orgId, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${orgId}/members`),
-    enabled: !!orgId,
-  });
+  const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
   const isGuest = members.find((m: any) => m.id === currentUser?.id)?.role === 'GUEST';
 
   if (projectLoading || tasksLoading) {

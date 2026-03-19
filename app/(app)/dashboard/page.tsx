@@ -1,27 +1,16 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Plus, FolderOpen, Users, Zap, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api-client';
+import { useGetOrganizationsQuery, useGetUserTasksQuery, useGetProjectsQuery } from '@/store/api';
 
 export default function DashboardPage() {
-  const { data: organizations = [], isLoading: orgsLoading } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [], isLoading: orgsLoading } = useGetOrganizationsQuery();
 
-  const { data: tasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks', 'mine'],
-    queryFn: () => api.get<any[]>('/api/tasks'),
-  });
+  const { data: tasks = [], isLoading: tasksLoading } = useGetUserTasksQuery();
 
-  const { data: projects = [], error: projectsError } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.get<any[]>('/api/projects'),
-    retry: 1,
-  });
+  const { data: projects = [], error: projectsError } = useGetProjectsQuery();
 
   if (orgsLoading || tasksLoading) {
     return (

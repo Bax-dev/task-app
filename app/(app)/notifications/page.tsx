@@ -1,29 +1,17 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api-client';
+import { useGetNotificationsQuery, useMarkAsReadMutation, useMarkAllAsReadMutation } from '@/store/api';
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const { data: notifData, isLoading } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => api.get<{ notifications: any[]; unreadCount: number }>('/api/notifications'),
-  });
+  const { data: notifData, isLoading } = useGetNotificationsQuery();
 
-  const markReadMutation = useMutation({
-    mutationFn: (ids: string[]) => api.post('/api/notifications/read', { notificationIds: ids }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
-  });
-
-  const markAllReadMutation = useMutation({
-    mutationFn: () => api.post('/api/notifications/read-all'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
-  });
+  const [markAsRead] = useMarkAsReadMutation();
+  const [markAllAsRead, { isLoading: isMarkingAllRead }] = useMarkAllAsReadMutation();
 
   const notifications = notifData?.notifications ?? [];
   const unreadCount = notifData?.unreadCount ?? 0;
@@ -55,8 +43,8 @@ export default function NotificationsPage() {
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => markAllReadMutation.mutate()}
-            disabled={markAllReadMutation.isPending}
+            onClick={() => markAllAsRead(undefined)}
+            disabled={isMarkingAllRead}
           >
             <CheckCheck className="w-4 h-4" />
             Mark all read
@@ -73,7 +61,7 @@ export default function NotificationsPage() {
                 !notif.read ? 'bg-primary/5' : ''
               }`}
               onClick={() => {
-                if (!notif.read) markReadMutation.mutate([notif.id]);
+                if (!notif.read) markAsRead([notif.id]);
                 if (notif.link) router.push(notif.link);
               }}
             >

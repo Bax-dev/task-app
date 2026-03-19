@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -28,7 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetSpaceQuery, useGetOrgMembersQuery, useCreateProjectMutation, useUpdateSpaceMutation, useDeleteSpaceMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function SpaceDetailPage({
@@ -38,7 +37,6 @@ export default function SpaceDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
 
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -47,56 +45,49 @@ export default function SpaceDetailPage({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
 
-  const { data: space, isLoading } = useQuery({
-    queryKey: ['spaces', id],
-    queryFn: () => api.get<any>(`/api/spaces/${id}`),
-  });
+  const { data: space, isLoading } = useGetSpaceQuery(id);
 
   const orgId = space?.organizationId || space?.organization?.id;
-  const { data: members = [] } = useQuery({
-    queryKey: ['organizations', orgId, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${orgId}/members`),
-    enabled: !!orgId,
-  });
+  const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isGuest = currentUserRole === 'GUEST';
 
-  const createProjectMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/projects', { name: projectName, description: projectDesc || undefined, spaceId: id }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['spaces', id] });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
+  const [createProject, { isLoading: isCreatingProject }] = useCreateProjectMutation();
+  const [updateSpace] = useUpdateSpaceMutation();
+  const [deleteSpace] = useDeleteSpaceMutation();
+
+  const handleCreateProject = async () => {
+    try {
+      const data = await createProject({ name: projectName, description: projectDesc || undefined, spaceId: id }).unwrap();
       toast.success('Project created!');
       setNewProjectOpen(false);
       setProjectName('');
       setProjectDesc('');
       router.push(`/projects/${data.id}`);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create project');
+    }
+  };
 
-  const renameSpaceMutation = useMutation({
-    mutationFn: (name: string) => api.patch(`/api/spaces/${id}`, { name }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spaces', id] });
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+  const handleRenameSpace = async (name: string) => {
+    try {
+      await updateSpace({ id, name }).unwrap();
       toast.success('Space renamed');
       setIsEditing(false);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to rename');
+    }
+  };
 
-  const deleteSpaceMutation = useMutation({
-    mutationFn: () => api.delete(`/api/spaces/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
-      queryClient.invalidateQueries({ queryKey: ['spaces'] });
+  const handleDeleteSpace = async () => {
+    try {
+      await deleteSpace(id).unwrap();
       toast.success('Space deleted');
       router.push('/organizations');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to delete');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -132,11 +123,11 @@ export default function SpaceDetailPage({
                   className="text-2xl font-bold h-10"
                   autoFocus
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && editName.trim()) renameSpaceMutation.mutate(editName.trim());
+                    if (e.key === 'Enter' && editName.trim()) handleRenameSpace(editName.trim());
                     if (e.key === 'Escape') setIsEditing(false);
                   }}
                 />
-                <Button size="icon" variant="ghost" onClick={() => { if (editName.trim()) renameSpaceMutation.mutate(editName.trim()); }} disabled={renameSpaceMutation.isPending}>
+                <Button size="icon" variant="ghost" onClick={() => { if (editName.trim()) handleRenameSpace(editName.trim()); }} disabled={false}>
                   <Check className="w-4 h-4" />
                 </Button>
                 <Button size="icon" variant="ghost" onClick={() => setIsEditing(false)}>
@@ -176,7 +167,7 @@ export default function SpaceDetailPage({
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => deleteSpaceMutation.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                <AlertDialogAction onClick={() => handleDeleteSpace()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Delete
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -196,7 +187,7 @@ export default function SpaceDetailPage({
               <DialogHeader>
                 <DialogTitle>Create Project in {space.name}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={(e) => { e.preventDefault(); createProjectMutation.mutate(); }} className="space-y-4 mt-4">
+              <form onSubmit={(e) => { e.preventDefault(); handleCreateProject(); }} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label>Project Name</Label>
                   <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="My Project" required />
@@ -205,8 +196,8 @@ export default function SpaceDetailPage({
                   <Label>Description (optional)</Label>
                   <Textarea value={projectDesc} onChange={(e) => setProjectDesc(e.target.value)} placeholder="Brief description" rows={3} />
                 </div>
-                <Button type="submit" className="w-full" disabled={createProjectMutation.isPending}>
-                  {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
+                <Button type="submit" className="w-full" disabled={isCreatingProject}>
+                  {isCreatingProject ? 'Creating...' : 'Create Project'}
                 </Button>
               </form>
             </DialogContent>

@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useLoginMutation } from '@/store/api';
+import GoogleSignInButton from './GoogleSignInButton';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -15,21 +15,17 @@ export default function LoginForm() {
   const redirect = searchParams.get('redirect');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [login, { isLoading }] = useLoginMutation();
 
-  const loginMutation = useMutation({
-    mutationFn: () => api.post('/api/auth/login', { email, password }),
-    onSuccess: () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await login({ email, password }).unwrap();
       toast.success('Logged in successfully!');
       router.push(redirect || '/dashboard');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Invalid credentials');
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    loginMutation.mutate();
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Invalid credentials');
+    }
   };
 
   return (
@@ -43,7 +39,7 @@ export default function LoginForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          disabled={loginMutation.isPending}
+          disabled={isLoading}
         />
       </div>
 
@@ -64,13 +60,13 @@ export default function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          disabled={loginMutation.isPending}
+          disabled={isLoading}
           minLength={8}
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-        {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? 'Signing in...' : 'Sign In'}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
@@ -79,6 +75,8 @@ export default function LoginForm() {
           Sign up
         </a>
       </p>
+
+      <GoogleSignInButton />
     </form>
   );
 }

@@ -1,70 +1,47 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api-client';
-import { useAuthStore } from '@/stores/auth-store';
-
-interface User {
-  id: string;
-  name: string | null;
-  email: string;
-}
+import { useGetMeQuery, useLoginMutation, useRegisterMutation, useLogoutMutation, apiSlice } from '@/store/api';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
 
 export function useAuth() {
-  const queryClient = useQueryClient();
   const router = useRouter();
-  const { setUser, clearUser } = useAuthStore();
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user);
 
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: async () => {
-      const data = await api.get<User>('/api/auth/me');
-      setUser(data);
-      return data;
-    },
-    retry: false,
-  });
+  const { isLoading } = useGetMeQuery(undefined, { refetchOnMountOrArgChange: true });
+  const [loginTrigger, loginState] = useLoginMutation();
+  const [registerTrigger, registerState] = useRegisterMutation();
+  const [logoutTrigger] = useLogoutMutation();
 
-  const loginMutation = useMutation({
-    mutationFn: (data: { email: string; password: string }) =>
-      api.post<{ user: User }>('/api/auth/login', data),
-    onSuccess: (data) => {
-      setUser(data.user);
-      queryClient.invalidateQueries({ queryKey: ['auth'] });
-      router.push('/dashboard');
-    },
-  });
+  const login = async (data: { email: string; password: string }) => {
+    const result = await loginTrigger(data).unwrap();
+    router.push('/dashboard');
+    return result;
+  };
 
-  const registerMutation = useMutation({
-    mutationFn: (data: { name: string; email: string; password: string }) =>
-      api.post<{ user: User }>('/api/auth/register', data),
-    onSuccess: (data) => {
-      setUser(data.user);
-      queryClient.invalidateQueries({ queryKey: ['auth'] });
-      router.push('/dashboard');
-    },
-  });
+  const register = async (data: { name: string; email: string; password: string }) => {
+    const result = await registerTrigger(data).unwrap();
+    router.push('/dashboard');
+    return result;
+  };
 
-  const logoutMutation = useMutation({
-    mutationFn: () => api.post('/api/auth/logout'),
-    onSuccess: () => {
-      clearUser();
-      queryClient.clear();
-      router.push('/login');
-    },
-  });
+  const logout = async () => {
+    await logoutTrigger().unwrap();
+    dispatch(apiSlice.util.resetApiState());
+    router.push('/login');
+  };
 
   return {
     user,
     isLoading,
     isAuthenticated: !!user,
-    login: loginMutation.mutateAsync,
-    register: registerMutation.mutateAsync,
-    logout: logoutMutation.mutateAsync,
-    loginError: loginMutation.error,
-    registerError: registerMutation.error,
-    isLoginPending: loginMutation.isPending,
-    isRegisterPending: registerMutation.isPending,
+    login,
+    register,
+    logout,
+    loginError: loginState.error,
+    registerError: registerState.error,
+    isLoginPending: loginState.isLoading,
+    isRegisterPending: registerState.isLoading,
   };
 }

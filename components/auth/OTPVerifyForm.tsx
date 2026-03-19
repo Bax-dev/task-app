@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useVerifyOtpMutation, useResendOtpMutation } from '@/store/api';
 import { ArrowLeft } from 'lucide-react';
 import ResetPasswordForm from './ResetPasswordForm';
 
@@ -42,37 +41,8 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  const verifyMutation = useMutation({
-    mutationFn: (otpCode: string) =>
-      api.post('/api/auth/verify-otp', { email, otp: otpCode, purpose }),
-    onSuccess: () => {
-      toast.success('Code verified!');
-      if (purpose === 'forgot-password') {
-        setStep('reset');
-      }
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Invalid code');
-      // Clear OTP inputs on error
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
-    },
-  });
-
-  const resendMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/auth/resend-otp', { email, purpose }),
-    onSuccess: () => {
-      toast.success('New code sent!');
-      setCountdown(300);
-      setResendCooldown(60);
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+  const [verifyOtp, { isLoading: isVerifying }] = useVerifyOtpMutation();
+  const [resendOtp, { isLoading: isResending }] = useResendOtpMutation();
 
   const handleOTPChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return; // Only digits
@@ -89,7 +59,34 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
     // Auto-submit when all 6 digits entered
     const fullOtp = newOtp.join('');
     if (fullOtp.length === 6) {
-      verifyMutation.mutate(fullOtp);
+      handleVerify(fullOtp);
+    }
+  };
+
+  const handleVerify = async (otpCode: string) => {
+    try {
+      await verifyOtp({ email, otp: otpCode, purpose }).unwrap();
+      toast.success('Code verified!');
+      if (purpose === 'forgot-password') {
+        setStep('reset');
+      }
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Invalid code');
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      await resendOtp({ email, purpose }).unwrap();
+      toast.success('New code sent!');
+      setCountdown(300);
+      setResendCooldown(60);
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to resend code');
     }
   };
 
@@ -105,7 +102,7 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
     if (pasted.length === 6) {
       const newOtp = pasted.split('');
       setOtp(newOtp);
-      verifyMutation.mutate(pasted);
+      handleVerify(pasted);
     }
   };
 
@@ -149,7 +146,7 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
             onChange={(e) => handleOTPChange(index, e.target.value)}
             onKeyDown={(e) => handleKeyDown(index, e)}
             className="w-12 h-14 text-center text-xl font-bold"
-            disabled={verifyMutation.isPending}
+            disabled={isVerifying}
           />
         ))}
       </div>
@@ -173,15 +170,15 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
         onClick={() => {
           const fullOtp = otp.join('');
           if (fullOtp.length === 6) {
-            verifyMutation.mutate(fullOtp);
+            handleVerify(fullOtp);
           } else {
             toast.error('Please enter the complete 6-digit code');
           }
         }}
         className="w-full"
-        disabled={verifyMutation.isPending || otp.join('').length !== 6}
+        disabled={isVerifying || otp.join('').length !== 6}
       >
-        {verifyMutation.isPending ? 'Verifying...' : 'Verify Code'}
+        {isVerifying ? 'Verifying...' : 'Verify Code'}
       </Button>
 
       {/* Resend */}
@@ -194,11 +191,11 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
             </span>
           ) : (
             <button
-              onClick={() => resendMutation.mutate()}
-              disabled={resendMutation.isPending}
+              onClick={handleResend}
+              disabled={isResending}
               className="text-primary hover:underline font-medium disabled:opacity-50"
             >
-              {resendMutation.isPending ? 'Sending...' : 'Resend Code'}
+              {isResending ? 'Sending...' : 'Resend Code'}
             </button>
           )}
         </p>

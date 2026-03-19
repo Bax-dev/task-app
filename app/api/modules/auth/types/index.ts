@@ -42,6 +42,11 @@ export const resendOTPSchema = z.object({
   purpose: z.enum(['forgot-password', 'verify-email']),
 });
 
+export const googleAuthSchema = z.object({
+  idToken: z.string().min(1, 'Google ID token is required'),
+});
+
+export type GoogleAuthDTO = z.infer<typeof googleAuthSchema>;
 export type RegisterDTO = z.infer<typeof registerSchema>;
 export type LoginDTO = z.infer<typeof loginSchema>;
 export type ForgotPasswordDTO = z.infer<typeof forgotPasswordSchema>;

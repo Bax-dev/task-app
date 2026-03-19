@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Plus, Users, FolderOpen, Loader2, Mail, Layout } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetOrganizationQuery, useGetOrgSpacesQuery, useGetOrgMembersQuery, useCreateSpaceMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 
 const SPACE_COLORS = [
@@ -29,41 +28,30 @@ export default function OrgDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaceName, setSpaceName] = useState('');
   const [spaceColor, setSpaceColor] = useState('#7c3aed');
 
-  const { data: org, isLoading } = useQuery({
-    queryKey: ['organizations', id],
-    queryFn: () => api.get<any>(`/api/organizations/${id}`),
-  });
+  const { data: org, isLoading } = useGetOrganizationQuery(id);
 
-  const { data: spaces = [] } = useQuery({
-    queryKey: ['organizations', id, 'spaces'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${id}/spaces`),
-    enabled: !!id,
-  });
+  const { data: spaces = [] } = useGetOrgSpacesQuery(id, { skip: !id });
 
-  const { data: members = [] } = useQuery({
-    queryKey: ['organizations', id, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${id}/members`),
-    enabled: !!id,
-  });
+  const { data: members = [] } = useGetOrgMembersQuery(id, { skip: !id });
 
-  const createSpaceMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/spaces', { name: spaceName, color: spaceColor, organizationId: id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations', id, 'spaces'] });
+  const [createSpace, { isLoading: isCreatingSpace }] = useCreateSpaceMutation();
+
+  const handleCreateSpace = async () => {
+    try {
+      await createSpace({ name: spaceName, color: spaceColor, organizationId: id }).unwrap();
       toast.success('Space created!');
       setNewSpaceOpen(false);
       setSpaceName('');
       setSpaceColor('#7c3aed');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create space');
+    }
+  };
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isAdmin = currentUserRole === 'ADMIN';
@@ -107,7 +95,7 @@ export default function OrgDetailPage({
               <DialogHeader>
                 <DialogTitle>Create Space in {org.name}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={(e) => { e.preventDefault(); createSpaceMutation.mutate(); }} className="space-y-4 mt-4">
+              <form onSubmit={(e) => { e.preventDefault(); handleCreateSpace(); }} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label>Space Name</Label>
                   <Input value={spaceName} onChange={(e) => setSpaceName(e.target.value)} placeholder="e.g. Sales, Marketing, Software" required />
@@ -126,8 +114,8 @@ export default function OrgDetailPage({
                     ))}
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={createSpaceMutation.isPending}>
-                  {createSpaceMutation.isPending ? 'Creating...' : 'Create Space'}
+                <Button type="submit" className="w-full" disabled={isCreatingSpace}>
+                  {isCreatingSpace ? 'Creating...' : 'Create Space'}
                 </Button>
               </form>
             </DialogContent>

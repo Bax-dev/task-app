@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, FileText, Loader2, Trash2 } from 'lucide-react';
@@ -34,58 +33,48 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetOrganizationsQuery, useGetOrgNotesQuery, useGetOrgMembersQuery, useCreateNoteMutation, useDeleteNoteMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function NotesPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
 
-  const { data: organizations = [], isLoading: orgsLoading } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [], isLoading: orgsLoading } = useGetOrganizationsQuery();
 
-  const { data: notes = [], isLoading: notesLoading } = useQuery({
-    queryKey: ['organizations', selectedOrg, 'notes'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${selectedOrg}/notes`),
-    enabled: !!selectedOrg,
-  });
+  const { data: notes = [], isLoading: notesLoading } = useGetOrgNotesQuery(selectedOrg, { skip: !selectedOrg });
 
-  const { data: members = [] } = useQuery({
-    queryKey: ['organizations', selectedOrg, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${selectedOrg}/members`),
-    enabled: !!selectedOrg,
-  });
+  const { data: members = [] } = useGetOrgMembersQuery(selectedOrg, { skip: !selectedOrg });
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isGuest = currentUserRole === 'GUEST';
 
-  const createNoteMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/notes', { title: noteTitle, organizationId: selectedOrg }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['organizations', selectedOrg, 'notes'] });
+  const [createNote, { isLoading: isCreatingNote }] = useCreateNoteMutation();
+  const [deleteNote] = useDeleteNoteMutation();
+
+  const handleCreateNote = async () => {
+    try {
+      const data = await createNote({ title: noteTitle, organizationId: selectedOrg }).unwrap();
       toast.success('Note created');
       setNewNoteOpen(false);
       setNoteTitle('');
       router.push(`/notes/${data.id}`);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create note');
+    }
+  };
 
-  const deleteNoteMutation = useMutation({
-    mutationFn: (noteId: string) => api.delete(`/api/notes/${noteId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations', selectedOrg, 'notes'] });
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      await deleteNote(noteId).unwrap();
       toast.success('Note deleted');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to delete note');
+    }
+  };
 
   // Auto-select first org
   if (organizations.length > 0 && !selectedOrg) {
@@ -130,7 +119,7 @@ export default function NotesPage() {
                 <DialogHeader>
                   <DialogTitle>Create Note</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={(e) => { e.preventDefault(); createNoteMutation.mutate(); }} className="space-y-4 mt-4">
+                <form onSubmit={(e) => { e.preventDefault(); handleCreateNote(); }} className="space-y-4 mt-4">
                   <div className="space-y-2">
                     <Label>Title</Label>
                     <Input
@@ -140,8 +129,8 @@ export default function NotesPage() {
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={createNoteMutation.isPending}>
-                    {createNoteMutation.isPending ? 'Creating...' : 'Create Note'}
+                  <Button type="submit" className="w-full" disabled={isCreatingNote}>
+                    {isCreatingNote ? 'Creating...' : 'Create Note'}
                   </Button>
                 </form>
               </DialogContent>
@@ -201,7 +190,7 @@ export default function NotesPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => deleteNoteMutation.mutate(note.id)}
+                        onClick={() => handleDeleteNote(note.id)}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         Delete

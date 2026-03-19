@@ -1,37 +1,34 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useUpdateProfileMutation } from '@/store/api';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function SettingsPage() {
-  const queryClient = useQueryClient();
   const [name, setName] = useState('');
+  const { user, isLoading: authLoading } = useAuth();
 
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: () => api.get<any>('/api/auth/me'),
-  });
+  const isLoading = authLoading;
 
   useEffect(() => {
     if (user?.name) setName(user.name);
   }, [user]);
 
-  const updateMutation = useMutation({
-    mutationFn: () => api.patch('/api/users/profile', { name }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+  const [updateProfile, { isLoading: isUpdating }] = useUpdateProfileMutation();
+
+  const handleUpdate = async () => {
+    try {
+      await updateProfile({ name }).unwrap();
       toast.success('Profile updated');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -49,7 +46,7 @@ export default function SettingsPage() {
       <div className="bg-card border border-border rounded-lg p-6">
         <h2 className="text-xl font-bold text-foreground mb-4">Profile</h2>
 
-        <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleUpdate(); }} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input id="email" value={user?.email || ''} disabled className="bg-muted" />
@@ -63,12 +60,12 @@ export default function SettingsPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              disabled={updateMutation.isPending}
+              disabled={isUpdating}
             />
           </div>
 
-          <Button type="submit" disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+          <Button type="submit" disabled={isUpdating}>
+            {isUpdating ? 'Saving...' : 'Save Changes'}
           </Button>
         </form>
       </div>

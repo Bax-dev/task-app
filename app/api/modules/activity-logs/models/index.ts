@@ -5,6 +5,10 @@ const activityLogInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
   task: { select: { id: true, title: true, projectId: true } },
   organization: { select: { id: true, name: true } },
+  attachments: {
+    select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+    orderBy: { createdAt: 'desc' as const },
+  },
 };
 
 export async function createActivityLog(data: {

@@ -2,6 +2,7 @@ import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
 import { generateOTP, storeOTP, verifyOTP as verifyStoredOTP, canResendOTP } from '@/lib/otp';
 import { sendEmail, buildOTPEmail } from '@/lib/email';
+import { verifyGoogleToken } from '@/lib/google-auth';
 import * as authModel from '../models';
 import { RegisterDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO, ResendOTPDTO, AuthResponse } from '../types';
 
@@ -29,6 +30,10 @@ export async function login(dto: LoginDTO): Promise<AuthResponse> {
     throw new Error('Invalid email or password');
   }
 
+  if (!user.passwordHash) {
+    throw new Error('Invalid email or password');
+  }
+
   const isValid = await verifyPassword(dto.password, user.passwordHash);
   if (!isValid) {
     throw new Error('Invalid email or password');
@@ -40,6 +45,36 @@ export async function login(dto: LoginDTO): Promise<AuthResponse> {
     user: { id: user.id, name: user.name, email: user.email },
     token,
   };
+}
+
+export async function googleAuth(idToken: string): Promise<AuthResponse> {
+  const googleUser = await verifyGoogleToken(idToken);
+
+  // Check if user already exists by Google ID
+  let user = await authModel.findUserByGoogleId(googleUser.googleId);
+  if (user) {
+    const token = await createSession(user.id, user.email);
+    return { user: { id: user.id, name: user.name, email: user.email }, token };
+  }
+
+  // Check if user exists by email (link Google account)
+  const existingUser = await authModel.findUserByEmail(googleUser.email);
+  if (existingUser) {
+    const linked = await authModel.linkGoogleAccount(googleUser.email, googleUser.googleId, googleUser.avatar);
+    const token = await createSession(linked.id, linked.email);
+    return { user: { id: linked.id, name: linked.name, email: linked.email }, token };
+  }
+
+  // Create new user
+  const newUser = await authModel.createUser({
+    name: googleUser.name,
+    email: googleUser.email,
+    googleId: googleUser.googleId,
+    avatar: googleUser.avatar || undefined,
+  });
+
+  const token = await createSession(newUser.id, newUser.email);
+  return { user: { id: newUser.id, name: newUser.name, email: newUser.email }, token };
 }
 
 export async function getMe(userId: string) {

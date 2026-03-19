@@ -1,12 +1,12 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Plus, Users, Loader2, Trash2, Building2 } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
-import { useViewStore } from '@/stores/view-store';
-import { api } from '@/lib/api-client';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setView, selectView } from '@/store/slices/viewSlice';
+import { useGetOrganizationsQuery, useDeleteOrganizationMutation } from '@/store/api';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -21,23 +21,21 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function OrganizationsPage() {
-  const queryClient = useQueryClient();
-  const view = useViewStore((s) => s.getView('organizations'));
-  const setView = useViewStore((s) => s.setView);
+  const dispatch = useAppDispatch();
+  const view = useAppSelector(selectView('organizations'));
 
-  const { data: organizations = [], isLoading } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [], isLoading } = useGetOrganizationsQuery();
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/organizations/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+  const [deleteOrganization] = useDeleteOrganizationMutation();
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteOrganization(id).unwrap();
       toast.success('Organization deleted');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to delete');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,7 +53,7 @@ export default function OrganizationsPage() {
           <p className="text-muted-foreground mt-2">Manage all your organizations and teams</p>
         </div>
         <div className="flex items-center gap-3">
-          <ViewToggle view={view} onViewChange={(v) => setView('organizations', v)} />
+          <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'organizations', mode: v }))} />
           <Link href="/organizations/new">
             <Button className="gap-2">
               <Plus className="w-4 h-4" />
@@ -69,7 +67,7 @@ export default function OrganizationsPage() {
         view === 'grid' ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {organizations.map((org: any) => (
-              <OrgCard key={org.id} org={org} onDelete={(id) => deleteMutation.mutate(id)} />
+              <OrgCard key={org.id} org={org} onDelete={(id) => handleDelete(id)} />
             ))}
           </div>
         ) : (
@@ -115,7 +113,7 @@ export default function OrganizationsPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteMutation.mutate(org.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                              <AlertDialogAction onClick={() => handleDelete(org.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                                 Delete
                               </AlertDialogAction>
                             </AlertDialogFooter>

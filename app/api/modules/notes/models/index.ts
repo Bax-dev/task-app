@@ -8,21 +8,39 @@ export async function createNote(data: {
 }) {
   return prisma.note.create({
     data,
-    include: { createdBy: { select: { id: true, name: true, email: true } } },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      attachments: {
+        select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+        orderBy: { createdAt: 'desc' as const },
+      },
+    },
   });
 }
 
 export async function findNoteById(id: string) {
   return prisma.note.findUnique({
     where: { id },
-    include: { createdBy: { select: { id: true, name: true, email: true } } },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      attachments: {
+        select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+        orderBy: { createdAt: 'desc' as const },
+      },
+    },
   });
 }
 
 export async function findNotesByOrganization(organizationId: string) {
   return prisma.note.findMany({
     where: { organizationId },
-    include: { createdBy: { select: { id: true, name: true, email: true } } },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      attachments: {
+        select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+        orderBy: { createdAt: 'desc' as const },
+      },
+    },
     orderBy: { updatedAt: 'desc' },
   });
 }
@@ -31,7 +49,13 @@ export async function updateNote(id: string, data: { title?: string; content?: s
   return prisma.note.update({
     where: { id },
     data,
-    include: { createdBy: { select: { id: true, name: true, email: true } } },
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+      attachments: {
+        select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
+        orderBy: { createdAt: 'desc' as const },
+      },
+    },
   });
 }
 

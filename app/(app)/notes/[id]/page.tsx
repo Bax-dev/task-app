@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useState, useCallback, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -26,8 +25,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetNoteQuery, useGetOrgMembersQuery, useUpdateNoteMutation, useDeleteNoteMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
+import FileUpload from '@/components/ui/file-upload';
 
 const RichTextEditor = dynamic(() => import('@/components/notes/RichTextEditor'), { ssr: false });
 
@@ -38,7 +38,6 @@ export default function NoteEditorPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -47,41 +46,17 @@ export default function NoteEditorPage({
   const currentContentRef = useRef<string>('');
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { data: note, isLoading } = useQuery({
-    queryKey: ['notes', id],
-    queryFn: () => api.get<any>(`/api/notes/${id}`),
-  });
+  const { data: note, isLoading } = useGetNoteQuery(id);
 
   const orgId = note?.organizationId;
 
-  const { data: members = [] } = useQuery({
-    queryKey: ['organizations', orgId, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${orgId}/members`),
-    enabled: !!orgId,
-  });
+  const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isGuest = currentUserRole === 'GUEST';
 
-  const updateMutation = useMutation({
-    mutationFn: (data: { title?: string; content?: string }) =>
-      api.patch(`/api/notes/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes', id] });
-      setHasUnsavedChanges(false);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/api/notes/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notes'] });
-      toast.success('Note deleted');
-      router.push('/notes');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const [updateNote, { isLoading: isSaving }] = useUpdateNoteMutation();
+  const [deleteNote] = useDeleteNoteMutation();
 
   const handleContentChange = useCallback((html: string) => {
     currentContentRef.current = html;
@@ -89,19 +64,23 @@ export default function NoteEditorPage({
     // Auto-save after 3 seconds of inactivity
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      updateMutation.mutate({ content: html });
+      updateNote({ id, content: html }).unwrap().then(() => setHasUnsavedChanges(false)).catch(() => {});
     }, 3000);
-  }, [updateMutation]);
+  }, [updateNote, id]);
 
   const handleManualSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    updateMutation.mutate({ content: currentContentRef.current });
-    toast.success('Note saved');
-  }, [updateMutation]);
+    updateNote({ id, content: currentContentRef.current }).unwrap().then(() => {
+      setHasUnsavedChanges(false);
+      toast.success('Note saved');
+    }).catch((error: any) => {
+      toast.error(error?.data?.message || 'Failed to save');
+    });
+  }, [updateNote, id]);
 
   const handleTitleSave = () => {
     if (editTitle.trim() && editTitle.trim() !== note?.title) {
-      updateMutation.mutate({ title: editTitle.trim() });
+      updateNote({ id, title: editTitle.trim() });
     }
     setIsEditingTitle(false);
   };
@@ -197,10 +176,10 @@ export default function NoteEditorPage({
           Back to Notes
         </Link>
         <div className="flex items-center gap-2">
-          {updateMutation.isPending && (
+          {isSaving && (
             <span className="text-xs text-muted-foreground">Saving...</span>
           )}
-          {!updateMutation.isPending && hasUnsavedChanges && (
+          {!isSaving && hasUnsavedChanges && (
             <span className="text-xs text-muted-foreground">Unsaved changes</span>
           )}
 
@@ -211,7 +190,7 @@ export default function NoteEditorPage({
               size="sm"
               className="gap-2"
               onClick={handleManualSave}
-              disabled={updateMutation.isPending || !hasUnsavedChanges}
+              disabled={isSaving || !hasUnsavedChanges}
             >
               <Save className="w-4 h-4" />
               Save
@@ -256,7 +235,15 @@ export default function NoteEditorPage({
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={() => deleteMutation.mutate()}
+                    onClick={async () => {
+                      try {
+                        await deleteNote(id).unwrap();
+                        toast.success('Note deleted');
+                        router.push('/notes');
+                      } catch (error: any) {
+                        toast.error(error?.data?.message || error?.message || 'Failed to delete');
+                      }
+                    }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     Delete
@@ -306,6 +293,14 @@ export default function NoteEditorPage({
           by {note.createdBy?.name || note.createdBy?.email} &middot; Updated {new Date(note.updatedAt).toLocaleDateString()}
         </p>
       </div>
+
+      {/* Attachments */}
+      {!isGuest && (
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-foreground mb-2">Attachments</h3>
+          <FileUpload noteId={id} attachments={note.attachments || []} />
+        </div>
+      )}
 
       {/* Editor */}
       <RichTextEditor

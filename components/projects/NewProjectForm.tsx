@@ -2,13 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useCreateProjectMutation } from '@/store/api';
 
 interface NewProjectFormProps {
   spaceId: string;
@@ -16,33 +15,30 @@ interface NewProjectFormProps {
 
 export default function NewProjectForm({ spaceId }: NewProjectFormProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/projects', {
+  const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
+
+  const handleCreate = async () => {
+    try {
+      const data = await createProject({
         name,
         description: description || undefined,
         spaceId,
-      }),
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['spaces', spaceId] });
+      }).unwrap();
       toast.success('Project created!');
       router.push(`/projects/${data.id}`);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create project');
+    }
+  };
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        createMutation.mutate();
+        handleCreate();
       }}
       className="space-y-4"
     >
@@ -54,7 +50,7 @@ export default function NewProjectForm({ spaceId }: NewProjectFormProps) {
           onChange={(e) => setName(e.target.value)}
           placeholder="My Project"
           required
-          disabled={createMutation.isPending}
+          disabled={isCreating}
         />
       </div>
 
@@ -66,12 +62,12 @@ export default function NewProjectForm({ spaceId }: NewProjectFormProps) {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Brief project description"
           rows={3}
-          disabled={createMutation.isPending}
+          disabled={isCreating}
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={createMutation.isPending}>
-        {createMutation.isPending ? 'Creating...' : 'Create Project'}
+      <Button type="submit" className="w-full" disabled={isCreating}>
+        {isCreating ? 'Creating...' : 'Create Project'}
       </Button>
     </form>
   );

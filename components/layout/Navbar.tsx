@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -14,33 +13,26 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User, Bell } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation } from '@/store/api';
 
 export default function Navbar() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: () => api.get<{ id: string; name: string | null; email: string }>('/api/auth/me'),
-    retry: false,
-  });
+  const { data: user } = useGetMeQuery();
 
-  const { data: notifData } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => api.get<{ notifications: any[]; unreadCount: number }>('/api/notifications'),
-    refetchInterval: 30000,
-    retry: false,
-  });
+  const { data: notifData } = useGetNotificationsQuery();
 
-  const logoutMutation = useMutation({
-    mutationFn: () => api.post('/api/auth/logout'),
-    onSuccess: () => {
-      queryClient.clear();
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+
+  const handleLogout = async () => {
+    try {
+      await logout().unwrap();
       toast.success('Logged out successfully');
       router.push('/login');
-    },
-  });
+    } catch {
+      toast.error('Failed to log out');
+    }
+  };
 
   const unreadCount = notifData?.unreadCount ?? 0;
 
@@ -87,9 +79,9 @@ export default function Navbar() {
             </DropdownMenuItem>
           </Link>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => logoutMutation.mutate()} className="cursor-pointer" disabled={logoutMutation.isPending}>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>{logoutMutation.isPending ? 'Logging out...' : 'Log out'}</span>
+          <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-foreground focus:text-foreground" disabled={isLoggingOut}>
+            <LogOut className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -61,7 +61,9 @@ model User {
   id           String   @id @default(uuid()) @db.Uuid
   name         String?
   email        String   @unique
-  passwordHash String
+  passwordHash String?
+  googleId     String?  @unique
+  avatar       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -183,6 +185,7 @@ model Task {
   createdBy    User             @relation("TaskCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
   assignments  TaskAssignment[]
   activityLogs ActivityLog[]
+  attachments  Attachment[]     @relation("TaskAttachments")
 
   @@index([projectId])
   @@index([createdById])
@@ -234,6 +237,7 @@ model Note {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User         @relation("NoteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  attachments  Attachment[] @relation("NoteAttachments")
 
   @@index([organizationId])
   @@index([createdById])
@@ -254,9 +258,33 @@ model ActivityLog {
   task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User         @relation("ActivityLogCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  attachments  Attachment[] @relation("ActivityLogAttachments")
 
   @@index([organizationId])
   @@index([createdById])
   @@index([taskId])
   @@index([loggedAt])
+}
+
+model Attachment {
+  id            String   @id @default(uuid()) @db.Uuid
+  fileName      String
+  fileKey       String
+  fileUrl       String
+  fileSize      Int
+  mimeType      String
+  taskId        String?  @db.Uuid
+  activityLogId String?  @db.Uuid
+  noteId        String?  @db.Uuid
+  uploadedById  String   @db.Uuid
+  createdAt     DateTime @default(now())
+
+  task        Task?        @relation("TaskAttachments", fields: [taskId], references: [id], onDelete: Cascade)
+  activityLog ActivityLog? @relation("ActivityLogAttachments", fields: [activityLogId], references: [id], onDelete: Cascade)
+  note        Note?        @relation("NoteAttachments", fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([activityLogId])
+  @@index([noteId])
+  @@index([uploadedById])
 }

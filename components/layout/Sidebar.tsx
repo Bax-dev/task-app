@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -36,7 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetOrganizationsQuery, useCreateSpaceMutation, useGetOrgSpacesQuery } from '@/store/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -56,17 +55,13 @@ const SPACE_COLORS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const queryClient = useQueryClient();
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaceName, setSpaceName] = useState('');
   const [spaceColor, setSpaceColor] = useState('#7c3aed');
   const [spaceOrgId, setSpaceOrgId] = useState('');
 
-  const { data: organizations = [] } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [] } = useGetOrganizationsQuery();
 
   const toggleOrg = (orgId: string) => {
     setExpandedOrgs((prev) => {
@@ -77,18 +72,20 @@ export default function Sidebar() {
     });
   };
 
-  const createSpaceMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/spaces', { name: spaceName, color: spaceColor, organizationId: spaceOrgId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations', spaceOrgId, 'spaces'] });
+  const [createSpace, { isLoading: isCreatingSpace }] = useCreateSpaceMutation();
+
+  const handleCreateSpace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createSpace({ name: spaceName, color: spaceColor, organizationId: spaceOrgId }).unwrap();
       toast.success('Space created!');
       setNewSpaceOpen(false);
       setSpaceName('');
       setSpaceColor('#7c3aed');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create space');
+    }
+  };
 
   return (
     <aside className="w-64 border-r border-border bg-card flex flex-col overflow-hidden">
@@ -129,7 +126,7 @@ export default function Sidebar() {
               <DialogHeader>
                 <DialogTitle>New Space</DialogTitle>
               </DialogHeader>
-              <form onSubmit={(e) => { e.preventDefault(); createSpaceMutation.mutate(); }} className="space-y-4 mt-4">
+              <form onSubmit={handleCreateSpace} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label>Organization</Label>
                   <Select value={spaceOrgId} onValueChange={setSpaceOrgId}>
@@ -159,8 +156,8 @@ export default function Sidebar() {
                     ))}
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={createSpaceMutation.isPending || !spaceOrgId}>
-                  {createSpaceMutation.isPending ? 'Creating...' : 'Create Space'}
+                <Button type="submit" className="w-full" disabled={isCreatingSpace || !spaceOrgId}>
+                  {isCreatingSpace ? 'Creating...' : 'Create Space'}
                 </Button>
               </form>
             </DialogContent>
@@ -182,10 +179,8 @@ export default function Sidebar() {
 }
 
 function OrgSpacesTree({ org, expanded, onToggle, pathname }: { org: any; expanded: boolean; onToggle: () => void; pathname: string }) {
-  const { data: spaces = [], isLoading } = useQuery({
-    queryKey: ['organizations', org.id, 'spaces'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${org.id}/spaces`),
-    enabled: expanded,
+  const { data: spaces = [], isLoading } = useGetOrgSpacesQuery(org.id, {
+    skip: !expanded,
   });
 
   return (

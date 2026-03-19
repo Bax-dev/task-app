@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Loader2, Mail, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,43 +22,30 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
-import { api } from '@/lib/api-client';
+import { useGetOrganizationsQuery, useGetOrgMembersQuery, useGetOrgInvitationsQuery, useRemoveOrgMemberMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 
 export default function TeamPage() {
   const [selectedOrg, setSelectedOrg] = useState<string>('');
-  const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const { data: organizations = [], isLoading: orgsLoading } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [], isLoading: orgsLoading } = useGetOrganizationsQuery();
 
-  const { data: members = [], isLoading: membersLoading } = useQuery({
-    queryKey: ['organizations', selectedOrg, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${selectedOrg}/members`),
-    enabled: !!selectedOrg,
-  });
+  const { data: members = [], isLoading: membersLoading } = useGetOrgMembersQuery(selectedOrg, { skip: !selectedOrg });
 
-  const { data: invitations = [] } = useQuery({
-    queryKey: ['organizations', selectedOrg, 'invitations'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${selectedOrg}/invitations`),
-    enabled: !!selectedOrg,
-  });
+  const { data: invitations = [] } = useGetOrgInvitationsQuery(selectedOrg, { skip: !selectedOrg });
 
-  const removeMemberMutation = useMutation({
-    mutationFn: (memberId: string) =>
-      api.delete(`/api/organizations/${selectedOrg}/members/${memberId}`),
-    onSuccess: () => {
+  const [removeOrgMember] = useRemoveOrgMemberMutation();
+
+  const handleRemoveMember = async (memberId: string) => {
+    try {
+      await removeOrgMember({ orgId: selectedOrg, userId: memberId }).unwrap();
       toast.success('Member removed successfully');
-      queryClient.invalidateQueries({ queryKey: ['organizations', selectedOrg, 'members'] });
-    },
-    onError: (error: any) => {
-      toast.error(error?.message || 'Failed to remove member');
-    },
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to remove member');
+    }
+  };
 
   const selectedOrgData = organizations.find((org: any) => org.id === selectedOrg);
   const currentUserRole = members.find((m: any) => m.id === user?.id)?.role;
@@ -186,7 +172,7 @@ export default function TeamPage() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => removeMemberMutation.mutate(member.id)}
+                                  onClick={() => handleRemoveMember(member.id)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >
                                   Remove

@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetTaskQuery, useGetProjectQuery, useGetOrgMembersQuery, useUpdateTaskMutation, useDeleteTaskMutation, useToggleAssignmentMutation } from '@/store/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
+import FileUpload from '@/components/ui/file-upload';
 
 export default function TaskDetailPage({
   params,
@@ -45,92 +45,54 @@ export default function TaskDetailPage({
 }) {
   const { id: projectId, taskId } = use(params);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
 
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const { data: task, isLoading } = useQuery({
-    queryKey: ['tasks', taskId],
-    queryFn: () => api.get<any>(`/api/tasks/${taskId}`),
-  });
+  const { data: task, isLoading } = useGetTaskQuery(taskId);
 
-  const { data: project } = useQuery({
-    queryKey: ['projects', projectId],
-    queryFn: () => api.get<any>(`/api/projects/${projectId}`),
-    enabled: !!projectId,
-  });
+  const { data: project } = useGetProjectQuery(projectId);
 
   const orgId = project?.space?.organizationId || project?.space?.organization?.id;
 
-  const { data: members = [] } = useQuery({
-    queryKey: ['organizations', orgId, 'members'],
-    queryFn: () => api.get<any[]>(`/api/organizations/${orgId}/members`),
-    enabled: !!orgId,
-  });
+  const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isAdmin = currentUserRole === 'ADMIN';
   const isGuest = currentUserRole === 'GUEST';
 
-  const updateMutation = useMutation({
-    mutationFn: (data: { status?: string; priority?: string; rejectionReason?: string }) =>
-      api.patch(`/api/tasks/${taskId}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', taskId] });
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tasks'] });
-      toast.success('Task updated');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
+  const [deleteTask] = useDeleteTaskMutation();
+  const [toggleAssignment, { isLoading: isAssigning }] = useToggleAssignmentMutation();
 
-  const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/api/tasks/${taskId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tasks'] });
-      toast.success('Task deleted');
-      router.push(`/projects/${projectId}`);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const assignMutation = useMutation({
-    mutationFn: (userId: string) =>
-      api.post(`/api/tasks/${taskId}/assign`, { userId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', taskId] });
-      toast.success('Assignment updated');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const handleStatusChange = (value: string) => {
+  const handleStatusChange = async (value: string) => {
     if (value === 'REJECTED') {
       setRejectionReason('');
       setRejectionDialogOpen(true);
     } else {
-      updateMutation.mutate({ status: value });
+      try {
+        await updateTask({ id: taskId, status: value }).unwrap();
+        toast.success('Task updated');
+      } catch (error: any) {
+        toast.error(error?.data?.message || error?.message || 'Failed to update');
+      }
     }
   };
 
-  const handleRejectionSubmit = () => {
+  const handleRejectionSubmit = async () => {
     if (!rejectionReason.trim()) {
       toast.error('Please provide a rejection reason');
       return;
     }
-    updateMutation.mutate(
-      { status: 'REJECTED', rejectionReason: rejectionReason.trim() },
-      {
-        onSuccess: () => {
-          setRejectionDialogOpen(false);
-          setRejectionReason('');
-          queryClient.invalidateQueries({ queryKey: ['tasks', taskId] });
-          queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tasks'] });
-          toast.success('Task updated');
-        },
-      }
-    );
+    try {
+      await updateTask({ id: taskId, status: 'REJECTED', rejectionReason: rejectionReason.trim() }).unwrap();
+      setRejectionDialogOpen(false);
+      setRejectionReason('');
+      toast.success('Task updated');
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
+    }
   };
 
   if (isLoading) {
@@ -178,7 +140,15 @@ export default function TaskDetailPage({
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() => deleteMutation.mutate()}
+                  onClick={async () => {
+                    try {
+                      await deleteTask(taskId).unwrap();
+                      toast.success('Task deleted');
+                      router.push(`/projects/${projectId}`);
+                    } catch (error: any) {
+                      toast.error(error?.data?.message || error?.message || 'Failed to delete');
+                    }
+                  }}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Delete
@@ -218,7 +188,14 @@ export default function TaskDetailPage({
           </div>
           <div className="space-y-2">
             <Label>Priority</Label>
-            <Select value={task.priority} onValueChange={(value) => updateMutation.mutate({ priority: value })}>
+            <Select value={task.priority} onValueChange={async (value) => {
+              try {
+                await updateTask({ id: taskId, priority: value }).unwrap();
+                toast.success('Task updated');
+              } catch (error: any) {
+                toast.error(error?.data?.message || error?.message || 'Failed to update');
+              }
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="LOW">Low</SelectItem>
@@ -265,7 +242,7 @@ export default function TaskDetailPage({
             <Button
               variant="destructive"
               onClick={handleRejectionSubmit}
-              disabled={updateMutation.isPending || !rejectionReason.trim()}
+              disabled={isUpdating || !rejectionReason.trim()}
             >
               Reject Task
             </Button>
@@ -292,8 +269,8 @@ export default function TaskDetailPage({
                 <span className="font-medium">{a.user.name || a.user.email}</span>
                 {isAdmin && (
                   <button
-                    onClick={() => assignMutation.mutate(a.user.id)}
-                    disabled={assignMutation.isPending}
+                    onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
+                    disabled={isAssigning}
                     className="hover:text-destructive transition-colors"
                     title="Unassign"
                   >
@@ -311,7 +288,7 @@ export default function TaskDetailPage({
         {isAdmin && unassignedMembers.length > 0 && (
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">Assign member</Label>
-            <Select onValueChange={(userId) => assignMutation.mutate(userId)}>
+            <Select onValueChange={(userId) => toggleAssignment({ taskId, userId })}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a member to assign" />
               </SelectTrigger>
@@ -326,6 +303,14 @@ export default function TaskDetailPage({
           </div>
         )}
       </div>
+
+      {/* Attachments */}
+      {!isGuest && (
+        <div className="bg-card border border-border rounded-lg p-6 mb-6">
+          <h3 className="font-semibold text-foreground mb-4">Attachments</h3>
+          <FileUpload taskId={taskId} attachments={task.attachments || []} />
+        </div>
+      )}
 
       {/* Details */}
       <div className="bg-card border border-border rounded-lg p-6 space-y-4">

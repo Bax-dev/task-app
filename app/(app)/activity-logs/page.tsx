@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,11 +19,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Activity, Plus, Loader2, Circle, PlayCircle, CheckCircle2, AlertTriangle, Trash2, Pencil } from 'lucide-react';
+import { Activity, Plus, Loader2, Circle, PlayCircle, CheckCircle2, AlertTriangle, Trash2, Pencil, Paperclip, Upload } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
-import { useViewStore } from '@/stores/view-store';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useGetUserActivityLogsQuery, useGetOrganizationsQuery, useGetUserTasksQuery, useCreateActivityLogMutation, useUpdateActivityLogMutation, useDeleteActivityLogMutation } from '@/store/api';
+import FileUpload from '@/components/ui/file-upload';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string; icon: React.ReactNode }> = {
   NOT_STARTED: { label: 'Not Started', color: 'bg-gray-100 text-gray-600 border-gray-200', dot: 'bg-gray-400', icon: <Circle className="w-4 h-4 text-gray-400" /> },
@@ -34,9 +35,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string;
 };
 
 export default function ActivityLogsPage() {
-  const queryClient = useQueryClient();
-  const view = useViewStore((s) => s.getView('activity-logs'));
-  const setViewMode = useViewStore((s) => s.setView);
+  const dispatch = useAppDispatch();
+  const view = useAppSelector(selectView('activity-logs'));
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [open, setOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<any>(null);
@@ -48,57 +48,56 @@ export default function ActivityLogsPage() {
   const [orgId, setOrgId] = useState('');
   const [taskId, setTaskId] = useState('');
 
-  const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['activity-logs', 'mine'],
-    queryFn: () => api.get<any[]>('/api/activity-logs'),
-  });
+  const { data: logs = [], isLoading } = useGetUserActivityLogsQuery();
 
-  const { data: organizations = [] } = useQuery({
-    queryKey: ['organizations'],
-    queryFn: () => api.get<any[]>('/api/organizations'),
-  });
+  const { data: organizations = [] } = useGetOrganizationsQuery();
 
-  const { data: tasks = [] } = useQuery({
-    queryKey: ['tasks', 'mine'],
-    queryFn: () => api.get<any[]>('/api/tasks'),
-  });
+  const { data: tasks = [] } = useGetUserTasksQuery();
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/activity-logs', {
+  const [createActivityLog, { isLoading: isCreating }] = useCreateActivityLogMutation();
+  const [updateActivityLog, { isLoading: isUpdatePending }] = useUpdateActivityLogMutation();
+  const [deleteActivityLog] = useDeleteActivityLogMutation();
+
+  const handleCreate = async () => {
+    try {
+      const newLog = await createActivityLog({
         description,
         status,
         note: note || undefined,
         organizationId: orgId,
         taskId: taskId || undefined,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
-      toast.success('Activity logged!');
-      resetForm();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+      }).unwrap();
+      toast.success('Activity logged! You can now attach files.');
+      setEditingLog(newLog);
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to log activity');
+    }
+  };
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; description?: string; status?: string; note?: string | null; taskId?: string | null }) =>
-      api.patch(`/api/activity-logs/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+  const handleUpdate = async () => {
+    try {
+      await updateActivityLog({
+        id: editingLog.id,
+        description,
+        status,
+        note: note || null,
+        taskId: taskId || null,
+      }).unwrap();
       toast.success('Activity updated!');
       resetForm();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
+    }
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/activity-logs/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['activity-logs'] });
+  const handleDeleteLog = async (id: string) => {
+    try {
+      await deleteActivityLog(id).unwrap();
       toast.success('Activity log deleted');
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to delete');
+    }
+  };
 
   function resetForm() {
     setOpen(false);
@@ -123,15 +122,9 @@ export default function ActivityLogsPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (editingLog) {
-      updateMutation.mutate({
-        id: editingLog.id,
-        description,
-        status,
-        note: note || null,
-        taskId: taskId || null,
-      });
+      handleUpdate();
     } else {
-      createMutation.mutate();
+      handleCreate();
     }
   }
 
@@ -153,7 +146,7 @@ export default function ActivityLogsPage() {
     BLOCKED: logs.filter((l: any) => l.status === 'BLOCKED').length,
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = isCreating || isUpdatePending;
 
   return (
     <div className="p-8">
@@ -163,7 +156,7 @@ export default function ActivityLogsPage() {
           <p className="text-muted-foreground mt-2">Record and track what you&apos;re working on</p>
         </div>
         <div className="flex items-center gap-3">
-          <ViewToggle view={view} onViewChange={(v) => setViewMode('activity-logs', v)} />
+          <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'activity-logs', mode: v }))} />
           <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); setOpen(v); }}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -239,6 +232,17 @@ export default function ActivityLogsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label>Attachments (max 5MB each)</Label>
+                  {editingLog ? (
+                    <FileUpload activityLogId={editingLog.id} attachments={editingLog.attachments || []} />
+                  ) : (
+                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                      <Upload className="w-5 h-5 mx-auto text-muted-foreground mb-1" />
+                      <p className="text-xs text-muted-foreground">Save activity first, then attach files</p>
+                    </div>
+                  )}
+                </div>
                 <Button type="submit" className="w-full" disabled={isPending || (!editingLog && !orgId)}>
                   {isPending ? (editingLog ? 'Updating...' : 'Logging...') : (editingLog ? 'Update Activity' : 'Log Activity')}
                 </Button>
@@ -304,7 +308,7 @@ export default function ActivityLogsPage() {
                       <button onClick={() => openEdit(log)} className="p-1 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => deleteMutation.mutate(log.id)} className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600 transition-colors">
+                      <button onClick={() => handleDeleteLog(log.id)} className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -313,9 +317,17 @@ export default function ActivityLogsPage() {
                   {log.note && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{log.note}</p>
                   )}
+                  {log.attachments && log.attachments.length > 0 && (
+                    <div className="mb-3">
+                      <FileUpload activityLogId={log.id} attachments={log.attachments} compact />
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {log.task && (
                       <span className="inline-block px-2 py-0.5 rounded bg-secondary/50 truncate max-w-[150px]">{log.task.title}</span>
+                    )}
+                    {log.attachments && log.attachments.length > 0 && (
+                      <span className="inline-flex items-center gap-1"><Paperclip className="w-3 h-3" />{log.attachments.length}</span>
                     )}
                     <span className="ml-auto">{new Date(log.loggedAt).toLocaleDateString()}</span>
                   </div>
@@ -360,7 +372,7 @@ export default function ActivityLogsPage() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex gap-1 justify-end">
                           <button onClick={() => openEdit(log)} className="text-xs px-2 py-1 rounded bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors">Edit</button>
-                          <button onClick={() => deleteMutation.mutate(log.id)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors">Delete</button>
+                          <button onClick={() => handleDeleteLog(log.id)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors">Delete</button>
                         </div>
                       </td>
                     </tr>

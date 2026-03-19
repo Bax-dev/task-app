@@ -2,7 +2,6 @@
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +16,7 @@ import {
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useCreateTaskMutation } from '@/store/api';
 
 export default function NewTaskPage({
   params,
@@ -26,7 +25,6 @@ export default function NewTaskPage({
 }) {
   const { id: projectId } = use(params);
   const router = useRouter();
-  const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -34,25 +32,24 @@ export default function NewTaskPage({
   const [status, setStatus] = useState('TODO');
   const [dueDate, setDueDate] = useState('');
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/tasks', {
+  const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
+
+  const handleCreate = async () => {
+    try {
+      await createTask({
         title,
         description: description || undefined,
         priority,
         status,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         projectId,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'tasks'] });
+      }).unwrap();
       toast.success('Task created!');
       router.push(`/projects/${projectId}`);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create task');
+    }
+  };
 
   return (
     <div className="p-8 max-w-2xl">
@@ -66,7 +63,7 @@ export default function NewTaskPage({
 
       <h1 className="text-3xl font-bold text-foreground mb-8">New Task</h1>
 
-      <form onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }} className="space-y-6">
+      <form onSubmit={(e) => { e.preventDefault(); handleCreate(); }} className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="title">Title</Label>
           <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Task title" />
@@ -110,8 +107,8 @@ export default function NewTaskPage({
           <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </div>
 
-        <Button type="submit" disabled={createMutation.isPending}>
-          {createMutation.isPending ? 'Creating...' : 'Create Task'}
+        <Button type="submit" disabled={isCreating}>
+          {isCreating ? 'Creating...' : 'Create Task'}
         </Button>
       </form>
     </div>

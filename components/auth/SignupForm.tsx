@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useRegisterMutation } from '@/store/api';
+import GoogleSignInButton from './GoogleSignInButton';
 
 export default function SignupForm() {
   const router = useRouter();
@@ -17,25 +17,21 @@ export default function SignupForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [register, { isLoading }] = useRegisterMutation();
 
-  const registerMutation = useMutation({
-    mutationFn: () => api.post('/api/auth/register', { name, email, password }),
-    onSuccess: () => {
-      toast.success('Account created successfully!');
-      router.push(redirect || '/dashboard');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Registration failed');
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
-    registerMutation.mutate();
+    try {
+      await register({ name, email, password }).unwrap();
+      toast.success('Account created successfully!');
+      router.push(redirect || '/dashboard');
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Registration failed');
+    }
   };
 
   return (
@@ -49,7 +45,7 @@ export default function SignupForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
-          disabled={registerMutation.isPending}
+          disabled={isLoading}
           minLength={2}
         />
       </div>
@@ -63,7 +59,7 @@ export default function SignupForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          disabled={registerMutation.isPending}
+          disabled={isLoading}
         />
       </div>
 
@@ -76,7 +72,7 @@ export default function SignupForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          disabled={registerMutation.isPending}
+          disabled={isLoading}
           minLength={8}
         />
       </div>
@@ -90,13 +86,13 @@ export default function SignupForm() {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
-          disabled={registerMutation.isPending}
+          disabled={isLoading}
           minLength={8}
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
-        {registerMutation.isPending ? 'Creating account...' : 'Create Account'}
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? 'Creating account...' : 'Create Account'}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
@@ -105,6 +101,8 @@ export default function SignupForm() {
           Log in
         </a>
       </p>
+
+      <GoogleSignInButton />
     </form>
   );
 }

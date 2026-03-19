@@ -2,12 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { api } from '@/lib/api-client';
+import { useResetPasswordMutation } from '@/store/api';
 import { CheckCircle } from 'lucide-react';
 
 interface ResetPasswordFormProps {
@@ -20,22 +19,7 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [success, setSuccess] = useState(false);
-
-  const resetMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/auth/reset-password', {
-        email,
-        otp,
-        newPassword,
-      }),
-    onSuccess: () => {
-      setSuccess(true);
-      toast.success('Password reset successfully!');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+  const [resetPassword, { isLoading }] = useResetPasswordMutation();
 
   if (success) {
     return (
@@ -54,13 +38,19 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
 
   return (
     <form
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
         if (newPassword !== confirmPassword) {
           toast.error('Passwords do not match');
           return;
         }
-        resetMutation.mutate();
+        try {
+          await resetPassword({ email, otp, newPassword }).unwrap();
+          setSuccess(true);
+          toast.success('Password reset successfully!');
+        } catch (error: any) {
+          toast.error(error?.data?.message || error?.message || 'Failed to reset password');
+        }
       }}
       className="space-y-4 w-full"
     >
@@ -82,7 +72,7 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
           required
           maxLength={6}
-          disabled={resetMutation.isPending}
+          disabled={isLoading}
           className="text-center text-lg tracking-widest"
         />
       </div>
@@ -97,7 +87,7 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
           onChange={(e) => setNewPassword(e.target.value)}
           required
           minLength={8}
-          disabled={resetMutation.isPending}
+          disabled={isLoading}
         />
       </div>
 
@@ -111,16 +101,16 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
           minLength={8}
-          disabled={resetMutation.isPending}
+          disabled={isLoading}
         />
       </div>
 
       <Button
         type="submit"
         className="w-full"
-        disabled={resetMutation.isPending}
+        disabled={isLoading}
       >
-        {resetMutation.isPending ? 'Resetting...' : 'Reset Password'}
+        {isLoading ? 'Resetting...' : 'Reset Password'}
       </Button>
     </form>
   );

@@ -1,8 +1,6 @@
 'use client';
 
 import { use, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, UserPlus, Mail, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { api, ApiError } from '@/lib/api-client';
+import { useGetOrganizationQuery, useAddOrgMemberMutation, useCreateInvitationMutation } from '@/store/api';
 
 export default function AddMemberPage({
   params,
@@ -25,57 +23,42 @@ export default function AddMemberPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: orgId } = use(params);
-  const queryClient = useQueryClient();
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('MEMBER');
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
 
-  const { data: org } = useQuery({
-    queryKey: ['organizations', orgId],
-    queryFn: () => api.get<any>(`/api/organizations/${orgId}`),
-  });
+  const { data: org } = useGetOrganizationQuery(orgId);
+
+  const [addOrgMember, { isLoading: isAddingMember }] = useAddOrgMemberMutation();
+  const [createInvitation, { isLoading: isInviting }] = useCreateInvitationMutation();
 
   // Direct add member (existing user)
-  const addMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/organizations/' + orgId + '/members/add', {
-        email,
-        organizationId: orgId,
-        role,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations', orgId, 'members'] });
+  const handleAddMember = async () => {
+    try {
+      await addOrgMember({ orgId, email, role }).unwrap();
       setAddSuccess(email);
       setEmail('');
       toast.success('Member added to the organization!');
-    },
-    onError: (error: ApiError) => {
-      if (error.status === 404) {
+    } catch (error: any) {
+      if (error?.status === 404) {
         toast.error('No account found with this email. Use the "Send Invitation" tab instead.');
       } else {
-        toast.error(error.message);
+        toast.error(error?.data?.message || error?.message || 'Failed to add member');
       }
-    },
-  });
+    }
+  };
 
   // Send invitation (new user)
-  const inviteMutation = useMutation({
-    mutationFn: () =>
-      api.post('/api/invitations', {
-        email,
-        organizationId: orgId,
-        role,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['organizations', orgId, 'invitations'] });
+  const handleInvite = async () => {
+    try {
+      await createInvitation({ email, organizationId: orgId, role }).unwrap();
       toast.success(`Invitation sent to ${email}`);
       setEmail('');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to send invitation');
+    }
+  };
 
   return (
     <div className="p-8 max-w-2xl">
@@ -127,7 +110,7 @@ export default function AddMemberPage({
               The person must already have a TaskFlow account. They&apos;ll be added instantly.
             </p>
 
-            <form onSubmit={(e) => { e.preventDefault(); addMutation.mutate(); }} className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleAddMember(); }} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="add-email">Email Address</Label>
                 <Input
@@ -137,7 +120,7 @@ export default function AddMemberPage({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  disabled={addMutation.isPending}
+                  disabled={isAddingMember}
                 />
               </div>
 
@@ -153,9 +136,9 @@ export default function AddMemberPage({
                 </Select>
               </div>
 
-              <Button type="submit" className="w-full gap-2" disabled={addMutation.isPending}>
+              <Button type="submit" className="w-full gap-2" disabled={isAddingMember}>
                 <UserPlus className="w-4 h-4" />
-                {addMutation.isPending ? 'Adding...' : 'Add Member'}
+                {isAddingMember ? 'Adding...' : 'Add Member'}
               </Button>
             </form>
           </div>
@@ -169,7 +152,7 @@ export default function AddMemberPage({
               Send an invitation link. They can sign up and join the organization.
             </p>
 
-            <form onSubmit={(e) => { e.preventDefault(); inviteMutation.mutate(); }} className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleInvite(); }} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="invite-email">Email Address</Label>
                 <Input
@@ -179,7 +162,7 @@ export default function AddMemberPage({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  disabled={inviteMutation.isPending}
+                  disabled={isInviting}
                 />
               </div>
 
@@ -195,9 +178,9 @@ export default function AddMemberPage({
                 </Select>
               </div>
 
-              <Button type="submit" className="w-full gap-2" disabled={inviteMutation.isPending}>
+              <Button type="submit" className="w-full gap-2" disabled={isInviting}>
                 <Mail className="w-4 h-4" />
-                {inviteMutation.isPending ? 'Sending...' : 'Send Invitation'}
+                {isInviting ? 'Sending...' : 'Send Invitation'}
               </Button>
             </form>
           </div>
