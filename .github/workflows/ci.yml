@@ -118,11 +118,22 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
+          envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,NEXT_PUBLIC_APP_URL
           script: |
             if [ ! -d ~/task-app ]; then
               echo "==> Cloning repository..."
@@ -130,6 +141,18 @@ jobs:
             fi
 
             cd ~/task-app
+
+            echo "==> Writing .env file..."
+            echo "DATABASE_URL=\"${DATABASE_URL}\"" > .env
+            echo "JWT_SECRET=\"${JWT_SECRET}\"" >> .env
+            echo "REDIS_URL=\"${REDIS_URL}\"" >> .env
+            echo "RESEND_API_KEY=\"${RESEND_API_KEY}\"" >> .env
+            echo "AWS_REGION=\"${AWS_REGION}\"" >> .env
+            echo "AWS_ACCESS_KEY_ID=\"${AWS_ACCESS_KEY_ID}\"" >> .env
+            echo "AWS_SECRET_ACCESS_KEY=\"${AWS_SECRET_ACCESS_KEY}\"" >> .env
+            echo "AWS_S3_BUCKET=\"${AWS_S3_BUCKET}\"" >> .env
+            echo "NEXT_PUBLIC_APP_URL=\"${NEXT_PUBLIC_APP_URL}\"" >> .env
+            echo "NODE_ENV=\"production\"" >> .env
 
             echo "==> Pulling latest code..."
             git pull origin main
