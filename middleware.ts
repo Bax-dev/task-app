@@ -10,6 +10,7 @@ const authRoutes = ['/login', '/signup', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get('session')?.value;
+  const refreshToken = request.cookies.get('refresh_token')?.value;
   const pathname = request.nextUrl.pathname;
 
   const isProtectedRoute = protectedRoutes.some((route) =>
@@ -19,10 +20,29 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(route)
   );
 
-  if (isProtectedRoute && !token) {
-    const url = new URL('/login', request.url);
-    url.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(url);
+  if (isProtectedRoute) {
+    if (!token && !refreshToken) {
+      // No tokens at all — redirect to login
+      const url = new URL('/login', request.url);
+      url.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(url);
+    }
+
+    if (token) {
+      try {
+        await jwtVerify(token, SECRET);
+        // Access token is valid, proceed
+      } catch {
+        // Access token expired but refresh token exists — let client-side handle refresh
+        if (!refreshToken) {
+          const url = new URL('/login', request.url);
+          url.searchParams.set('redirect', pathname);
+          return NextResponse.redirect(url);
+        }
+        // Has refresh token, allow through so RTK Query can auto-refresh
+      }
+    }
+    // If no access token but has refresh token, allow through for client-side refresh
   }
 
   if (isAuthRoute && token) {

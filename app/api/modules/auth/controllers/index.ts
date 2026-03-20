@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse, unauthorizedResponse, rateLimitResponse } from '@/lib/api-response';
 import { setSessionCookie, deleteSessionCookie } from '@/lib/auth/session';
+import { setRefreshTokenCookie, getRefreshTokenFromCookie, deleteRefreshTokenCookie } from '@/lib/auth/refresh-token';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { loginLimiter } from '@/lib/rate-limit';
@@ -19,6 +20,7 @@ export async function handleRegister(request: NextRequest) {
 
     const result = await authService.register(validation.data);
     await setSessionCookie(result.token);
+    await setRefreshTokenCookie(result.refreshToken);
 
     return successResponse({ user: result.user }, 201);
   } catch (error: any) {
@@ -41,6 +43,7 @@ export async function handleLogin(request: NextRequest) {
 
     const result = await authService.login(validation.data);
     await setSessionCookie(result.token);
+    await setRefreshTokenCookie(result.refreshToken);
 
     return successResponse({ user: result.user });
   } catch (error: any) {
@@ -51,12 +54,51 @@ export async function handleLogin(request: NextRequest) {
   }
 }
 
-export async function handleLogout() {
+export async function handleLogout(request: NextRequest) {
   try {
+    // Authenticate to get user ID for revoking refresh tokens
+    const session = await authenticateRequest(request);
+    const refreshToken = await getRefreshTokenFromCookie();
+
+    if (session) {
+      await authService.logoutUser(session.userId, refreshToken ?? undefined);
+    }
+
+    // Clear both cookies
     await deleteSessionCookie();
+    await deleteRefreshTokenCookie();
+
     return successResponse({ message: 'Logged out successfully' });
   } catch {
-    return errorResponse('Logout failed', 500);
+    // Even if revocation fails, still clear cookies
+    await deleteSessionCookie();
+    await deleteRefreshTokenCookie();
+    return successResponse({ message: 'Logged out successfully' });
+  }
+}
+
+export async function handleRefresh() {
+  try {
+    const refreshToken = await getRefreshTokenFromCookie();
+    if (!refreshToken) {
+      return unauthorizedResponse('No refresh token provided');
+    }
+
+    const result = await authService.refreshSession(refreshToken);
+
+    // Set new cookies
+    await setSessionCookie(result.token);
+    await setRefreshTokenCookie(result.refreshToken);
+
+    return successResponse({ message: 'Token refreshed successfully' });
+  } catch (error: any) {
+    if (error.message === 'Invalid or expired refresh token') {
+      // Clear stale cookies
+      await deleteSessionCookie();
+      await deleteRefreshTokenCookie();
+      return unauthorizedResponse('Invalid or expired refresh token');
+    }
+    return errorResponse('Token refresh failed', 500);
   }
 }
 
@@ -153,6 +195,7 @@ export async function handleGoogleAuth(request: NextRequest) {
 
     const result = await authService.googleAuth(validation.data.idToken);
     await setSessionCookie(result.token);
+    await setRefreshTokenCookie(result.refreshToken);
 
     return successResponse({ user: result.user });
   } catch (error: any) {

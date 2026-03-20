@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { signToken, verifyToken, JWTPayload } from './jwt';
 
 const COOKIE_NAME = 'session';
-const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const MAX_AGE = 60 * 15; // 15 minutes (matches access token expiry)
 
 export async function createSession(userId: string, email: string): Promise<string> {
   return signToken({ userId, email });

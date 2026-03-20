@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useGetMeQuery, useLogoutMutation } from '@/store/api';
+import { useGetMeQuery, useLogoutMutation, apiSlice } from '@/store/api';
+import { useAppDispatch } from '@/store/hooks';
 import { toast } from 'sonner';
 
 const links = [
@@ -19,6 +20,7 @@ const links = [
 export default function MobileNav() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { data: user } = useGetMeQuery();
   const isLoggedIn = !!user;
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
@@ -26,12 +28,13 @@ export default function MobileNav() {
   const handleLogout = async () => {
     try {
       await logout().unwrap();
-      toast.success('Logged out successfully');
-      setOpen(false);
-      router.push('/login');
     } catch {
-      toast.error('Failed to log out');
+      // Still clear state even if API call fails
     }
+    dispatch(apiSlice.util.resetApiState());
+    toast.success('Logged out successfully');
+    setOpen(false);
+    router.push('/login');
   };
 
   return (

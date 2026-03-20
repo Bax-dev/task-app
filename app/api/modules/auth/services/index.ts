@@ -1,5 +1,6 @@
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
+import { signRefreshToken, verifyRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from '@/lib/auth/refresh-token';
 import { generateOTP, storeOTP, verifyOTP as verifyStoredOTP, canResendOTP } from '@/lib/otp';
 import { sendEmail, buildOTPEmail } from '@/lib/email';
 import { verifyGoogleToken } from '@/lib/google-auth';
@@ -20,8 +21,9 @@ export async function register(dto: RegisterDTO): Promise<AuthResponse> {
   });
 
   const token = await createSession(user.id, user.email);
+  const { token: refreshToken } = await signRefreshToken(user.id, user.email);
 
-  return { user, token };
+  return { user, token, refreshToken };
 }
 
 export async function login(dto: LoginDTO): Promise<AuthResponse> {
@@ -40,10 +42,12 @@ export async function login(dto: LoginDTO): Promise<AuthResponse> {
   }
 
   const token = await createSession(user.id, user.email);
+  const { token: refreshToken } = await signRefreshToken(user.id, user.email);
 
   return {
     user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar },
     token,
+    refreshToken,
   };
 }
 
@@ -54,7 +58,8 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   let user = await authModel.findUserByGoogleId(googleUser.googleId);
   if (user) {
     const token = await createSession(user.id, user.email);
-    return { user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar }, token };
+    const { token: refreshToken } = await signRefreshToken(user.id, user.email);
+    return { user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar }, token, refreshToken };
   }
 
   // Check if user exists by email (link Google account)
@@ -62,7 +67,8 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   if (existingUser) {
     const linked = await authModel.linkGoogleAccount(googleUser.email, googleUser.googleId, googleUser.avatar);
     const token = await createSession(linked.id, linked.email);
-    return { user: { id: linked.id, name: linked.name, email: linked.email, avatar: linked.avatar }, token };
+    const { token: refreshToken } = await signRefreshToken(linked.id, linked.email);
+    return { user: { id: linked.id, name: linked.name, email: linked.email, avatar: linked.avatar }, token, refreshToken };
   }
 
   // Create new user
@@ -74,7 +80,37 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   });
 
   const token = await createSession(newUser.id, newUser.email);
-  return { user: { id: newUser.id, name: newUser.name, email: newUser.email, avatar: newUser.avatar }, token };
+  const { token: refreshToken } = await signRefreshToken(newUser.id, newUser.email);
+  return { user: { id: newUser.id, name: newUser.name, email: newUser.email, avatar: newUser.avatar }, token, refreshToken };
+}
+
+export async function refreshSession(refreshTokenValue: string): Promise<{ token: string; refreshToken: string }> {
+  const payload = await verifyRefreshToken(refreshTokenValue);
+  if (!payload) {
+    throw new Error('Invalid or expired refresh token');
+  }
+
+  // Revoke old refresh token (token rotation)
+  await revokeRefreshToken(payload.userId, payload.tokenId);
+
+  // Issue new access token + new refresh token
+  const token = await createSession(payload.userId, payload.email);
+  const { token: refreshToken } = await signRefreshToken(payload.userId, payload.email);
+
+  return { token, refreshToken };
+}
+
+export async function logoutUser(userId: string, refreshTokenValue?: string): Promise<void> {
+  if (refreshTokenValue) {
+    // Revoke the specific refresh token
+    const payload = await verifyRefreshToken(refreshTokenValue);
+    if (payload) {
+      await revokeRefreshToken(payload.userId, payload.tokenId);
+    }
+  } else {
+    // If no refresh token provided, revoke all for safety
+    await revokeAllRefreshTokens(userId);
+  }
 }
 
 export async function getMe(userId: string) {

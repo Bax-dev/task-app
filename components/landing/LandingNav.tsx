@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { useGetMeQuery, useLogoutMutation } from '@/store/api';
+import { useGetMeQuery, useLogoutMutation, apiSlice } from '@/store/api';
+import { useAppDispatch } from '@/store/hooks';
 import { toast } from 'sonner';
 import MobileNav from './MobileNav';
 
 export default function LandingNav() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { data: user } = useGetMeQuery();
   const isLoggedIn = !!user;
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
@@ -16,11 +18,12 @@ export default function LandingNav() {
   const handleLogout = async () => {
     try {
       await logout().unwrap();
-      toast.success('Logged out successfully');
-      router.push('/login');
     } catch {
-      toast.error('Failed to log out');
+      // Still clear state even if API call fails
     }
+    dispatch(apiSlice.util.resetApiState());
+    toast.success('Logged out successfully');
+    router.push('/login');
   };
 
   return (

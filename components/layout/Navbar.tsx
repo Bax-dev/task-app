@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User, Bell, Menu, Search, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation } from '@/store/api';
+import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation, apiSlice } from '@/store/api';
+import { useAppDispatch } from '@/store/hooks';
 
 const BREADCRUMB_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -36,6 +37,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
 export default function Navbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
+  const dispatch = useAppDispatch();
 
   const { data: user } = useGetMeQuery();
   const { data: notifData } = useGetNotificationsQuery();
@@ -44,11 +46,12 @@ export default function Navbar({ onMenuToggle }: { onMenuToggle?: () => void }) 
   const handleLogout = async () => {
     try {
       await logout().unwrap();
-      toast.success('Logged out successfully');
-      router.push('/login');
     } catch {
-      toast.error('Failed to log out');
+      // Still clear state even if API call fails
     }
+    dispatch(apiSlice.util.resetApiState());
+    toast.success('Logged out successfully');
+    router.push('/login');
   };
 
   const unreadCount = notifData?.unreadCount ?? 0;

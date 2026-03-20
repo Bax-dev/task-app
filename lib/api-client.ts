@@ -14,6 +14,31 @@ class ApiError extends Error {
   }
 }
 
+// Mutex to prevent multiple simultaneous refresh requests
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+async function attemptRefresh(): Promise<boolean> {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = fetch('/api/auth/refresh', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+  })
+    .then((res) => res.ok)
+    .catch(() => false)
+    .finally(() => {
+      isRefreshing = false;
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+}
+
 async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {} } = options;
 
@@ -30,7 +55,17 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
     config.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, config);
+  let response = await fetch(url, config);
+
+  // Auto-refresh on 401 (skip for auth endpoints)
+  if (response.status === 401 && !url.includes('/auth/refresh') && !url.includes('/auth/login') && !url.includes('/auth/register')) {
+    const refreshed = await attemptRefresh();
+    if (refreshed) {
+      // Retry original request with new access token
+      response = await fetch(url, config);
+    }
+  }
+
   const data = await response.json();
 
   if (!response.ok) {

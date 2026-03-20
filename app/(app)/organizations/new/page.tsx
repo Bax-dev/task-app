@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import NewOrgForm from '@/components/organizations/NewOrgForm';
+import NewOrgForm from '@/components/organizations/forms/NewOrgForm';
 
 export const metadata: Metadata = {
   title: 'Create Organization | TaskFlow',

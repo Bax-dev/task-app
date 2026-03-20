@@ -29,7 +29,7 @@ import { useGetNoteQuery, useGetOrgMembersQuery, useUpdateNoteMutation, useDelet
 import { useAuth } from '@/hooks/use-auth';
 import FileUpload from '@/components/ui/file-upload';
 
-const RichTextEditor = dynamic(() => import('@/components/notes/RichTextEditor'), { ssr: false });
+const RichTextEditor = dynamic(() => import('@/components/notes/editor/RichTextEditor'), { ssr: false });
 
 export default function NoteEditorPage({
   params,

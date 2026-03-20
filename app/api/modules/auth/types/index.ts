@@ -62,4 +62,5 @@ export interface AuthResponse {
     avatar?: string | null;
   };
   token: string;
+  refreshToken: string;
 }

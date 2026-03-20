@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import type { User } from '@/types/auth';
 import type { Organization, Member } from '@/types/organization';
 import type { Project } from '@/types/project';
@@ -8,7 +9,7 @@ import type { Notification, NotificationsResponse } from '@/types/notification';
 import type { Invitation } from '@/types/invitation';
 import type { ActivityLog } from '@/types/activity-log';
 
-const baseQuery = fetchBaseQuery({
+const rawBaseQuery = fetchBaseQuery({
   baseUrl: '/api',
   credentials: 'include',
   prepareHeaders: (headers) => {
@@ -23,6 +24,53 @@ const baseQuery = fetchBaseQuery({
     return data.data ?? data;
   },
 });
+
+// Mutex to prevent multiple simultaneous refresh requests
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+  args,
+  api,
+  extraOptions
+) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  if (result.error && result.error.status === 401) {
+    // Don't try to refresh if we're already on an auth endpoint
+    const url = typeof args === 'string' ? args : args.url;
+    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register') {
+      return result;
+    }
+
+    // Use mutex to avoid concurrent refresh calls
+    if (!isRefreshing) {
+      isRefreshing = true;
+      refreshPromise = (async () => {
+        const refreshResult = await rawBaseQuery(
+          { url: '/auth/refresh', method: 'POST' },
+          api,
+          extraOptions
+        );
+        isRefreshing = false;
+        refreshPromise = null;
+        return !refreshResult.error;
+      })();
+    }
+
+    const refreshed = await refreshPromise;
+
+    if (refreshed) {
+      // Retry the original request with new access token
+      result = await rawBaseQuery(args, api, extraOptions);
+    } else {
+      // Refresh failed — reset state and redirect to login
+      api.dispatch(apiSlice.util.resetApiState());
+    }
+  }
+
+  return result;
+};
 
 export const apiSlice = createApi({
   reducerPath: 'api',
@@ -56,6 +104,9 @@ export const apiSlice = createApi({
     logout: builder.mutation<void, void>({
       query: () => ({ url: '/auth/logout', method: 'POST' }),
       invalidatesTags: ['Auth', 'Organizations', 'Projects', 'Tasks', 'Notifications'],
+    }),
+    refreshToken: builder.mutation<void, void>({
+      query: () => ({ url: '/auth/refresh', method: 'POST' }),
     }),
     forgotPassword: builder.mutation<void, { email: string }>({
       query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
@@ -314,6 +365,7 @@ export const {
   useLoginMutation,
   useRegisterMutation,
   useLogoutMutation,
+  useRefreshTokenMutation,
   useForgotPasswordMutation,
   useVerifyOtpMutation,
   useResendOtpMutation,

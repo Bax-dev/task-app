@@ -1,6 +1,6 @@
 'use client';
 
-import TaskCard from './TaskCard';
+import TaskCard from '@/components/tasks/board/TaskCard';
 
 interface Task {
   id: string;

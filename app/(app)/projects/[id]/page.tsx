@@ -28,7 +28,7 @@ import {
   useGetOrgMembersQuery,
   useCreateTaskMutation,
 } from '@/store/api';
-import TaskBoard from '@/components/tasks/TaskBoard';
+import TaskBoard from '@/components/tasks/board/TaskBoard';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import type { Member } from '@/types/organization';
