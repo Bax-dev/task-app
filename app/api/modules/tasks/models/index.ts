@@ -9,7 +9,7 @@ const taskInclude = {
     },
   },
   project: {
-    select: { id: true, name: true, spaceId: true, space: { select: { id: true, name: true, organizationId: true } } },
+    select: { id: true, name: true, spaceId: true, space: { select: { id: true, name: true, organizationId: true, organization: { select: { slug: true } } } } },
   },
   attachments: {
     select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
@@ -26,6 +26,20 @@ export async function createTask(data: {
   projectId: string;
   createdById: string;
 }) {
+  // Get the organization ID via the project's space
+  const project = await prisma.project.findUnique({
+    where: { id: data.projectId },
+    select: { space: { select: { organizationId: true } } },
+  });
+  if (!project) throw new Error('Project not found');
+
+  // Atomically increment the org task counter and create the task
+  const org = await prisma.organization.update({
+    where: { id: project.space.organizationId },
+    data: { taskCounter: { increment: 1 } },
+    select: { taskCounter: true },
+  });
+
   return prisma.task.create({
     data: {
       title: data.title,
@@ -35,6 +49,7 @@ export async function createTask(data: {
       dueDate: data.dueDate,
       projectId: data.projectId,
       createdById: data.createdById,
+      taskNumber: org.taskCounter,
     },
     include: taskInclude,
   });

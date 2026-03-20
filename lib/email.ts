@@ -103,6 +103,50 @@ export function buildActivityUpdateEmail(
   };
 }
 
+export function buildTaskAssignedEmail(params: {
+  assigneeName: string;
+  taskTitle: string;
+  projectName: string;
+  assignedByName: string;
+  taskUrl: string;
+  priority?: string;
+  dueDate?: string | null;
+  description?: string | null;
+}): { subject: string; html: string } {
+  const dueLine = params.dueDate
+    ? `<p style="margin: 4px 0; color: #555; font-size: 14px;"><strong>Due:</strong> ${new Date(params.dueDate).toLocaleDateString()}</p>`
+    : '';
+  const priorityLine = params.priority
+    ? `<p style="margin: 4px 0; color: #555; font-size: 14px;"><strong>Priority:</strong> ${params.priority}</p>`
+    : '';
+  const descLine = params.description
+    ? `<p style="margin: 12px 0; color: #555; font-size: 14px;">${params.description}</p>`
+    : '';
+
+  return {
+    subject: `You've been assigned to "${params.taskTitle}" - TaskFlow`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>New Task Assignment</h2>
+        <p>Hi ${params.assigneeName},</p>
+        <p><strong>${params.assignedByName}</strong> assigned you to a task in <strong>${params.projectName}</strong>:</p>
+        <div style="margin: 16px 0; padding: 16px; background: #f3f4f6; border-radius: 8px; border-left: 4px solid #6b7280;">
+          <h3 style="margin: 0 0 8px 0; color: #111;">${params.taskTitle}</h3>
+          ${descLine}
+          ${priorityLine}
+          ${dueLine}
+        </div>
+        <a href="${params.taskUrl}" style="display: inline-block; padding: 12px 24px; background: #4b5563; color: white; text-decoration: none; border-radius: 6px;">
+          View Task
+        </a>
+        <p style="margin-top: 16px; color: #666; font-size: 14px;">
+          This is an automated notification from TaskFlow.
+        </p>
+      </div>
+    `,
+  };
+}
+
 export function buildInviteEmail(orgName: string, inviteUrl: string): { subject: string; html: string } {
   return {
     subject: `You've been invited to join ${orgName} on TaskFlow`,

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -127,8 +128,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
     <aside className="w-60 h-full border-r border-border bg-card flex flex-col overflow-hidden">
       <div className="h-12 px-4 border-b border-border flex items-center justify-between shrink-0">
-        <Link href="/dashboard" onClick={onClose}>
-          <span className="text-lg font-bold text-primary">TaskFlow</span>
+        <Link href="/dashboard" onClick={onClose} className="flex items-center gap-2">
+          <Image src="/logo.png" alt="TaskFlow" width={48} height={48} className="h-8 w-auto object-contain" unoptimized />
+          <span className="text-lg font-bold tracking-wide" style={{ fontFamily: 'var(--font-raleway)' }}><span className="text-foreground">Task</span><span className="text-primary">Flow</span></span>
         </Link>
         {onClose && (
           <button onClick={onClose} className="md:hidden text-muted-foreground">

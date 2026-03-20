@@ -82,6 +82,7 @@ model Organization {
   id          String   @id @default(uuid()) @db.Uuid
   name        String
   slug        String   @unique
+  taskCounter Int      @default(0)
   createdById String   @db.Uuid
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -170,6 +171,7 @@ model Project {
 
 model Task {
   id              String       @id @default(uuid()) @db.Uuid
+  taskNumber      Int
   title           String
   description     String?
   status          TaskStatus   @default(TODO)

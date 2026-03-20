@@ -4,7 +4,8 @@ import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -49,6 +50,13 @@ export default function TaskDetailPage({
 
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [editDesc, setEditDesc] = useState('');
+  const [editingDueDate, setEditingDueDate] = useState(false);
+  const [editDueDate, setEditDueDate] = useState('');
 
   const { data: task, isLoading } = useGetTaskQuery(taskId);
 
@@ -118,11 +126,88 @@ export default function TaskDetailPage({
         Back to Project
       </Link>
 
+      {task.taskNumber && (
+        <span className="inline-block text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded mb-3">
+          TSK-{task.project?.space?.organization?.slug?.toUpperCase() || 'ORG'}-{task.taskNumber}
+        </span>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{task.title}</h1>
-          {task.description && (
-            <p className="text-muted-foreground mt-2">{task.description}</p>
+        <div className="flex-1 min-w-0">
+          {editingTitle ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="text-2xl font-bold"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (editTitle.trim() && editTitle.trim() !== task.title) {
+                      updateTask({ id: taskId, title: editTitle.trim() }).unwrap()
+                        .then(() => { toast.success('Title updated'); setEditingTitle(false); })
+                        .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
+                    } else { setEditingTitle(false); }
+                  }
+                  if (e.key === 'Escape') setEditingTitle(false);
+                }}
+              />
+              <Button size="icon" variant="ghost" onClick={() => {
+                if (editTitle.trim() && editTitle.trim() !== task.title) {
+                  updateTask({ id: taskId, title: editTitle.trim() }).unwrap()
+                    .then(() => { toast.success('Title updated'); setEditingTitle(false); })
+                    .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
+                } else { setEditingTitle(false); }
+              }}>
+                <Check className="w-4 h-4" />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={() => setEditingTitle(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="group flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{task.title}</h1>
+              {!isGuest && (
+                <button onClick={() => { setEditTitle(task.title); setEditingTitle(true); }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {editingDesc ? (
+            <div className="mt-2 space-y-2">
+              <Textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="Add a description..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditingDesc(false);
+                }}
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => {
+                  updateTask({ id: taskId, description: editDesc.trim() || null }).unwrap()
+                    .then(() => { toast.success('Description updated'); setEditingDesc(false); })
+                    .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
+                }}>Save</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingDesc(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="group flex items-start gap-2 mt-2">
+              <p className="text-muted-foreground">{task.description || (isGuest ? '' : 'No description')}</p>
+              {!isGuest && (
+                <button onClick={() => { setEditDesc(task.description || ''); setEditingDesc(true); }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground mt-0.5">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           )}
         </div>
         {!isGuest && (
@@ -318,12 +403,44 @@ export default function TaskDetailPage({
           <span className="text-sm text-muted-foreground">Created by</span>
           <span className="text-sm font-medium">{task.createdBy?.name || task.createdBy?.email || '-'}</span>
         </div>
-        {task.dueDate && (
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Due Date</span>
-            <span className="text-sm font-medium">{new Date(task.dueDate).toLocaleDateString()}</span>
-          </div>
-        )}
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Due Date</span>
+          {editingDueDate ? (
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                className="h-8 w-auto text-sm"
+              />
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
+                updateTask({ id: taskId, dueDate: editDueDate || null }).unwrap()
+                  .then(() => { toast.success('Due date updated'); setEditingDueDate(false); })
+                  .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
+              }}>
+                <Check className="w-3.5 h-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingDueDate(false)}>
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <div className="group flex items-center gap-2">
+              <span className="text-sm font-medium">
+                {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'Not set'}
+              </span>
+              {!isGuest && (
+                <button onClick={() => {
+                  setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
+                  setEditingDueDate(true);
+                }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                  <Pencil className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Created</span>
           <span className="text-sm font-medium">{new Date(task.createdAt).toLocaleDateString()}</span>

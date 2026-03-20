@@ -2,9 +2,33 @@ import { TaskStatus, TaskPriority } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
 import { notifyTaskAssigned, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
+import { sendEmail, buildTaskAssignedEmail } from '@/lib/email';
 import * as taskModel from '../models';
 import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
 import { logAudit } from '@/lib/audit';
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+async function sendAssignmentEmail(assigneeId: string, task: any, assignerName: string) {
+  const assignee = await prisma.user.findUnique({
+    where: { id: assigneeId },
+    select: { name: true, email: true },
+  });
+  if (!assignee?.email) return;
+
+  const { subject, html } = buildTaskAssignedEmail({
+    assigneeName: assignee.name || assignee.email,
+    taskTitle: task.title,
+    projectName: task.project.name,
+    assignedByName: assignerName,
+    taskUrl: `${APP_URL}/projects/${task.projectId}/tasks/${task.id}`,
+    priority: task.priority,
+    dueDate: task.dueDate,
+    description: task.description,
+  });
+
+  sendEmail({ to: assignee.email, subject, html }).catch(() => {});
+}
 
 async function getProjectOrgId(projectId: string): Promise<string> {
   const project = await prisma.project.findUnique({
@@ -54,6 +78,7 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
             assignedByName: assignerName,
             taskLink: `/projects/${task.projectId}/tasks/${task.id}`,
           }).catch(() => {});
+          sendAssignmentEmail(assigneeId, task, assignerName).catch(() => {});
         }
       } catch {
         // Skip users who aren't org members
@@ -135,6 +160,7 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
       assignedByName: assignerName,
       taskLink: `/projects/${task.projectId}/tasks/${taskId}`,
     }).catch(() => {}); // fire-and-forget
+    sendAssignmentEmail(dto.userId, task, assignerName).catch(() => {});
   }
 
   logAudit({ userId, organizationId: orgId, description: `assigned a member to "${task.title}"`, taskId });

@@ -10,9 +10,6 @@ import {
   Globe,
   Clock,
   Layers,
-  Github,
-  Twitter,
-  Linkedin,
 } from 'lucide-react';
 import AnimatedCounter from '@/components/landing/AnimatedCounter';
 import FeatureTabs from '@/components/landing/FeatureTabs';
@@ -385,10 +382,10 @@ export default function Home() {
       {/* ─── Footer ─── */}
       <footer className="border-t border-border bg-card/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-12">
             <div className="col-span-2 md:col-span-1">
-              <Link href="/" className="text-2xl font-bold text-primary">
-                TaskFlow
+              <Link href="/" className="text-2xl font-bold tracking-wide" style={{ fontFamily: 'var(--font-raleway)' }}>
+                <span className="text-foreground">Task</span><span className="text-primary">Flow</span>
               </Link>
               <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
                 Modern project management for teams that ship.
@@ -397,53 +394,34 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-foreground mb-4 text-sm">Product</h4>
               <ul className="space-y-2">
-                {['Features', 'Pricing', 'Changelog', 'Roadmap'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item}</a>
-                  </li>
-                ))}
+                <li>
+                  <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
+                </li>
+                <li>
+                  <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+                </li>
+                <li>
+                  <Link href="/user-manual" className="text-sm text-muted-foreground hover:text-foreground transition-colors">User Manual</Link>
+                </li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground mb-4 text-sm">Company</h4>
+              <h4 className="font-semibold text-foreground mb-4 text-sm">Get Started</h4>
               <ul className="space-y-2">
-                {['About', 'Blog', 'Careers', 'Contact'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item}</a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-4 text-sm">Legal</h4>
-              <ul className="space-y-2">
-                {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">{item}</a>
-                  </li>
-                ))}
+                <li>
+                  <Link href="/signup" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Sign Up</Link>
+                </li>
+                <li>
+                  <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Log In</Link>
+                </li>
               </ul>
             </div>
           </div>
 
-          <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="border-t border-border pt-8 flex items-center justify-center">
             <p className="text-sm text-muted-foreground">
               &copy; {new Date().getFullYear()} TaskFlow. All rights reserved.
             </p>
-            <div className="flex items-center gap-4">
-              {[
-                { icon: Twitter, label: 'Twitter' },
-                { icon: Github, label: 'GitHub' },
-                { icon: Linkedin, label: 'LinkedIn' },
-              ].map((s) => {
-                const Icon = s.icon;
-                return (
-                  <a key={s.label} href="#" aria-label={s.label} className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors">
-                    <Icon className="w-4 h-4" />
-                  </a>
-                );
-              })}
-            </div>
           </div>
         </div>
       </footer>

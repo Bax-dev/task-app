@@ -2,18 +2,37 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useGetMeQuery, useLogoutMutation } from '@/store/api';
+import { toast } from 'sonner';
 
 const links = [
-  { label: 'Features', href: '#features' },
-  { label: 'How It Works', href: '#how-it-works' },
-  { label: 'Testimonials', href: '#testimonials' },
-  { label: 'Pricing', href: '#pricing' },
+  { label: 'Features', href: '/#features' },
+  { label: 'How It Works', href: '/#how-it-works' },
+  { label: 'Testimonials', href: '/#testimonials' },
+  { label: 'Pricing', href: '/#pricing' },
+  { label: 'User Manual', href: '/user-manual' },
 ];
 
 export default function MobileNav() {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const { data: user } = useGetMeQuery();
+  const isLoggedIn = !!user;
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+
+  const handleLogout = async () => {
+    try {
+      await logout().unwrap();
+      toast.success('Logged out successfully');
+      setOpen(false);
+      router.push('/login');
+    } catch {
+      toast.error('Failed to log out');
+    }
+  };
 
   return (
     <div className="sm:hidden">
@@ -39,12 +58,25 @@ export default function MobileNav() {
               </a>
             ))}
             <hr className="border-border" />
-            <Link href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground py-2">
-              Log in
-            </Link>
-            <Link href="/signup" onClick={() => setOpen(false)}>
-              <Button size="sm" className="w-full">Get Started Free</Button>
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <Link href="/dashboard" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground py-2">
+                  Dashboard
+                </Link>
+                <Button size="sm" variant="outline" className="w-full" onClick={handleLogout} disabled={isLoggingOut}>
+                  {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-foreground py-2">
+                  Log in
+                </Link>
+                <Link href="/signup" onClick={() => setOpen(false)}>
+                  <Button size="sm" className="w-full">Get Started Free</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

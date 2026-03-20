@@ -5,11 +5,13 @@ import { useUpdateTaskMutation } from '@/store/api';
 
 interface Task {
   id: string;
+  taskNumber?: number;
   title: string;
   status: string;
   priority: string;
   dueDate: string | null;
   assignments?: { user: { id: string; name: string | null; email: string } }[];
+  project?: { space?: { organization?: { slug: string } } };
 }
 
 const priorityColors: Record<string, string> = {
@@ -25,6 +27,11 @@ export default function TaskCard({ task, projectId }: { task: Task; projectId: s
   return (
     <Link href={`/projects/${projectId}/tasks/${task.id}`}>
       <div className="bg-card border border-border rounded-lg p-3 hover:border-primary/50 transition-colors cursor-pointer">
+        {task.taskNumber && (
+          <span className="text-[11px] font-mono text-muted-foreground mb-1 block">
+            TSK-{task.project?.space?.organization?.slug?.toUpperCase() || 'ORG'}-{task.taskNumber}
+          </span>
+        )}
         <h4 className="text-sm font-medium text-foreground mb-2 line-clamp-2">{task.title}</h4>
         <div className="flex items-center justify-between">
           <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${priorityColors[task.priority] || ''}`}>

@@ -16,6 +16,7 @@ export interface ThemeColor {
 }
 
 export const THEME_COLORS: ThemeColor[] = [
+  { id: 'silver', label: 'Silver', primary: 'oklch(0.45 0.02 240)', primaryDark: 'oklch(0.7 0.012 240)' },
   { id: 'violet', label: 'Violet', primary: 'oklch(0.45 0.31 283)', primaryDark: 'oklch(0.65 0.25 283)' },
   { id: 'blue', label: 'Blue', primary: 'oklch(0.45 0.24 260)', primaryDark: 'oklch(0.65 0.22 260)' },
   { id: 'green', label: 'Green', primary: 'oklch(0.45 0.18 155)', primaryDark: 'oklch(0.65 0.2 155)' },
@@ -42,7 +43,7 @@ interface PreferencesState {
 }
 
 function loadFromStorage(): PreferencesState {
-  if (typeof window === 'undefined') return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'violet' };
+  if (typeof window === 'undefined') return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver' };
   try {
     const saved = localStorage.getItem('taskflow-preferences');
     if (saved) {
@@ -58,7 +59,7 @@ function loadFromStorage(): PreferencesState {
       };
     }
   } catch {}
-  return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'violet' };
+  return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver' };
 }
 
 function saveToStorage(state: PreferencesState) {

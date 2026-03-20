@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Raleway } from 'next/font/google';
 import { Toaster } from 'sonner';
 import StoreProvider from '@/store/provider';
 import ThemeColorApplier from '@/components/ThemeColorApplier';
@@ -7,6 +7,7 @@ import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+const raleway = Raleway({ subsets: ['latin'], variable: '--font-raleway' });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -78,8 +79,8 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/apple-icon.png',
+    icon: '/logo.png',
+    apple: '/logo.png',
   },
   manifest: '/manifest.json',
 };
@@ -94,7 +95,7 @@ export default function RootLayout({
       <head>
         <link rel="canonical" href={APP_URL} />
       </head>
-      <body className={`${inter.className} ${jetbrainsMono.variable} antialiased`}>
+      <body className={`${inter.className} ${jetbrainsMono.variable} ${raleway.variable} antialiased`}>
         <StoreProvider>
           <ThemeColorApplier />
           {children}
