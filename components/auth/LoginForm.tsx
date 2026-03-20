@@ -13,7 +13,8 @@ export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
-  const [email, setEmail] = useState('');
+  const prefillEmail = searchParams.get('email') || '';
+  const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [login, { isLoading }] = useLoginMutation();
 

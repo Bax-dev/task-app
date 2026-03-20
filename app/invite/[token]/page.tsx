@@ -2,7 +2,6 @@
 
 import { use } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, XCircle, LogIn, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -131,19 +130,25 @@ export default function AcceptInvitePage({
               You need an account to join. Log in or create one below.
             </p>
 
-            <Link href={`/login?redirect=${encodeURIComponent(inviteUrl)}`}>
-              <Button variant="default" className="w-full gap-2" size="lg">
-                <LogIn className="w-4 h-4" />
-                Log In &amp; Accept
-              </Button>
-            </Link>
+            <Button
+              variant="default"
+              className="w-full gap-2"
+              size="lg"
+              onClick={() => router.push(`/login?redirect=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(invitation.email)}`)}
+            >
+              <LogIn className="w-4 h-4" />
+              Log In &amp; Accept
+            </Button>
 
-            <Link href={`/signup?redirect=${encodeURIComponent(inviteUrl)}`}>
-              <Button variant="outline" className="w-full gap-2" size="lg">
-                <UserPlus className="w-4 h-4" />
-                Create Account &amp; Accept
-              </Button>
-            </Link>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              size="lg"
+              onClick={() => router.push(`/signup?redirect=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(invitation.email)}`)}
+            >
+              <UserPlus className="w-4 h-4" />
+              Create Account &amp; Accept
+            </Button>
           </div>
         )}
       </div>

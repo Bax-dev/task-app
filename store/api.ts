@@ -69,7 +69,7 @@ export const apiSlice = createApi({
     resetPassword: builder.mutation<void, { email: string; otp: string; newPassword: string }>({
       query: (body) => ({ url: '/auth/reset-password', method: 'POST', body }),
     }),
-    updateProfile: builder.mutation<User, { name?: string; email?: string }>({
+    updateProfile: builder.mutation<User, { name?: string; email?: string; avatar?: string | null }>({
       query: (body) => ({ url: '/users/profile', method: 'PATCH', body }),
       invalidatesTags: ['Auth'],
     }),
@@ -189,7 +189,7 @@ export const apiSlice = createApi({
       query: (id) => `/tasks/${id}`,
       providesTags: (_, __, id) => [{ type: 'Tasks', id }],
     }),
-    createTask: builder.mutation<Task, { title: string; description?: string; status?: string; priority?: string; dueDate?: string | null; projectId: string }>({
+    createTask: builder.mutation<Task, { title: string; description?: string; status?: string; priority?: string; dueDate?: string | null; projectId: string; assigneeIds?: string[] }>({
       query: (body) => ({ url: '/tasks', method: 'POST', body }),
       invalidatesTags: (_, __, { projectId }) => [
         { type: 'Tasks', id: 'LIST' },
@@ -246,6 +246,14 @@ export const apiSlice = createApi({
     acceptInvitation: builder.mutation<void, string>({
       query: (token) => ({ url: '/invitations/accept', method: 'POST', body: { token } }),
       invalidatesTags: ['Organizations'],
+    }),
+    resendInvitation: builder.mutation<void, { invitationId: string; organizationId: string }>({
+      query: ({ invitationId }) => ({ url: '/invitations/resend', method: 'POST', body: { invitationId } }),
+      invalidatesTags: (_, __, { organizationId }) => [{ type: 'Invitations', id: organizationId }],
+    }),
+    revokeInvitation: builder.mutation<void, { invitationId: string; organizationId: string }>({
+      query: ({ invitationId }) => ({ url: '/invitations/revoke', method: 'POST', body: { invitationId } }),
+      invalidatesTags: (_, __, { organizationId }) => [{ type: 'Invitations', id: organizationId }],
     }),
 
     // ─── Notes ───
@@ -352,6 +360,8 @@ export const {
   useGetInvitationByTokenQuery,
   useCreateInvitationMutation,
   useAcceptInvitationMutation,
+  useResendInvitationMutation,
+  useRevokeInvitationMutation,
   // Notes
   useGetOrgNotesQuery,
   useGetNoteQuery,

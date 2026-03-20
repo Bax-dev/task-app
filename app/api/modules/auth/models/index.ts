@@ -7,6 +7,7 @@ export async function findUserByEmail(email: string) {
       id: true,
       name: true,
       email: true,
+      avatar: true,
       passwordHash: true,
     },
   });
@@ -19,6 +20,7 @@ export async function findUserById(id: string) {
       id: true,
       name: true,
       email: true,
+      avatar: true,
       createdAt: true,
       updatedAt: true,
     },

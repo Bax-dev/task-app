@@ -17,6 +17,9 @@ import {
   FileText,
   Activity,
   X,
+  CalendarDays,
+  BarChart3,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,17 +39,46 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useGetOrganizationsQuery, useCreateSpaceMutation, useGetOrgSpacesQuery } from '@/store/api';
+import { useGetOrganizationsQuery, useCreateSpaceMutation, useGetOrgSpacesQuery, useGetOrgMembersQuery, useGetMeQuery } from '@/store/api';
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Organizations', href: '/organizations', icon: Building2 },
-  { name: 'Team', href: '/team', icon: Users },
-  { name: 'Projects', href: '/projects', icon: FolderOpen },
-  { name: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { name: 'Activity Logs', href: '/activity-logs', icon: Activity },
-  { name: 'Notes', href: '/notes', icon: FileText },
-  { name: 'Settings', href: '/settings', icon: Settings },
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  adminOnly?: boolean;
+}
+
+const navSections: { label: string | null; items: NavItem[] }[] = [
+  {
+    label: null,
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Quick Access', href: '/favorites', icon: Star },
+    ],
+  },
+  {
+    label: 'Work',
+    items: [
+      { name: 'Tasks', href: '/tasks', icon: CheckSquare },
+      { name: 'Projects', href: '/projects', icon: FolderOpen },
+      { name: 'Calendar', href: '/calendar', icon: CalendarDays },
+      { name: 'Notes', href: '/notes', icon: FileText },
+    ],
+  },
+  {
+    label: 'Team',
+    items: [
+      { name: 'Organizations', href: '/organizations', icon: Building2 },
+      { name: 'Members', href: '/team', icon: Users },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { name: 'Reports', href: '/reports', icon: BarChart3 },
+      { name: 'Audit Logs', href: '/activity-logs', icon: Activity, adminOnly: true },
+    ],
+  },
 ];
 
 const SPACE_COLORS = [
@@ -62,7 +94,11 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const [spaceColor, setSpaceColor] = useState('#7c3aed');
   const [spaceOrgId, setSpaceOrgId] = useState('');
 
+  const { data: user } = useGetMeQuery();
   const { data: organizations = [] } = useGetOrganizationsQuery();
+  const firstOrgId = organizations[0]?.id || '';
+  const { data: orgMembers = [] } = useGetOrgMembersQuery(firstOrgId, { skip: !firstOrgId });
+  const isAdmin = orgMembers.some((m: any) => m.id === user?.id && m.role === 'ADMIN');
 
   const toggleOrg = (orgId: string) => {
     setExpandedOrgs((prev) => {
@@ -89,39 +125,50 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   };
 
   return (
-    <aside className="w-64 h-full border-r border-border bg-card flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-border flex items-center justify-between">
+    <aside className="w-60 h-full border-r border-border bg-card flex flex-col overflow-hidden">
+      <div className="h-12 px-4 border-b border-border flex items-center justify-between shrink-0">
         <Link href="/dashboard" onClick={onClose}>
-          <h1 className="text-2xl font-bold text-primary">TaskFlow</h1>
+          <span className="text-lg font-bold text-primary">TaskFlow</span>
         </Link>
         {onClose && (
-          <button onClick={onClose} className="md:hidden text-muted-foreground hover:text-foreground">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="md:hidden text-muted-foreground">
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      <nav className="p-3 space-y-1">
-        {navigation.map((item) => {
-          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-          const Icon = item.icon;
-          return (
-            <Link key={item.href} href={item.href} onClick={onClose}>
-              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
-                isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-              }`}>
-                <Icon className="w-4 h-4" />
-                <span className="font-medium">{item.name}</span>
-              </div>
-            </Link>
-          );
-        })}
+      <nav className="p-2 space-y-3 overflow-auto">
+        {navSections.map((section, idx) => (
+          <div key={idx}>
+            {section.label && (
+              <span className="px-2.5 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                {section.label}
+              </span>
+            )}
+            <div className={`space-y-px ${section.label ? 'mt-1' : ''}`}>
+              {section.items.filter((item) => !item.adminOnly || isAdmin).map((item) => {
+                const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/favorites' && pathname.startsWith(item.href));
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href} onClick={onClose}>
+                    <div className={`flex items-center gap-2.5 px-2.5 py-[7px] rounded-md transition-colors text-[13px] ${
+                      isActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}>
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span>{item.name}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Spaces Section */}
       <div className="flex-1 overflow-auto border-t border-border">
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Spaces</span>
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">Spaces</span>
           <Dialog open={newSpaceOpen} onOpenChange={setNewSpaceOpen}>
             <DialogTrigger asChild>
               <button className="text-muted-foreground hover:text-foreground">
@@ -177,8 +224,15 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <div className="p-4 border-t border-border">
-        <div className="text-xs text-muted-foreground text-center">TaskFlow v1.0</div>
+      <div className="p-2 border-t border-border">
+        <Link href="/settings" onClick={onClose}>
+          <div className={`flex items-center gap-2.5 px-2.5 py-[7px] rounded-md transition-colors text-[13px] ${
+            pathname === '/settings' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+          }`}>
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
+          </div>
+        </Link>
       </div>
     </aside>
   );

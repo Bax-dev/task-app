@@ -4,6 +4,7 @@ import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/gu
 import { notifyTaskAssigned, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
 import * as taskModel from '../models';
 import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
+import { logAudit } from '@/lib/audit';
 
 async function getProjectOrgId(projectId: string): Promise<string> {
   const project = await prisma.project.findUnique({
@@ -22,7 +23,7 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
   const orgId = await getProjectOrgId(dto.projectId);
   await requireNonGuest(userId, orgId);
 
-  return taskModel.createTask({
+  const task = await taskModel.createTask({
     title: dto.title,
     description: dto.description,
     status: dto.status as TaskStatus,
@@ -31,6 +32,42 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
     projectId: dto.projectId,
     createdById: userId,
   });
+
+  // Assign users if provided
+  if (dto.assigneeIds && dto.assigneeIds.length > 0) {
+    const assigner = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    const assignerName = assigner?.name || assigner?.email || 'Someone';
+
+    for (const assigneeId of dto.assigneeIds) {
+      try {
+        await requireOrgMembership(assigneeId, orgId);
+        await taskModel.assignUser(task.id, assigneeId);
+
+        if (assigneeId !== userId) {
+          notifyTaskAssigned({
+            assigneeId,
+            taskTitle: task.title,
+            projectName: task.project.name,
+            assignedByName: assignerName,
+            taskLink: `/projects/${task.projectId}/tasks/${task.id}`,
+          }).catch(() => {});
+        }
+      } catch {
+        // Skip users who aren't org members
+      }
+    }
+
+    // Re-fetch task with assignments
+    const updated = await taskModel.findTaskById(task.id);
+    logAudit({ userId, organizationId: orgId, description: `created task "${task.title}"`, taskId: task.id });
+    if (updated) return updated;
+  }
+
+  logAudit({ userId, organizationId: orgId, description: `created task "${task.title}"`, taskId: task.id });
+  return task;
 }
 
 export async function getTask(taskId: string, userId: string) {
@@ -62,6 +99,7 @@ export async function deleteTask(taskId: string, userId: string) {
     await requireOrgAdmin(userId, orgId);
   }
 
+  logAudit({ userId, organizationId: orgId, description: `deleted task "${task.title}"` });
   return taskModel.deleteTask(taskId);
 }
 
@@ -76,6 +114,7 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
   const existing = await taskModel.findAssignment(taskId, dto.userId);
   if (existing) {
     await taskModel.unassignUser(taskId, dto.userId);
+    logAudit({ userId, organizationId: orgId, description: `unassigned a member from "${task.title}"`, taskId });
     return { assigned: false, userId: dto.userId };
   }
 
@@ -98,6 +137,7 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
     }).catch(() => {}); // fire-and-forget
   }
 
+  logAudit({ userId, organizationId: orgId, description: `assigned a member to "${task.title}"`, taskId });
   return { assigned: true, userId: dto.userId, user: assignment.user };
 }
 
@@ -129,6 +169,12 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
   }
 
   const updated = await taskModel.updateTask(taskId, updateData);
+
+  // Audit log
+  let auditDesc = `updated task "${task.title}"`;
+  if (dto.status) auditDesc = `changed status of "${task.title}" to ${dto.status}`;
+  else if (dto.priority) auditDesc = `changed priority of "${task.title}" to ${dto.priority}`;
+  logAudit({ userId, organizationId: orgId, description: auditDesc, taskId });
 
   // Notify assigned users + task creator about the update
   const notifyIds = [

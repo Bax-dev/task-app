@@ -7,13 +7,14 @@ export async function findUserById(id: string) {
       id: true,
       name: true,
       email: true,
+      avatar: true,
       createdAt: true,
       updatedAt: true,
     },
   });
 }
 
-export async function updateUser(id: string, data: { name?: string }) {
+export async function updateUser(id: string, data: { name?: string; avatar?: string | null }) {
   return prisma.user.update({
     where: { id },
     data,
@@ -21,6 +22,7 @@ export async function updateUser(id: string, data: { name?: string }) {
       id: true,
       name: true,
       email: true,
+      avatar: true,
       createdAt: true,
       updatedAt: true,
     },

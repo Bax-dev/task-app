@@ -3,6 +3,7 @@ import { setupListeners } from '@reduxjs/toolkit/query';
 import { apiSlice } from './api';
 import authReducer from './slices/authSlice';
 import viewReducer from './slices/viewSlice';
+import preferencesReducer from './slices/preferencesSlice';
 
 export const makeStore = () => {
   const store = configureStore({
@@ -10,6 +11,7 @@ export const makeStore = () => {
       [apiSlice.reducerPath]: apiSlice.reducer,
       auth: authReducer,
       view: viewReducer,
+      preferences: preferencesReducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(apiSlice.middleware),

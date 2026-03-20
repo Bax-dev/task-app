@@ -1,5 +1,6 @@
 import * as userModel from '../models';
 import { UpdateUserDTO, AddMemberDTO } from '../types';
+import { logAudit } from '@/lib/audit';
 
 export async function getUserProfile(userId: string) {
   const user = await userModel.findUserById(userId);
@@ -40,6 +41,7 @@ export async function addMemberDirectly(dto: AddMemberDTO) {
     role: dto.role,
   });
 
+  logAudit({ userId: user.id, organizationId: dto.organizationId, description: `added member ${dto.email} as ${dto.role}` });
   return { user: membership.user, role: dto.role };
 }
 
@@ -54,5 +56,6 @@ export async function removeMember(adminUserId: string, userId: string, organiza
   }
 
   await userModel.removeMembership(userId, organizationId);
+  logAudit({ userId: adminUserId, organizationId, description: `removed a member from the organization` });
   return { message: 'Member removed' };
 }

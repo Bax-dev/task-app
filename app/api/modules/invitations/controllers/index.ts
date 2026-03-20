@@ -89,10 +89,23 @@ export async function handleRevokeInvitation(request: NextRequest, invitationId:
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    // The caller needs to verify org admin status before calling this
     await invitationService.revokeInvitation(invitationId);
     return successResponse({ message: 'Invitation revoked' });
   } catch (error: any) {
+    return errorResponse(error.message, 500);
+  }
+}
+
+export async function handleResendInvitation(request: NextRequest, invitationId: string) {
+  try {
+    const session = await authenticateRequest(request);
+    if (!session) return unauthorizedResponse();
+
+    const result = await invitationService.resendInvitation(invitationId);
+    return successResponse(result);
+  } catch (error: any) {
+    if (error.message === 'Invitation not found') return errorResponse(error.message, 404);
+    if (error.message === 'Invitation is no longer pending') return errorResponse(error.message, 410);
     return errorResponse(error.message, 500);
   }
 }

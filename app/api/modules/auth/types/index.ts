@@ -59,6 +59,7 @@ export interface AuthResponse {
     id: string;
     name: string | null;
     email: string;
+    avatar?: string | null;
   };
   token: string;
 }

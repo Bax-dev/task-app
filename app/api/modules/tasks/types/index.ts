@@ -7,6 +7,7 @@ export const createTaskSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
   dueDate: z.string().datetime().optional().nullable(),
   projectId: z.string().uuid('Invalid project ID'),
+  assigneeIds: z.array(z.string().uuid()).optional(),
 });
 
 export const updateTaskSchema = z.object({

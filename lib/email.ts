@@ -9,15 +9,20 @@ interface EmailOptions {
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendEmail(options: EmailOptions): Promise<void> {
+  // Always log in development for debugging
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[DEV EMAIL] To: ${options.to}`);
-    console.log(`[DEV EMAIL] Subject: ${options.subject}`);
-    console.log(`[DEV EMAIL] Body: ${options.html}`);
+    console.log(`[EMAIL] To: ${options.to}`);
+    console.log(`[EMAIL] Subject: ${options.subject}`);
+  }
+
+  // Skip sending only if Resend API key is not configured
+  if (!process.env.RESEND_API_KEY) {
+    console.log(`[EMAIL] No RESEND_API_KEY set — email not sent. Body:\n${options.html}`);
     return;
   }
 
   const { error } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || 'noreply@taskflow.app',
+    from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     to: options.to,
     subject: options.subject,
     html: options.html,

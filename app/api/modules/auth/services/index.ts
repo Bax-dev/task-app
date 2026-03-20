@@ -42,7 +42,7 @@ export async function login(dto: LoginDTO): Promise<AuthResponse> {
   const token = await createSession(user.id, user.email);
 
   return {
-    user: { id: user.id, name: user.name, email: user.email },
+    user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar },
     token,
   };
 }
@@ -54,7 +54,7 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   let user = await authModel.findUserByGoogleId(googleUser.googleId);
   if (user) {
     const token = await createSession(user.id, user.email);
-    return { user: { id: user.id, name: user.name, email: user.email }, token };
+    return { user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar }, token };
   }
 
   // Check if user exists by email (link Google account)
@@ -62,7 +62,7 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   if (existingUser) {
     const linked = await authModel.linkGoogleAccount(googleUser.email, googleUser.googleId, googleUser.avatar);
     const token = await createSession(linked.id, linked.email);
-    return { user: { id: linked.id, name: linked.name, email: linked.email }, token };
+    return { user: { id: linked.id, name: linked.name, email: linked.email, avatar: linked.avatar }, token };
   }
 
   // Create new user
@@ -74,7 +74,7 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   });
 
   const token = await createSession(newUser.id, newUser.email);
-  return { user: { id: newUser.id, name: newUser.name, email: newUser.email }, token };
+  return { user: { id: newUser.id, name: newUser.name, email: newUser.email, avatar: newUser.avatar }, token };
 }
 
 export async function getMe(userId: string) {

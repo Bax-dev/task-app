@@ -8,27 +8,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40 md:hidden transition-opacity"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar: hidden on mobile by default, shown as overlay when open */}
+      {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out md:relative md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <Sidebar onClose={() => setSidebarOpen(false)} />
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
         <Navbar onMenuToggle={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-auto bg-secondary/30">
+        <main className="flex-1 overflow-auto bg-background">
           {children}
         </main>
       </div>

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -20,12 +21,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus, Search } from 'lucide-react';
+import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus, Search, Users, AtSign, X } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
-import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation } from '@/store/api';
+import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation, useGetOrgMembersQuery } from '@/store/api';
+import type { Member } from '@/types/organization';
 
 export default function TasksPage() {
   const dispatch = useAppDispatch();
@@ -33,42 +35,10 @@ export default function TasksPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [priority, setPriority] = useState('MEDIUM');
-  const [status, setStatus] = useState('TODO');
-  const [dueDate, setDueDate] = useState('');
 
   const { data: tasks = [], isLoading } = useGetUserTasksQuery();
-
   const { data: projects = [] } = useGetProjectsQuery();
-
-  const [createTask, { isLoading: isCreatingTask }] = useCreateTaskMutation();
   const [updateTask] = useUpdateTaskMutation();
-
-  const handleCreateTask = async () => {
-    try {
-      await createTask({
-        title,
-        description: description || undefined,
-        projectId,
-        priority,
-        status,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-      }).unwrap();
-      toast.success('Task created!');
-      setOpen(false);
-      setTitle('');
-      setDescription('');
-      setProjectId('');
-      setPriority('MEDIUM');
-      setStatus('TODO');
-      setDueDate('');
-    } catch (error: any) {
-      toast.error(error?.data?.message || error?.message || 'Failed to create task');
-    }
-  };
 
   const handleStatusUpdate = async (taskId: string, newStatus: string) => {
     try {
@@ -136,84 +106,11 @@ export default function TasksPage() {
               New Task
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Task</DialogTitle>
             </DialogHeader>
-            <form
-              onSubmit={(e) => { e.preventDefault(); handleCreateTask(); }}
-              className="space-y-4 mt-4"
-            >
-              <div className="space-y-2">
-                <Label>Project</Label>
-                <Select value={projectId} onValueChange={setProjectId} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p: any) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name} {p.space?.organization?.name ? `(${p.space.organization.name})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="task-title">Title</Label>
-                <Input
-                  id="task-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Task title"
-                  required
-                  disabled={isCreatingTask}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="task-desc">Description (optional)</Label>
-                <Textarea
-                  id="task-desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Description"
-                  rows={3}
-                  disabled={isCreatingTask}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select value={priority} onValueChange={setPriority}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="LOW">Low</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HIGH">High</SelectItem>
-                      <SelectItem value="URGENT">Urgent</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TODO">To Do</SelectItem>
-                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                      <SelectItem value="REJECTED">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="task-due">Due Date (optional)</Label>
-                <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              </div>
-              <Button type="submit" className="w-full" disabled={isCreatingTask || !projectId}>
-                {isCreatingTask ? 'Creating...' : 'Create Task'}
-              </Button>
-            </form>
+            <CreateTaskForm projects={projects} onCreated={() => setOpen(false)} />
           </DialogContent>
         </Dialog>
         </div>
@@ -433,5 +330,212 @@ export default function TasksPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: () => void }) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [priority, setPriority] = useState('MEDIUM');
+  const [status, setStatus] = useState('TODO');
+  const [dueDate, setDueDate] = useState('');
+  const [assignedUsers, setAssignedUsers] = useState<Member[]>([]);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const assignRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [createTask, { isLoading }] = useCreateTaskMutation();
+
+  // Get org ID from selected project
+  const selectedProject = projects.find((p: any) => p.id === projectId);
+  const orgId = selectedProject?.space?.organizationId || '';
+  const { data: members = [] } = useGetOrgMembersQuery(orgId, { skip: !orgId });
+
+  // Reset assignees when project changes
+  useEffect(() => {
+    setAssignedUsers([]);
+    setAssignSearch('');
+  }, [projectId]);
+
+  const filteredMembers = useMemo(() => {
+    const assignedIds = new Set(assignedUsers.map((u) => u.id));
+    const search = assignSearch.replace(/^@/, '').toLowerCase();
+    return members.filter(
+      (m: Member) => !assignedIds.has(m.id) && (m.name?.toLowerCase().includes(search) || m.email.toLowerCase().includes(search))
+    );
+  }, [members, assignedUsers, assignSearch]);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleAssignInput = (value: string) => {
+    setAssignSearch(value);
+    if (value.toLowerCase() === '@all') {
+      const assignedIds = new Set(assignedUsers.map((u) => u.id));
+      const newMembers = members.filter((m: Member) => !assignedIds.has(m.id));
+      setAssignedUsers([...assignedUsers, ...newMembers]);
+      setAssignSearch('');
+      setShowDropdown(false);
+      return;
+    }
+    setShowDropdown(value.length > 0);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createTask({
+        title,
+        description: description || undefined,
+        projectId,
+        priority,
+        status,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        assigneeIds: assignedUsers.length > 0 ? assignedUsers.map((u) => u.id) : undefined,
+      }).unwrap();
+      toast.success('Task created!');
+      onCreated();
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create task');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+      <div className="space-y-2">
+        <Label>Project</Label>
+        <Select value={projectId} onValueChange={setProjectId} required>
+          <SelectTrigger>
+            <SelectValue placeholder="Select project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((p: any) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name} {p.space?.organization?.name ? `(${p.space.organization.name})` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Title</Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" required disabled={isLoading} />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Description</Label>
+        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Details..." rows={3} disabled={isLoading} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <Label>Priority</Label>
+          <Select value={priority} onValueChange={setPriority}>
+            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="LOW"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500" /> Low</span></SelectItem>
+              <SelectItem value="MEDIUM"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-500" /> Medium</span></SelectItem>
+              <SelectItem value="HIGH"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-500" /> High</span></SelectItem>
+              <SelectItem value="URGENT"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> Urgent</span></SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Status</Label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TODO">To Do</SelectItem>
+              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Due Date</Label>
+          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-9 text-xs" />
+        </div>
+      </div>
+
+      {/* Assign Members */}
+      {projectId && (
+        <div className="space-y-2">
+          <Label className="flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5" /> Assign
+          </Label>
+
+          {assignedUsers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {assignedUsers.map((m) => (
+                <Badge key={m.id} variant="secondary" className="gap-1 pr-1 text-xs">
+                  {m.name || m.email.split('@')[0]}
+                  <button type="button" onClick={() => setAssignedUsers((prev) => prev.filter((u) => u.id !== m.id))} className="ml-0.5 p-0.5 rounded-full hover:bg-muted">
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <div className="relative" ref={dropdownRef}>
+            <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              ref={assignRef}
+              value={assignSearch}
+              onChange={(e) => handleAssignInput(e.target.value)}
+              onFocus={() => { if (assignSearch.length > 0) setShowDropdown(true); }}
+              placeholder="@name or @all"
+              className="pl-8 h-9 text-sm"
+            />
+            {showDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-36 overflow-auto">
+                {assignSearch.toLowerCase().startsWith('@al') && assignSearch.toLowerCase() !== '@all' && (
+                  <button
+                    type="button"
+                    onClick={() => handleAssignInput('@all')}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-secondary/50 text-left text-sm border-b border-border"
+                  >
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    <span className="font-medium">Assign everyone</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{members.length}</span>
+                  </button>
+                )}
+                {filteredMembers.length > 0 ? (
+                  filteredMembers.map((m: Member) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => { setAssignedUsers((prev) => [...prev, m]); setAssignSearch(''); setShowDropdown(false); assignRef.current?.focus(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-secondary/50 text-left text-sm"
+                    >
+                      <span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
+                        {(m.name?.[0] || m.email[0]).toUpperCase()}
+                      </span>
+                      <span className="truncate">{m.name || m.email}</span>
+                      <span className="text-[10px] text-muted-foreground ml-auto capitalize">{m.role.toLowerCase()}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Button type="submit" className="w-full" disabled={isLoading || !projectId || !title.trim()}>
+        {isLoading ? 'Creating...' : 'Create Task'}
+      </Button>
+    </form>
   );
 }

@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import StoreProvider from '@/store/provider';
+import ThemeColorApplier from '@/components/ThemeColorApplier';
 import './globals.css';
 
-const geist = Geist({ subsets: ['latin'] });
-const geistMono = Geist_Mono({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -93,8 +94,9 @@ export default function RootLayout({
       <head>
         <link rel="canonical" href={APP_URL} />
       </head>
-      <body className={`${geist.className} antialiased`}>
+      <body className={`${inter.className} ${jetbrainsMono.variable} antialiased`}>
         <StoreProvider>
+          <ThemeColorApplier />
           {children}
           <Toaster position="top-right" richColors />
         </StoreProvider>

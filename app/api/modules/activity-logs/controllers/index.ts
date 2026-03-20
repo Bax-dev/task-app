@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
+import { requireOrgAdmin } from '@/lib/guards/org-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createActivityLogSchema, updateActivityLogSchema } from '../types';
 import * as activityLogService from '../services';
@@ -14,9 +15,13 @@ export async function handleCreateActivityLog(request: NextRequest) {
     const validation = validateBody(createActivityLogSchema, body);
     if (!validation.success) return errorResponse(validation.error);
 
+    // Only admins can create activity logs
+    await requireOrgAdmin(session.userId, validation.data.organizationId);
+
     const log = await activityLogService.createActivityLog(session.userId, validation.data);
     return successResponse(log, 201);
   } catch (error: any) {
+    if (error.message === 'Admin access required') return forbiddenResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     return errorResponse(error.message, 500);
   }
@@ -53,9 +58,13 @@ export async function handleGetOrgActivityLogs(request: NextRequest, organizatio
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
+    // Only admins can view org activity logs
+    await requireOrgAdmin(session.userId, organizationId);
+
     const logs = await activityLogService.getOrgActivityLogs(organizationId, session.userId);
     return successResponse(logs);
   } catch (error: any) {
+    if (error.message === 'Admin access required') return forbiddenResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
     return errorResponse(error.message, 500);
   }
