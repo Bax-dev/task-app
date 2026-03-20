@@ -7,6 +7,8 @@ import { Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useGetMeQuery, useLogoutMutation, apiSlice } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
+import { useTheme } from 'next-themes';
+import { Sun, Moon, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
 
 const links = [
@@ -21,6 +23,7 @@ export default function MobileNav() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const { theme, setTheme } = useTheme();
   const { data: user } = useGetMeQuery();
   const isLoggedIn = !!user;
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
@@ -60,6 +63,24 @@ export default function MobileNav() {
                 {link.label}
               </a>
             ))}
+            <div className="flex items-center gap-1 py-2">
+              <span className="text-xs text-muted-foreground mr-2">Theme:</span>
+              {[
+                { id: 'light', icon: Sun },
+                { id: 'dark', icon: Moon },
+                { id: 'system', icon: Monitor },
+              ].map(({ id, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setTheme(id)}
+                  className={`p-2 rounded-md transition-colors ${
+                    theme === id ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                </button>
+              ))}
+            </div>
             <hr className="border-border" />
             {isLoggedIn ? (
               <>

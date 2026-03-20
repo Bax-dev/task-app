@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono, Raleway } from 'next/font/google';
 import { Toaster } from 'sonner';
 import StoreProvider from '@/store/provider';
+import { ThemeProvider } from '@/components/theme-provider';
 import ThemeColorApplier from '@/components/ThemeColorApplier';
 import './globals.css';
 
@@ -91,16 +92,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="canonical" href={APP_URL} />
       </head>
       <body className={`${inter.className} ${jetbrainsMono.variable} ${raleway.variable} antialiased`}>
-        <StoreProvider>
-          <ThemeColorApplier />
-          {children}
-          <Toaster position="top-right" richColors />
-        </StoreProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <StoreProvider>
+            <ThemeColorApplier />
+            {children}
+            <Toaster position="top-right" richColors />
+          </StoreProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

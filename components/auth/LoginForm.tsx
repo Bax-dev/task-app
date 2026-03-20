@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useLoginMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function LoginForm() {
   const prefillEmail = searchParams.get('email') || '';
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [login, { isLoading }] = useLoginMutation();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,6 +43,7 @@ export default function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           required
           disabled={isLoading}
+          className="placeholder:opacity-50"
         />
       </div>
 
@@ -54,16 +57,27 @@ export default function LoginForm() {
             Forgot password?
           </a>
         </div>
-        <Input
-          id="password"
-          type="password"
-          placeholder="Enter your password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          disabled={isLoading}
-          minLength={8}
-        />
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={isLoading}
+            minLength={8}
+            className="pr-10 placeholder:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       <Button type="submit" className="w-full" disabled={isLoading}>

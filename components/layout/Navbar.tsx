@@ -15,6 +15,7 @@ import { LogOut, Settings, User, Bell, Menu, Search, ChevronRight } from 'lucide
 import { toast } from 'sonner';
 import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation, apiSlice } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const BREADCRUMB_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -111,6 +112,9 @@ export default function Navbar({ onMenuToggle }: { onMenuToggle?: () => void }) 
           <Search className="w-3 h-3" />
           Search...
         </button>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Notifications */}
         <Link href="/notifications" className="relative p-1.5 rounded-md text-muted-foreground">

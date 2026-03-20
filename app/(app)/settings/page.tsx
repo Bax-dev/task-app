@@ -21,7 +21,11 @@ import {
   Camera,
   Check,
   Upload,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { useUpdateProfileMutation, useGetMeQuery } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
@@ -48,9 +52,17 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FolderOpen,
 };
 
+const THEME_MODES = [
+  { id: 'light', label: 'Light', icon: Sun, description: 'Light background with dark text' },
+  { id: 'dark', label: 'Dark', icon: Moon, description: 'Dark background with light text' },
+  { id: 'system', label: 'System', icon: Monitor, description: 'Follows your device settings' },
+] as const;
+
 export default function SettingsPage() {
   const [name, setName] = useState('');
   const { user, isLoading: authLoading } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const { refetch } = useGetMeQuery();
   const dispatch = useAppDispatch();
   const moduleCards = useAppSelector(selectModuleCards);
@@ -62,6 +74,8 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isLoading = authLoading;
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (user?.name) setName(user.name);
@@ -282,6 +296,42 @@ export default function SettingsPage() {
                 </div>
                 <span className={`text-[10px] ${isActive ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                   {color.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Appearance Mode */}
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+        <h2 className="text-lg font-semibold text-foreground mb-1">Appearance</h2>
+        <p className="text-xs text-muted-foreground mb-4">Choose between light, dark, or system theme</p>
+
+        <div className="grid grid-cols-3 gap-3">
+          {THEME_MODES.map((mode) => {
+            const Icon = mode.icon;
+            const isActive = mounted && theme === mode.id;
+            return (
+              <button
+                key={mode.id}
+                onClick={() => setTheme(mode.id)}
+                className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                  isActive
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-border hover:border-primary/30 hover:bg-muted/50'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  isActive ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
+                }`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                  {mode.label}
+                </span>
+                <span className="text-[10px] text-muted-foreground text-center leading-tight">
+                  {mode.description}
                 </span>
               </button>
             );

@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useResetPasswordMutation } from '@/store/api';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Eye, EyeOff } from 'lucide-react';
 
 interface ResetPasswordFormProps {
   email: string;
@@ -18,8 +18,24 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [success, setSuccess] = useState(false);
   const [resetPassword, { isLoading }] = useResetPasswordMutation();
+
+  const passwordStrength = useMemo(() => {
+    if (!newPassword) return { score: 0, label: '', color: '' };
+    let score = 0;
+    if (newPassword.length >= 8) score++;
+    if (/[A-Z]/.test(newPassword)) score++;
+    if (/[a-z]/.test(newPassword)) score++;
+    if (/[0-9]/.test(newPassword)) score++;
+    if (/[^A-Za-z0-9]/.test(newPassword)) score++;
+    if (score <= 2) return { score, label: 'Weak', color: 'bg-red-500' };
+    if (score <= 3) return { score, label: 'Fair', color: 'bg-yellow-500' };
+    if (score <= 4) return { score, label: 'Good', color: 'bg-blue-500' };
+    return { score, label: 'Strong', color: 'bg-green-500' };
+  }, [newPassword]);
 
   if (success) {
     return (
@@ -79,30 +95,73 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
 
       <div className="space-y-2">
         <Label htmlFor="newPassword">New Password</Label>
-        <Input
-          id="newPassword"
-          type="password"
-          placeholder="Min 8 chars, 1 uppercase, 1 number"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          required
-          minLength={8}
-          disabled={isLoading}
-        />
+        <div className="relative">
+          <Input
+            id="newPassword"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Min 8 chars, 1 uppercase, 1 number"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+            minLength={8}
+            disabled={isLoading}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+        {newPassword && (
+          <div className="space-y-1">
+            <div className="flex gap-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1 flex-1 rounded-full transition-colors ${
+                    i < passwordStrength.score ? passwordStrength.color : 'bg-muted'
+                  }`}
+                />
+              ))}
+            </div>
+            <p className={`text-xs ${
+              passwordStrength.label === 'Weak' ? 'text-red-500' :
+              passwordStrength.label === 'Fair' ? 'text-yellow-500' :
+              passwordStrength.label === 'Good' ? 'text-blue-500' : 'text-green-500'
+            }`}>
+              {passwordStrength.label}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Confirm New Password</Label>
-        <Input
-          id="confirmPassword"
-          type="password"
-          placeholder="Confirm your new password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-          minLength={8}
-          disabled={isLoading}
-        />
+        <div className="relative">
+          <Input
+            id="confirmPassword"
+            type={showConfirmPassword ? 'text' : 'password'}
+            placeholder="Confirm your new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            minLength={8}
+            disabled={isLoading}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1}
+          >
+            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       <Button

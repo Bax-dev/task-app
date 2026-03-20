@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useGetMeQuery, useLogoutMutation, apiSlice } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import { toast } from 'sonner';
+import ThemeToggle from '@/components/ThemeToggle';
 import MobileNav from './MobileNav';
 
 export default function LandingNav() {
@@ -52,6 +53,7 @@ export default function LandingNav() {
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           {isLoggedIn ? (
             <>
               <Link href="/dashboard" className="hidden sm:inline-block">
