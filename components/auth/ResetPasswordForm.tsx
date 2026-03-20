@@ -11,15 +11,17 @@ import { CheckCircle, Eye, EyeOff } from 'lucide-react';
 
 interface ResetPasswordFormProps {
   email: string;
+  otp: string;
+  onOtpExpired: () => void;
 }
 
-export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
+export default function ResetPasswordForm({ email, otp, onOtpExpired }: ResetPasswordFormProps) {
   const router = useRouter();
-  const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
   const [success, setSuccess] = useState(false);
   const [resetPassword, { isLoading }] = useResetPasswordMutation();
 
@@ -65,6 +67,12 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
           setSuccess(true);
           toast.success('Password reset successfully!');
         } catch (error: any) {
+          const attempts = failedAttempts + 1;
+          setFailedAttempts(attempts);
+          if (attempts >= 2) {
+            onOtpExpired();
+            return;
+          }
           toast.error(error?.data?.message || error?.message || 'Failed to reset password');
         }
       }}
@@ -73,24 +81,8 @@ export default function ResetPasswordForm({ email }: ResetPasswordFormProps) {
       <div className="text-center mb-4">
         <h3 className="text-xl font-bold text-foreground">Set New Password</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Enter the verification code and your new password
+          Enter your new password
         </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="otp">Verification Code</Label>
-        <Input
-          id="otp"
-          type="text"
-          inputMode="numeric"
-          placeholder="Enter 6-digit code"
-          value={otp}
-          onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          required
-          maxLength={6}
-          disabled={isLoading}
-          className="text-center text-lg tracking-widest"
-        />
       </div>
 
       <div className="space-y-2">

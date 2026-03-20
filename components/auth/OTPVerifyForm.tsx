@@ -113,7 +113,18 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
   };
 
   if (step === 'reset') {
-    return <ResetPasswordForm email={email} />;
+    return (
+      <ResetPasswordForm
+        email={email}
+        otp={otp.join('')}
+        onOtpExpired={() => {
+          setStep('otp');
+          setOtp(['', '', '', '', '', '']);
+          inputRefs.current[0]?.focus();
+          toast.error('Too many failed attempts. Please re-enter your verification code.');
+        }}
+      />
+    );
   }
 
   return (
