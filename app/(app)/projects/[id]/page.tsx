@@ -276,7 +276,7 @@ function NewTaskModal({
             value={assignSearch}
             onChange={(e) => handleAssignInput(e.target.value)}
             onFocus={() => { if (assignSearch.length > 0) setShowDropdown(true); }}
-            placeholder="@name or @all"
+            placeholder=""
             className="pl-8 h-9 text-sm"
           />
           {showDropdown && (
