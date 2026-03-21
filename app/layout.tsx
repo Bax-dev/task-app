@@ -3,7 +3,6 @@ import { Inter, JetBrains_Mono, Raleway } from 'next/font/google';
 import { Toaster } from 'sonner';
 import StoreProvider from '@/store/provider';
 import { ThemeProvider } from '@/components/theme-provider';
-import ThemeColorApplier from '@/components/ThemeColorApplier';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -99,7 +98,6 @@ export default function RootLayout({
       <body className={`${inter.className} ${jetbrainsMono.variable} ${raleway.variable} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <StoreProvider>
-            <ThemeColorApplier />
             {children}
             <Toaster position="top-right" richColors />
           </StoreProvider>

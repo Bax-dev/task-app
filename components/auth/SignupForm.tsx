@@ -10,17 +10,28 @@ import { useRegisterMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
 import { Eye, EyeOff } from 'lucide-react';
 
+interface FieldErrors {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+}
+
 export default function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
   const prefillEmail = searchParams.get('email') || '';
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [register, { isLoading }] = useRegisterMutation();
 
   const passwordStrength = useMemo(() => {
@@ -37,36 +48,95 @@ export default function SignupForm() {
     return { score, label: 'Strong', color: 'bg-green-500' };
   }, [password]);
 
+  const validate = (): FieldErrors => {
+    const errs: FieldErrors = {};
+    if (!firstName.trim()) errs.firstName = 'First name is required';
+    else if (firstName.trim().length < 2) errs.firstName = 'First name must be at least 2 characters';
+    if (!lastName.trim()) errs.lastName = 'Last name is required';
+    else if (lastName.trim().length < 2) errs.lastName = 'Last name must be at least 2 characters';
+    if (!email.trim()) errs.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = 'Please enter a valid email address';
+    if (!password) errs.password = 'Password is required';
+    else if (password.length < 8) errs.password = 'Password must be at least 8 characters';
+    else if (!/[A-Z]/.test(password)) errs.password = 'Password must contain at least one uppercase letter';
+    else if (!/[a-z]/.test(password)) errs.password = 'Password must contain at least one lowercase letter';
+    else if (!/[0-9]/.test(password)) errs.password = 'Password must contain at least one number';
+    if (!confirmPassword) errs.confirmPassword = 'Please confirm your password';
+    else if (password !== confirmPassword) errs.confirmPassword = 'Passwords do not match';
+    return errs;
+  };
+
+  const validateField = (field: string) => {
+    const allErrors = validate();
+    setErrors((prev) => ({ ...prev, [field]: allErrors[field as keyof FieldErrors] }));
+  };
+
+  const handleBlur = (field: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    validateField(field);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
+    const allTouched = { firstName: true, lastName: true, email: true, password: true, confirmPassword: true };
+    setTouched(allTouched);
+    const validationErrors = validate();
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
+
+    const name = `${firstName.trim()} ${lastName.trim()}`;
     try {
-      await register({ name, email, password }).unwrap();
+      await register({ name, email: email.trim(), password }).unwrap();
       toast.success('Account created successfully!');
       window.location.href = redirect || '/dashboard';
     } catch (error: any) {
-      toast.error(error?.data?.message || error?.message || 'Registration failed');
+      const msg = error?.data?.error || error?.data?.message || error?.message || 'Registration failed';
+      if (msg.toLowerCase().includes('email')) {
+        setErrors((prev) => ({ ...prev, email: msg }));
+      } else {
+        toast.error(msg);
+      }
     }
   };
 
+  const fieldErrorClass = (field: string) =>
+    touched[field] && errors[field as keyof FieldErrors] ? 'border-red-500 focus-visible:ring-red-500' : '';
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full">
-      <div className="space-y-2">
-        <Label htmlFor="name">Full Name</Label>
-        <Input
-          id="name"
-          type="text"
-          placeholder="John Doe"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          disabled={isLoading}
-          minLength={2}
-          className="placeholder:opacity-50"
-        />
+    <form onSubmit={handleSubmit} className="space-y-4 w-full" noValidate>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">First Name</Label>
+          <Input
+            id="firstName"
+            type="text"
+            placeholder="John"
+            value={firstName}
+            onChange={(e) => { setFirstName(e.target.value); if (touched.firstName) validateField('firstName'); }}
+            onBlur={() => handleBlur('firstName')}
+            disabled={isLoading}
+            className={`placeholder:opacity-50 ${fieldErrorClass('firstName')}`}
+          />
+          {touched.firstName && errors.firstName && (
+            <p className="text-xs text-red-500">{errors.firstName}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Last Name</Label>
+          <Input
+            id="lastName"
+            type="text"
+            placeholder="Doe"
+            value={lastName}
+            onChange={(e) => { setLastName(e.target.value); if (touched.lastName) validateField('lastName'); }}
+            onBlur={() => handleBlur('lastName')}
+            disabled={isLoading}
+            className={`placeholder:opacity-50 ${fieldErrorClass('lastName')}`}
+          />
+          {touched.lastName && errors.lastName && (
+            <p className="text-xs text-red-500">{errors.lastName}</p>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -76,11 +146,14 @@ export default function SignupForm() {
           type="email"
           placeholder="you@example.com"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          onChange={(e) => { setEmail(e.target.value); if (touched.email) validateField('email'); }}
+          onBlur={() => handleBlur('email')}
           disabled={isLoading}
-          className="placeholder:opacity-50"
+          className={`placeholder:opacity-50 ${fieldErrorClass('email')}`}
         />
+        {touched.email && errors.email && (
+          <p className="text-xs text-red-500">{errors.email}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -91,11 +164,10 @@ export default function SignupForm() {
             type={showPassword ? 'text' : 'password'}
             placeholder="Min 8 characters, 1 uppercase, 1 number"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
+            onChange={(e) => { setPassword(e.target.value); if (touched.password) validateField('password'); }}
+            onBlur={() => handleBlur('password')}
             disabled={isLoading}
-            minLength={8}
-            className="pr-10 placeholder:opacity-50"
+            className={`pr-10 placeholder:opacity-50 ${fieldErrorClass('password')}`}
           />
           <button
             type="button"
@@ -106,7 +178,10 @@ export default function SignupForm() {
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
-        {password && (
+        {touched.password && errors.password && (
+          <p className="text-xs text-red-500">{errors.password}</p>
+        )}
+        {password && !errors.password && (
           <div className="space-y-1">
             <div className="flex gap-1">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -137,11 +212,10 @@ export default function SignupForm() {
             type={showConfirmPassword ? 'text' : 'password'}
             placeholder="Confirm your password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
+            onChange={(e) => { setConfirmPassword(e.target.value); if (touched.confirmPassword) validateField('confirmPassword'); }}
+            onBlur={() => handleBlur('confirmPassword')}
             disabled={isLoading}
-            minLength={8}
-            className="pr-10 placeholder:opacity-50"
+            className={`pr-10 placeholder:opacity-50 ${fieldErrorClass('confirmPassword')}`}
           />
           <button
             type="button"
@@ -152,6 +226,9 @@ export default function SignupForm() {
             {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
+        {touched.confirmPassword && errors.confirmPassword && (
+          <p className="text-xs text-red-500">{errors.confirmPassword}</p>
+        )}
       </div>
 
       <Button type="submit" className="w-full" disabled={isLoading}>

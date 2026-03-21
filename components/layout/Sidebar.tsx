@@ -20,6 +20,14 @@ import {
   CalendarDays,
   BarChart3,
   Star,
+  Kanban,
+  Tags,
+  Repeat2,
+  Zap,
+  Plug,
+  Filter,
+  GaugeCircle,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +69,8 @@ const navSections: { label: string | null; items: NavItem[] }[] = [
     items: [
       { name: 'Tasks', href: '/tasks', icon: CheckSquare },
       { name: 'Projects', href: '/projects', icon: FolderOpen },
+      { name: 'Boards', href: '/boards', icon: Kanban },
+      { name: 'Sprints', href: '/sprints', icon: Repeat2 },
       { name: 'Calendar', href: '/calendar', icon: CalendarDays },
       { name: 'Notes', href: '/notes', icon: FileText },
     ],
@@ -73,9 +83,21 @@ const navSections: { label: string | null; items: NavItem[] }[] = [
     ],
   },
   {
+    label: 'Configure',
+    items: [
+      { name: 'Labels', href: '/labels', icon: Tags },
+      { name: 'Issue Types', href: '/issue-types', icon: Layers, adminOnly: true },
+      { name: 'Workflows', href: '/workflows', icon: GaugeCircle, adminOnly: true },
+      { name: 'Automations', href: '/automations', icon: Zap, adminOnly: true },
+      { name: 'Integrations', href: '/integrations', icon: Plug, adminOnly: true },
+    ],
+  },
+  {
     label: 'Insights',
     items: [
       { name: 'Reports', href: '/reports', icon: BarChart3 },
+      { name: 'Dashboards', href: '/dashboards', icon: LayoutDashboard },
+      { name: 'Saved Filters', href: '/saved-filters', icon: Filter },
       { name: 'Audit Logs', href: '/activity-logs', icon: Activity, adminOnly: true },
     ],
   },

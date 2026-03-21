@@ -56,7 +56,7 @@ export async function handleLogin(request: NextRequest) {
 
 export async function handleLogout(request: NextRequest) {
   try {
-    // Authenticate to get user ID for revoking refresh tokens
+    
     const session = await authenticateRequest(request);
     const refreshToken = await getRefreshTokenFromCookie();
 
@@ -64,13 +64,12 @@ export async function handleLogout(request: NextRequest) {
       await authService.logoutUser(session.userId, refreshToken ?? undefined);
     }
 
-    // Clear both cookies
     await deleteSessionCookie();
     await deleteRefreshTokenCookie();
 
     return successResponse({ message: 'Logged out successfully' });
   } catch {
-    // Even if revocation fails, still clear cookies
+
     await deleteSessionCookie();
     await deleteRefreshTokenCookie();
     return successResponse({ message: 'Logged out successfully' });

@@ -5,7 +5,7 @@ const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 );
 
-const protectedRoutes = ['/dashboard', '/organizations', '/projects', '/tasks', '/team', '/settings', '/spaces', '/notes', '/notifications'];
+const protectedRoutes = ['/dashboard', '/organizations', '/projects', '/tasks', '/team', '/settings', '/spaces', '/notes', '/notifications', '/boards', '/labels', '/sprints', '/workflows', '/automations', '/integrations', '/saved-filters', '/dashboards', '/issue-types', '/custom-fields', '/reports', '/calendar', '/favorites', '/activity-logs'];
 const authRoutes = ['/login', '/signup', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {

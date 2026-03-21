@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,10 +20,26 @@ import {
   Check,
   X,
   Clock,
+  Layers,
+  GripVertical,
 } from 'lucide-react';
-import { useGetOrganizationsQuery, useGetUserTasksQuery, useGetProjectsQuery, useGetMeQuery } from '@/store/api';
+import { useGetOrganizationsQuery, useGetUserTasksQuery, useGetProjectsQuery, useGetMeQuery, useCreateSpaceMutation } from '@/store/api';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { selectVisibleModuleCards, renameModuleCard } from '@/store/slices/preferencesSlice';
+import { selectVisibleModuleCards, renameModuleCard, reorderModuleCards, type ModuleCard } from '@/store/slices/preferencesSlice';
 import type { LucideIcon } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -37,12 +53,25 @@ const ICON_MAP: Record<string, LucideIcon> = {
   FolderOpen,
 };
 
-function EditableModuleCard({ card }: { card: { id: string; name: string; href: string; icon: string } }) {
+interface DraggableCardProps {
+  card: { id: string; name: string; href: string; icon: string };
+  index: number;
+  dragIndex: number | null;
+  overIndex: number | null;
+  onDragStart: (index: number) => void;
+  onDragOver: (e: React.DragEvent, index: number) => void;
+  onDragEnd: () => void;
+  onDrop: (e: React.DragEvent) => void;
+}
+
+function DraggableModuleCard({ card, index, dragIndex, overIndex, onDragStart, onDragOver, onDragEnd, onDrop }: DraggableCardProps) {
   const dispatch = useAppDispatch();
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(card.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const Icon = ICON_MAP[card.icon] || CheckSquare;
+  const isDragging = dragIndex === index;
+  const isOver = overIndex === index;
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -95,20 +124,28 @@ function EditableModuleCard({ card }: { card: { id: string; name: string; href: 
   }
 
   return (
-    <div className="group relative">
+    <div
+      className={`group relative transition-all duration-200 ${isDragging ? 'opacity-40 scale-95' : ''} ${isOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg' : ''}`}
+      draggable
+      onDragStart={() => onDragStart(index)}
+      onDragOver={(e) => onDragOver(e, index)}
+      onDragEnd={onDragEnd}
+      onDrop={onDrop}
+    >
       <Link href={card.href}>
         <div className="bg-card border border-border rounded-lg p-3 flex items-center gap-3 hover:border-primary/30 hover:shadow-sm transition-all">
           <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Icon className="w-4 h-4 text-primary" />
           </div>
-          <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+          <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate flex-1">
             {card.name}
           </span>
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 cursor-grab" />
         </div>
       </Link>
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(true); }}
-        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground"
+        className="absolute top-1.5 right-7 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground"
         title="Rename"
       >
         <Pencil className="w-3 h-3" />
@@ -117,12 +154,76 @@ function EditableModuleCard({ card }: { card: { id: string; name: string; href: 
   );
 }
 
+const SPACE_COLORS = [
+  '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
+  '#db2777', '#9333ea', '#0891b2', '#65a30d', '#ea580c',
+];
+
 export default function DashboardPage() {
   const { data: user } = useGetMeQuery();
   const { data: organizations = [], isLoading: orgsLoading } = useGetOrganizationsQuery();
   const { data: tasks = [], isLoading: tasksLoading } = useGetUserTasksQuery();
   const { data: projects = [], error: projectsError } = useGetProjectsQuery();
-  const moduleCards = useAppSelector(selectVisibleModuleCards);
+  const allModuleCards = useAppSelector(selectVisibleModuleCards);
+  const dispatch = useAppDispatch();
+  const [localCards, setLocalCards] = useState<ModuleCard[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLocalCards(allModuleCards);
+  }, [allModuleCards]);
+
+  const handleDragStart = useCallback((index: number) => {
+    setDragIndex(index);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setOverIndex(index);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragIndex === null || overIndex === null || dragIndex === overIndex) {
+      setDragIndex(null);
+      setOverIndex(null);
+      return;
+    }
+    const updated = [...localCards];
+    const [moved] = updated.splice(dragIndex, 1);
+    updated.splice(overIndex, 0, moved);
+    setLocalCards(updated);
+    dispatch(reorderModuleCards(updated));
+    setDragIndex(null);
+    setOverIndex(null);
+  }, [dragIndex, overIndex, localCards, dispatch]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragIndex(null);
+    setOverIndex(null);
+  }, []);
+
+  const [spaceDialogOpen, setSpaceDialogOpen] = useState(false);
+  const [spaceName, setSpaceName] = useState('');
+  const [spaceColor, setSpaceColor] = useState('#7c3aed');
+  const [spaceOrgId, setSpaceOrgId] = useState('');
+  const [createSpace, { isLoading: isCreatingSpace }] = useCreateSpaceMutation();
+
+  const handleCreateSpace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!spaceName.trim() || !spaceOrgId) return;
+    try {
+      await createSpace({ name: spaceName.trim(), color: spaceColor, organizationId: spaceOrgId }).unwrap();
+      toast.success('Space created!');
+      setSpaceDialogOpen(false);
+      setSpaceName('');
+      setSpaceColor('#7c3aed');
+      setSpaceOrgId('');
+    } catch (error: any) {
+      toast.error(error?.data?.error || error?.message || 'Failed to create space');
+    }
+  };
 
   if (orgsLoading || tasksLoading) {
     return (
@@ -170,6 +271,70 @@ export default function DashboardPage() {
               </Button>
             </Link>
           )}
+          {organizations.length > 0 && (
+            <Dialog open={spaceDialogOpen} onOpenChange={setSpaceDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  New Space
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[550px] p-0 gap-0 overflow-hidden">
+                <form onSubmit={handleCreateSpace}>
+                  <div className="px-5 pt-5 pb-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">Space</span>
+                    </div>
+                  </div>
+                  <input
+                    value={spaceName}
+                    onChange={(e) => setSpaceName(e.target.value)}
+                    placeholder="Space Name"
+                    className="w-full border-0 bg-transparent text-lg font-semibold h-auto py-2 px-5 placeholder:text-muted-foreground/50 focus:outline-none"
+                    required
+                    autoFocus
+                  />
+                  <div className="border-t border-border" />
+                  <div className="px-5 py-3 space-y-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium text-muted-foreground">Organization</Label>
+                      <Select value={spaceOrgId} onValueChange={setSpaceOrgId}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select organization" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {organizations.map((org: any) => (
+                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium text-muted-foreground">Color</Label>
+                      <div className="flex gap-2 flex-wrap">
+                        {SPACE_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setSpaceColor(c)}
+                            className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${spaceColor === c ? 'border-foreground scale-110 ring-2 ring-offset-2 ring-offset-background ring-primary' : 'border-transparent'}`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border-t border-border" />
+                  <div className="px-5 py-3 flex items-center justify-end">
+                    <Button type="submit" disabled={isCreatingSpace || !spaceName.trim() || !spaceOrgId} size="sm" className="gap-1.5 px-5">
+                      {isCreatingSpace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                      {isCreatingSpace ? 'Creating...' : 'Create Space'}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
           <Link href="/organizations/new">
             <Button size="sm" className="gap-1.5">
               <Plus className="w-3.5 h-3.5" />
@@ -213,17 +378,25 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* Module Cards - Editable */}
+      {/* Module Cards - Drag & Drop */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Quick Actions</h2>
-          <Link href="/settings" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-            Customize
-          </Link>
+          <span className="text-[10px] text-muted-foreground/60">Drag to reorder</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {moduleCards.map((card) => (
-            <EditableModuleCard key={card.id} card={card} />
+          {localCards.map((card, i) => (
+            <DraggableModuleCard
+              key={card.id}
+              card={card}
+              index={i}
+              dragIndex={dragIndex}
+              overIndex={overIndex}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              onDrop={handleDrop}
+            />
           ))}
         </div>
       </div>
