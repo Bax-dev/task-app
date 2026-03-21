@@ -8,6 +8,7 @@ export const createTaskSchema = z.object({
   dueDate: z.string().datetime().optional().nullable(),
   projectId: z.string().uuid('Invalid project ID'),
   assigneeIds: z.array(z.string().uuid()).optional(),
+  issueTypeId: z.string().uuid().optional().nullable(),
 });
 
 export const updateTaskSchema = z.object({
@@ -17,6 +18,7 @@ export const updateTaskSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   dueDate: z.string().datetime().optional().nullable(),
   rejectionReason: z.string().max(2000).optional().nullable(),
+  issueTypeId: z.string().uuid().optional().nullable(),
 });
 
 export const assignTaskSchema = z.object({

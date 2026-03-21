@@ -21,13 +21,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, ArrowLeft, Loader2, X, AtSign, Users } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, X, AtSign, Users, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   useGetProjectQuery,
   useGetProjectTasksQuery,
   useGetOrgMembersQuery,
+  useGetOrgIssueTypesQuery,
   useCreateTaskMutation,
 } from '@/store/api';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  circle: Circle, square: Square, triangle: Triangle, star: Star,
+  zap: Zap, bug: Bug, bookmark: Bookmark, flag: Flag, target: Target, layers: Layers,
+};
 import TaskBoard from '@/components/tasks/board/TaskBoard';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
@@ -98,6 +105,7 @@ export default function ProjectPage({
                 <NewTaskModal
                   projectId={id}
                   members={members}
+                  orgId={orgId || ''}
                   onCreated={() => setDialogOpen(false)}
                 />
               </DialogContent>
@@ -114,10 +122,12 @@ export default function ProjectPage({
 function NewTaskModal({
   projectId,
   members,
+  orgId,
   onCreated,
 }: {
   projectId: string;
   members: Member[];
+  orgId: string;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
@@ -125,6 +135,7 @@ function NewTaskModal({
   const [priority, setPriority] = useState('MEDIUM');
   const [status, setStatus] = useState('TODO');
   const [dueDate, setDueDate] = useState('');
+  const [issueTypeId, setIssueTypeId] = useState('');
 
   // Assignment
   const [assignedUsers, setAssignedUsers] = useState<Member[]>([]);
@@ -134,6 +145,7 @@ function NewTaskModal({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [createTask, { isLoading }] = useCreateTaskMutation();
+  const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId, { skip: !orgId });
 
   const filteredMembers = useMemo(() => {
     const assignedIds = new Set(assignedUsers.map((u) => u.id));
@@ -188,6 +200,7 @@ function NewTaskModal({
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         projectId,
         assigneeIds: assignedUsers.length > 0 ? assignedUsers.map((u) => u.id) : undefined,
+        issueTypeId: issueTypeId || null,
       }).unwrap();
       toast.success('Task created!');
       onCreated();
@@ -250,6 +263,31 @@ function NewTaskModal({
         </div>
       </div>
 
+      {/* Issue Type */}
+      {issueTypes.length > 0 && (
+        <div className="space-y-2">
+          <Label>Issue Type</Label>
+          <Select value={issueTypeId} onValueChange={setIssueTypeId}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Select type (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              {issueTypes.map((it: any) => {
+                const Icon = ICON_MAP[it.icon] || Circle;
+                return (
+                  <SelectItem key={it.id} value={it.id}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5" style={{ color: it.color }} />
+                      {it.name}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Assign */}
       <div className="space-y-2">
         <Label className="flex items-center gap-1.5">
@@ -269,18 +307,20 @@ function NewTaskModal({
           </div>
         )}
 
-        <div className="relative" ref={dropdownRef}>
-          <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            ref={assignRef}
-            value={assignSearch}
-            onChange={(e) => handleAssignInput(e.target.value)}
-            onFocus={() => { if (assignSearch.length > 0) setShowDropdown(true); }}
-            placeholder=""
-            className="pl-8 h-9 text-sm"
-          />
+        <div ref={dropdownRef}>
+          <div className="relative">
+            <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              ref={assignRef}
+              value={assignSearch}
+              onChange={(e) => handleAssignInput(e.target.value)}
+              onFocus={() => { if (assignSearch.length > 0) setShowDropdown(true); }}
+              placeholder=""
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
           {showDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-36 overflow-auto">
+            <div className="mt-1 bg-card border border-border rounded-lg shadow-lg max-h-36 overflow-auto">
               {assignSearch.toLowerCase().startsWith('@al') && assignSearch.toLowerCase() !== '@all' && (
                 <button
                   type="button"

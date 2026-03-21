@@ -7,6 +7,7 @@ export interface Task {
   priority: string;
   dueDate: string | null;
   rejectionReason?: string | null;
+  issueTypeId?: string | null;
   projectId: string;
   createdById: string;
   createdAt: string;
@@ -14,6 +15,7 @@ export interface Task {
   assignments?: { user: { id: string; name: string | null; email: string } }[];
   project?: { id: string; name: string; spaceId: string; space?: { id: string; name: string; organizationId: string; organization?: { slug: string } } };
   attachments?: { id: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string }[];
+  issueType?: { id: string; name: string; icon: string; color: string } | null;
 }
 
 export interface CreateTaskDTO {

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import {
-  useGetBoardQuery, useGetProjectTasksQuery, useUpdateTaskMutation,
+  useGetBoardQuery, useGetProjectTasksQuery, useUpdateTaskMutation, useCreateTaskMutation,
 } from '@/store/api';
 import type { Task } from '@/types/task';
 import type { BoardColumn } from '@/types/board';
@@ -215,14 +215,19 @@ function KanbanColumn({
   onStatusChange,
   updatingTaskId,
   onAddTask,
+  isCreating,
 }: {
   column: BoardColumn;
   tasks: Task[];
   allColumns: BoardColumn[];
   onStatusChange: (taskId: string, newStatus: string) => void;
   updatingTaskId: string | null;
-  onAddTask: (status: string) => void;
+  onAddTask: (status: string, title: string) => void;
+  isCreating: boolean;
 }) {
+  const [adding, setAdding] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+
   const count = tasks.length;
   const limit = column.wipLimit;
   const isAtLimit = limit !== null && count >= limit;
@@ -237,6 +242,13 @@ function KanbanColumn({
     headerColor = 'text-amber-600';
     countBadge = 'bg-amber-500/15 text-amber-600';
   }
+
+  const handleCreate = () => {
+    if (!newTitle.trim()) return;
+    onAddTask(resolveColumnStatus(column.name), newTitle.trim());
+    setNewTitle('');
+    setAdding(false);
+  };
 
   return (
     <div className="bg-muted/30 rounded-lg p-3 min-w-[280px] max-w-[320px] flex flex-col gap-2 shrink-0">
@@ -253,7 +265,7 @@ function KanbanColumn({
 
       {/* Task list */}
       <div className="flex flex-col gap-2 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
-        {tasks.length === 0 && (
+        {tasks.length === 0 && !adding && (
           <div className="text-center py-6 text-xs text-muted-foreground/60">
             No tasks
           </div>
@@ -269,14 +281,40 @@ function KanbanColumn({
         ))}
       </div>
 
-      {/* Add task button */}
-      <button
-        onClick={() => onAddTask(resolveColumnStatus(column.name))}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-2 px-2 rounded-md hover:bg-muted/60 transition-colors mt-1"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        Add Task
-      </button>
+      {/* Inline add task form */}
+      {adding ? (
+        <div className="space-y-2 mt-1">
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Task title..."
+            className="h-8 text-sm"
+            autoFocus
+            disabled={isCreating}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreate();
+              if (e.key === 'Escape') { setAdding(false); setNewTitle(''); }
+            }}
+          />
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="h-7 text-xs" onClick={handleCreate} disabled={isCreating || !newTitle.trim()}>
+              {isCreating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setNewTitle(''); }} disabled={isCreating}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground py-2 px-2 rounded-md hover:bg-muted/60 transition-colors mt-1"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Task
+        </button>
+      )}
     </div>
   );
 }
@@ -296,6 +334,7 @@ function BoardDetailView({
     { skip: !board?.projectId },
   );
   const [updateTask] = useUpdateTaskMutation();
+  const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
   // Derive columns sorted by position
@@ -330,6 +369,16 @@ function BoardDetailView({
       toast.error(err?.data?.message || 'Failed to move task');
     } finally {
       setUpdatingTaskId(null);
+    }
+  };
+
+  const handleAddTask = async (status: string, title: string) => {
+    if (!board) return;
+    try {
+      await createTask({ title, status, projectId: board.projectId }).unwrap();
+      toast.success('Task created');
+    } catch (err: any) {
+      toast.error(err?.data?.message || 'Failed to create task');
     }
   };
 
@@ -399,9 +448,8 @@ function BoardDetailView({
               allColumns={columns}
               onStatusChange={handleStatusChange}
               updatingTaskId={updatingTaskId}
-              onAddTask={(status) => {
-                toast.info('Navigate to the Tasks page to create a new task with status: ' + status.replace(/_/g, ' '));
-              }}
+              onAddTask={handleAddTask}
+              isCreating={isCreating}
             />
           ))}
         </div>

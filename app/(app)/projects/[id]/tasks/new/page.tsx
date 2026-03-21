@@ -25,15 +25,23 @@ import {
   FileText,
   Image as ImageIcon,
   AtSign,
+  Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   useCreateTaskMutation,
   useGetProjectQuery,
   useGetOrgMembersQuery,
+  useGetOrgIssueTypesQuery,
   useGetMeQuery,
 } from '@/store/api';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  circle: Circle, square: Square, triangle: Triangle, star: Star,
+  zap: Zap, bug: Bug, bookmark: Bookmark, flag: Flag, target: Target, layers: Layers,
+};
 import { api } from '@/lib/api-client';
 import type { Member } from '@/types/organization';
 
@@ -63,6 +71,7 @@ export default function NewTaskPage({
   const [priority, setPriority] = useState('MEDIUM');
   const [status, setStatus] = useState('TODO');
   const [dueDate, setDueDate] = useState('');
+  const [issueTypeId, setIssueTypeId] = useState('');
 
   // Assignment state
   const [assignedUsers, setAssignedUsers] = useState<Member[]>([]);
@@ -80,6 +89,7 @@ export default function NewTaskPage({
   const { data: project } = useGetProjectQuery(projectId);
   const orgId = project?.space?.organizationId || '';
   const { data: members = [] } = useGetOrgMembersQuery(orgId, { skip: !orgId });
+  const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId, { skip: !orgId });
 
   const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
 
@@ -181,6 +191,7 @@ export default function NewTaskPage({
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         projectId,
         assigneeIds: assignedUsers.length > 0 ? assignedUsers.map((u) => u.id) : undefined,
+        issueTypeId: issueTypeId || null,
       }).unwrap();
 
       // Link uploaded files to the created task
@@ -288,6 +299,31 @@ export default function NewTaskPage({
             <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
         </div>
+
+        {/* Issue Type */}
+        {issueTypes.length > 0 && (
+          <div className="space-y-2">
+            <Label>Issue Type</Label>
+            <Select value={issueTypeId} onValueChange={setIssueTypeId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select type (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {issueTypes.map((it: any) => {
+                  const Icon = ICON_MAP[it.icon] || Circle;
+                  return (
+                    <SelectItem key={it.id} value={it.id}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-3.5 h-3.5" style={{ color: it.color }} />
+                        {it.name}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Assign Members */}
         <div className="space-y-2">

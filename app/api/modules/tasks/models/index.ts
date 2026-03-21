@@ -15,6 +15,9 @@ const taskInclude = {
     select: { id: true, fileName: true, fileUrl: true, fileSize: true, mimeType: true },
     orderBy: { createdAt: 'desc' as const },
   },
+  issueType: {
+    select: { id: true, name: true, icon: true, color: true },
+  },
 };
 
 export async function createTask(data: {
@@ -25,6 +28,7 @@ export async function createTask(data: {
   dueDate?: Date | null;
   projectId: string;
   createdById: string;
+  issueTypeId?: string | null;
 }) {
   // Get the organization ID via the project's space
   const project = await prisma.project.findUnique({
@@ -50,6 +54,7 @@ export async function createTask(data: {
       projectId: data.projectId,
       createdById: data.createdById,
       taskNumber: org.taskCounter,
+      issueTypeId: data.issueTypeId ?? null,
     },
     include: taskInclude,
   });
@@ -90,6 +95,7 @@ export async function updateTask(id: string, data: {
   priority?: TaskPriority;
   dueDate?: Date | null;
   rejectionReason?: string | null;
+  issueTypeId?: string | null;
 }) {
   return prisma.task.update({
     where: { id },

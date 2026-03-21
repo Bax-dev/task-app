@@ -30,23 +30,37 @@ const rawBaseQuery = fetchBaseQuery({
   },
   responseHandler: async (response) => {
     const text = await response.text();
-    let data;
     try {
-      data = JSON.parse(text);
+      const data = JSON.parse(text);
+      if (response.ok) {
+        return data.data ?? data;
+      }
+      // Return parsed error data as-is so fetchBaseQuery sets error.status to the HTTP code
+      return data;
     } catch {
-      if (!response.ok) throw new Error(text || 'An error occurred');
+      if (!response.ok) return { message: text || 'An error occurred' };
       return text;
     }
-    if (!response.ok) {
-      throw new Error(data.error || data.message || 'An error occurred');
-    }
-    return data.data ?? data;
   },
 });
 
 // Mutex to prevent multiple simultaneous refresh requests
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
+
+// Normalize error.data so catch blocks can always use error?.data?.message
+function normalizeError(result: { error?: FetchBaseQueryError; data?: unknown; meta?: unknown }) {
+  if (result.error) {
+    const data = result.error.data;
+    if (typeof data === 'string') {
+      result.error.data = { message: data };
+    } else if (data && typeof data === 'object' && !('message' in data) && 'error' in data) {
+      // API returns { success: false, error: "..." } — normalize to { message: "..." }
+      (data as Record<string, unknown>).message = (data as Record<string, unknown>).error;
+    }
+  }
+  return result;
+}
 
 const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
   args,
@@ -59,7 +73,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
     // Don't try to refresh if we're already on an auth endpoint
     const url = typeof args === 'string' ? args : args.url;
     if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register') {
-      return result;
+      return normalizeError(result);
     }
 
     // Use mutex to avoid concurrent refresh calls
@@ -88,7 +102,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
     }
   }
 
-  return result;
+  return normalizeError(result);
 };
 
 export const apiSlice = createApi({
@@ -271,14 +285,14 @@ export const apiSlice = createApi({
       query: (id) => `/tasks/${id}`,
       providesTags: (_, __, id) => [{ type: 'Tasks', id }],
     }),
-    createTask: builder.mutation<Task, { title: string; description?: string; status?: string; priority?: string; dueDate?: string | null; projectId: string; assigneeIds?: string[] }>({
+    createTask: builder.mutation<Task, { title: string; description?: string; status?: string; priority?: string; dueDate?: string | null; projectId: string; assigneeIds?: string[]; issueTypeId?: string | null }>({
       query: (body) => ({ url: '/tasks', method: 'POST', body }),
       invalidatesTags: (_, __, { projectId }) => [
         { type: 'Tasks', id: 'LIST' },
         { type: 'Tasks', id: `project-${projectId}` },
       ],
     }),
-    updateTask: builder.mutation<Task, { id: string; title?: string; description?: string | null; status?: string; priority?: string; dueDate?: string | null; rejectionReason?: string | null }>({
+    updateTask: builder.mutation<Task, { id: string; title?: string; description?: string | null; status?: string; priority?: string; dueDate?: string | null; rejectionReason?: string | null; issueTypeId?: string | null }>({
       query: ({ id, ...body }) => ({ url: `/tasks/${id}`, method: 'PATCH', body }),
       invalidatesTags: (result) =>
         result
@@ -291,7 +305,7 @@ export const apiSlice = createApi({
     }),
     toggleAssignment: builder.mutation<any, { taskId: string; userId: string }>({
       query: ({ taskId, userId }) => ({ url: `/tasks/${taskId}/assign`, method: 'POST', body: { userId } }),
-      invalidatesTags: [{ type: 'Tasks', id: 'LIST' }],
+      invalidatesTags: (_, __, { taskId }) => [{ type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: taskId }],
     }),
 
     // ─── Notifications ───

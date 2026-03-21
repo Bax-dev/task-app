@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -16,7 +17,12 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { useGetTaskQuery, useGetProjectQuery, useGetOrgMembersQuery, useUpdateTaskMutation, useDeleteTaskMutation, useToggleAssignmentMutation } from '@/store/api';
+import { useGetTaskQuery, useGetProjectQuery, useGetOrgMembersQuery, useGetOrgIssueTypesQuery, useUpdateTaskMutation, useDeleteTaskMutation, useToggleAssignmentMutation } from '@/store/api';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  circle: Circle, square: Square, triangle: Triangle, star: Star,
+  zap: Zap, bug: Bug, bookmark: Bookmark, flag: Flag, target: Target, layers: Layers,
+};
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +71,7 @@ export default function TaskDetailPage({
   const orgId = project?.space?.organizationId || project?.space?.organization?.id;
 
   const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
+  const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId!, { skip: !orgId });
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isAdmin = currentUserRole === 'ADMIN';
@@ -152,17 +159,17 @@ export default function TaskDetailPage({
                   if (e.key === 'Escape') setEditingTitle(false);
                 }}
               />
-              <Button size="icon" variant="ghost" onClick={() => {
+              <Button size="sm" onClick={() => {
                 if (editTitle.trim() && editTitle.trim() !== task.title) {
                   updateTask({ id: taskId, title: editTitle.trim() }).unwrap()
                     .then(() => { toast.success('Title updated'); setEditingTitle(false); })
                     .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
                 } else { setEditingTitle(false); }
-              }}>
-                <Check className="w-4 h-4" />
+              }} disabled={isUpdating}>
+                <Check className="w-4 h-4 mr-1" /> Save
               </Button>
-              <Button size="icon" variant="ghost" onClick={() => setEditingTitle(false)}>
-                <X className="w-4 h-4" />
+              <Button size="sm" variant="ghost" onClick={() => setEditingTitle(false)}>
+                Cancel
               </Button>
             </div>
           ) : (
@@ -307,6 +314,66 @@ export default function TaskDetailPage({
         </div>
       )}
 
+      {/* Issue Type */}
+      {!isGuest && issueTypes.length > 0 && (
+        <div className="mb-8">
+          <div className="space-y-2">
+            <Label>Issue Type</Label>
+            <Select
+              value={task.issueTypeId || ''}
+              onValueChange={async (value) => {
+                try {
+                  await updateTask({ id: taskId, issueTypeId: value || null }).unwrap();
+                  toast.success('Issue type updated');
+                } catch (error: any) {
+                  toast.error(error?.data?.message || error?.message || 'Failed to update');
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select issue type">
+                  {task.issueType ? (() => {
+                    const Icon = ICON_MAP[task.issueType.icon] || Circle;
+                    return (
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-3.5 h-3.5" style={{ color: task.issueType.color }} />
+                        {task.issueType.name}
+                      </span>
+                    );
+                  })() : undefined}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {issueTypes.map((it: any) => {
+                  const Icon = ICON_MAP[it.icon] || Circle;
+                  return (
+                    <SelectItem key={it.id} value={it.id}>
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-3.5 h-3.5" style={{ color: it.color }} />
+                        {it.name}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      {/* Read-only issue type for guests */}
+      {isGuest && task.issueType && (
+        <div className="mb-8">
+          <div className="space-y-2">
+            <Label>Issue Type</Label>
+            <p className="text-sm font-medium px-3 py-2 rounded-md border border-input bg-muted/50 flex items-center gap-2">
+              {(() => { const Icon = ICON_MAP[task.issueType.icon] || Circle; return <Icon className="w-3.5 h-3.5" style={{ color: task.issueType.color }} />; })()}
+              {task.issueType.name}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Rejection Reason Dialog */}
       <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
         <DialogContent>
@@ -335,35 +402,38 @@ export default function TaskDetailPage({
         </DialogContent>
       </Dialog>
 
-      {/* Assignees - Admin only can manage */}
+      {/* Assignees */}
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
         <h3 className="font-semibold text-foreground mb-4">Assigned Members</h3>
 
         {task.assignments && task.assignments.length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-4">
-            {task.assignments.map((a: any) => (
-              <div
-                key={a.user.id}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm"
-              >
-                <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-xs font-bold">
-                    {(a.user.name?.[0] || a.user.email[0]).toUpperCase()}
-                  </span>
+            {task.assignments.map((a: any) => {
+              const canUnassign = isAdmin || a.user.id === currentUser?.id;
+              return (
+                <div
+                  key={a.user.id}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm"
+                >
+                  <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span className="text-xs font-bold">
+                      {(a.user.name?.[0] || a.user.email[0]).toUpperCase()}
+                    </span>
+                  </div>
+                  <span className="font-medium">{a.user.name || a.user.email}</span>
+                  {canUnassign && (
+                    <button
+                      onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
+                      disabled={isAssigning}
+                      className="hover:text-foreground transition-colors"
+                      title={a.user.id === currentUser?.id ? 'Unassign yourself' : 'Unassign'}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
-                <span className="font-medium">{a.user.name || a.user.email}</span>
-                {isAdmin && (
-                  <button
-                    onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
-                    disabled={isAssigning}
-                    className="hover:text-foreground transition-colors"
-                    title="Unassign"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground mb-4">No one assigned yet</p>
@@ -413,15 +483,15 @@ export default function TaskDetailPage({
                 onChange={(e) => setEditDueDate(e.target.value)}
                 className="h-8 w-auto text-sm"
               />
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                updateTask({ id: taskId, dueDate: editDueDate || null }).unwrap()
+              <Button size="sm" className="h-7 text-xs" onClick={() => {
+                updateTask({ id: taskId, dueDate: editDueDate ? new Date(editDueDate).toISOString() : null }).unwrap()
                   .then(() => { toast.success('Due date updated'); setEditingDueDate(false); })
                   .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
-              }}>
-                <Check className="w-3.5 h-3.5" />
+              }} disabled={isUpdating}>
+                <Check className="w-3 h-3 mr-1" /> Save
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingDueDate(false)}>
-                <X className="w-3.5 h-3.5" />
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingDueDate(false)}>
+                Cancel
               </Button>
             </div>
           ) : (

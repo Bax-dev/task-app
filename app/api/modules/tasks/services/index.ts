@@ -55,6 +55,7 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
     dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
     projectId: dto.projectId,
     createdById: userId,
+    issueTypeId: dto.issueTypeId,
   });
 
   // Assign users if provided
@@ -133,15 +134,23 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
   if (!task) throw new Error('Task not found');
 
   const orgId = getOrgIdFromTask(task);
-  await requireOrgAdmin(userId, orgId);
   await requireOrgMembership(dto.userId, orgId);
 
   const existing = await taskModel.findAssignment(taskId, dto.userId);
   if (existing) {
+    // Allow members to unassign themselves; require admin to unassign others
+    if (dto.userId !== userId) {
+      await requireOrgAdmin(userId, orgId);
+    } else {
+      await requireNonGuest(userId, orgId);
+    }
     await taskModel.unassignUser(taskId, dto.userId);
     logAudit({ userId, organizationId: orgId, description: `unassigned a member from "${task.title}"`, taskId });
     return { assigned: false, userId: dto.userId };
   }
+
+  // Assigning requires admin
+  await requireOrgAdmin(userId, orgId);
 
   const assignment = await taskModel.assignUser(taskId, dto.userId);
 
@@ -185,6 +194,7 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
     status: dto.status as TaskStatus | undefined,
     priority: dto.priority as TaskPriority | undefined,
     dueDate: dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+    issueTypeId: dto.issueTypeId !== undefined ? (dto.issueTypeId || null) : undefined,
   };
 
   // Set or clear rejection reason

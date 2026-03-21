@@ -21,13 +21,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus, Search, Users, AtSign, X } from 'lucide-react';
+import { CheckCircle, AlertCircle, Circle, XCircle, Loader2, Plus, Search, Users, AtSign, X, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
-import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation, useGetOrgMembersQuery } from '@/store/api';
+import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation, useGetOrgMembersQuery, useGetOrgIssueTypesQuery } from '@/store/api';
 import type { Member } from '@/types/organization';
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  circle: Circle, square: Square, triangle: Triangle, star: Star,
+  zap: Zap, bug: Bug, bookmark: Bookmark, flag: Flag, target: Target, layers: Layers,
+};
 
 export default function TasksPage() {
   const dispatch = useAppDispatch();
@@ -340,6 +346,7 @@ function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: (
   const [priority, setPriority] = useState('MEDIUM');
   const [status, setStatus] = useState('TODO');
   const [dueDate, setDueDate] = useState('');
+  const [issueTypeId, setIssueTypeId] = useState('');
   const [assignedUsers, setAssignedUsers] = useState<Member[]>([]);
   const [assignSearch, setAssignSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -352,11 +359,13 @@ function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: (
   const selectedProject = projects.find((p: any) => p.id === projectId);
   const orgId = selectedProject?.space?.organizationId || '';
   const { data: members = [] } = useGetOrgMembersQuery(orgId, { skip: !orgId });
+  const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId, { skip: !orgId });
 
-  // Reset assignees when project changes
+  // Reset assignees and issue type when project changes
   useEffect(() => {
     setAssignedUsers([]);
     setAssignSearch('');
+    setIssueTypeId('');
   }, [projectId]);
 
   const filteredMembers = useMemo(() => {
@@ -401,6 +410,7 @@ function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: (
         status,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         assigneeIds: assignedUsers.length > 0 ? assignedUsers.map((u) => u.id) : undefined,
+        issueTypeId: issueTypeId || null,
       }).unwrap();
       toast.success('Task created!');
       onCreated();
@@ -466,6 +476,31 @@ function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: (
         </div>
       </div>
 
+      {/* Issue Type */}
+      {projectId && issueTypes.length > 0 && (
+        <div className="space-y-2">
+          <Label>Issue Type</Label>
+          <Select value={issueTypeId} onValueChange={setIssueTypeId}>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Select type (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              {issueTypes.map((it: any) => {
+                const Icon = ICON_MAP[it.icon] || Circle;
+                return (
+                  <SelectItem key={it.id} value={it.id}>
+                    <span className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5" style={{ color: it.color }} />
+                      {it.name}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Assign Members */}
       {projectId && (
         <div className="space-y-2">
@@ -486,18 +521,20 @@ function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: (
             </div>
           )}
 
-          <div className="relative" ref={dropdownRef}>
-            <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              ref={assignRef}
-              value={assignSearch}
-              onChange={(e) => handleAssignInput(e.target.value)}
-              onFocus={() => { if (assignSearch.length > 0) setShowDropdown(true); }}
-              placeholder=""
-              className="pl-8 h-9 text-sm"
-            />
+          <div ref={dropdownRef}>
+            <div className="relative">
+              <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                ref={assignRef}
+                value={assignSearch}
+                onChange={(e) => handleAssignInput(e.target.value)}
+                onFocus={() => { if (assignSearch.length > 0) setShowDropdown(true); }}
+                placeholder=""
+                className="pl-8 h-9 text-sm"
+              />
+            </div>
             {showDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-36 overflow-auto">
+              <div className="mt-1 bg-card border border-border rounded-lg shadow-lg max-h-36 overflow-auto">
                 {assignSearch.toLowerCase().startsWith('@al') && assignSearch.toLowerCase() !== '@all' && (
                   <button
                     type="button"
