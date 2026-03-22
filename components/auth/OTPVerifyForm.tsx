@@ -19,6 +19,7 @@ interface OTPVerifyFormProps {
 export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormProps) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [step, setStep] = useState<'otp' | 'reset'>('otp');
+  const [resetToken, setResetToken] = useState('');
   const [countdown, setCountdown] = useState(300); // 5 minutes
   const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -65,9 +66,10 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
 
   const handleVerify = async (otpCode: string) => {
     try {
-      await verifyOtp({ email, otp: otpCode, purpose }).unwrap();
+      const result = await verifyOtp({ email, otp: otpCode, purpose }).unwrap();
       toast.success('Code verified!');
       if (purpose === 'forgot-password') {
+        setResetToken(result?.resetToken || otpCode);
         setStep('reset');
       }
     } catch (error: any) {
@@ -116,7 +118,7 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
     return (
       <ResetPasswordForm
         email={email}
-        otp={otp.join('')}
+        otp={resetToken}
         onOtpExpired={() => {
           setStep('otp');
           setOtp(['', '', '', '', '', '']);

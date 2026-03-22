@@ -69,7 +69,6 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   let result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error && result.error.status === 401) {
-    // Don't try to refresh if we're already on an auth endpoint
     const url = typeof args === 'string' ? args : args.url;
     if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register' || url === '/auth/me') {
       return normalizeError(result);
@@ -162,7 +161,7 @@ export const apiSlice = createApi({
     forgotPassword: builder.mutation<void, { email: string }>({
       query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
     }),
-    verifyOtp: builder.mutation<void, { email: string; otp: string; purpose?: string }>({
+    verifyOtp: builder.mutation<{ valid: boolean; resetToken?: string }, { email: string; otp: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/verify-otp', method: 'POST', body }),
     }),
     resendOtp: builder.mutation<void, { email: string; purpose?: string }>({

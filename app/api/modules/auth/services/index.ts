@@ -158,9 +158,9 @@ export async function verifyOTP(email: string, otp: string, purpose: 'forgot-pas
 }
 
 export async function resetPassword(dto: ResetPasswordDTO) {
-  // Verify the OTP directly (this is the combined verify+reset flow)
-  const isValid = await verifyStoredOTP('forgot-password', dto.email, dto.otp);
-  if (!isValid) {
+  const isResetToken = await verifyStoredOTP('reset-token', dto.email, dto.otp);
+  const isDirectOtp = !isResetToken && await verifyStoredOTP('forgot-password', dto.email, dto.otp);
+  if (!isResetToken && !isDirectOtp) {
     throw new Error('Invalid or expired OTP');
   }
 
