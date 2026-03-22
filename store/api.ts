@@ -71,11 +71,10 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   if (result.error && result.error.status === 401) {
     // Don't try to refresh if we're already on an auth endpoint
     const url = typeof args === 'string' ? args : args.url;
-    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register') {
+    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register' || url === '/auth/me') {
       return normalizeError(result);
     }
 
-    // Use mutex to avoid concurrent refresh calls
     if (!isRefreshing) {
       isRefreshing = true;
       refreshPromise = (async () => {
@@ -95,11 +94,15 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
     if (refreshed) {
       result = await rawBaseQuery(args, api, extraOptions);
     } else {
-      // Session expired — full logout to prevent stale user state
       await rawBaseQuery({ url: '/auth/logout', method: 'POST' }, api, extraOptions);
       api.dispatch(apiSlice.util.resetApiState());
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        const path = window.location.pathname;
+        const publicPaths = ['/', '/login', '/signup', '/forgot-password', '/user-manual'];
+        const isPublic = publicPaths.includes(path) || path.startsWith('/invite/');
+        if (!isPublic) {
+          window.location.href = '/login';
+        }
       }
     }
   }
