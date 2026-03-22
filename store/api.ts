@@ -44,18 +44,17 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-// Mutex to prevent multiple simultaneous refresh requests
+
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 
-// Normalize error.data so catch blocks can always use error?.data?.message
-function normalizeError(result: { error?: FetchBaseQueryError; data?: unknown; meta?: unknown }) {
+function normalizeError<T extends { error?: FetchBaseQueryError; data?: unknown; meta?: unknown }>(result: T): T {
   if (result.error) {
     const data = result.error.data;
     if (typeof data === 'string') {
       result.error.data = { message: data };
     } else if (data && typeof data === 'object' && !('message' in data) && 'error' in data) {
-      // API returns { success: false, error: "..." } — normalize to { message: "..." }
+      
       (data as Record<string, unknown>).message = (data as Record<string, unknown>).error;
     }
   }
