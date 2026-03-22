@@ -374,7 +374,7 @@ export default function DashboardRead({
                 <Pencil className="w-3.5 h-3.5" />
                 Edit
               </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-red-600 hover:text-red-700" onClick={() => onDeleteDashboard(activeDashboard)}>
+              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => onDeleteDashboard(activeDashboard)}>
                 <Trash2 className="w-3.5 h-3.5" />
                 Delete
               </Button>

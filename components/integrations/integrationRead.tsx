@@ -309,7 +309,7 @@ export default function IntegrationRead({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                               onClick={() => onDeleteIntegration(integration)}
                             >
                               <Trash2 className="w-3.5 h-3.5" />

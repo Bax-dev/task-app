@@ -433,7 +433,7 @@ function IssueTypeDetail({
                   {isAdmin && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <button className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all">
+                        <button className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </AlertDialogTrigger>
@@ -448,7 +448,7 @@ function IssueTypeDetail({
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={() => handleDeleteField(field.id)}
-                            className="bg-red-600 text-white hover:bg-red-700"
+                            className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
                           >
                             Delete Field
                           </AlertDialogAction>
@@ -690,7 +690,7 @@ export default function IssueTypeRead({
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); onDeleteIssueType(issueType); }}
-                      className="p-1.5 rounded-md bg-card/80 backdrop-blur-sm hover:bg-muted text-muted-foreground hover:text-red-600 border border-border shadow-sm"
+                      className="p-1.5 rounded-md bg-card/80 backdrop-blur-sm hover:bg-muted text-muted-foreground hover:text-foreground border border-border shadow-sm"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

@@ -47,7 +47,7 @@ export default function SavedFilterRemove({
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={handleDeleteFilter}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
           >
             Delete
           </AlertDialogAction>

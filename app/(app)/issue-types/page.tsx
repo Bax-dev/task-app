@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Loader2, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,9 +31,11 @@ export default function IssueTypesPage() {
   const isAdmin = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   if (orgsLoading) {
     return (

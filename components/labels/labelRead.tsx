@@ -233,7 +233,7 @@ export default function LabelRead({
                     </button>
                     <button
                       type="button"
-                      className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive"
+                      className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
                       onClick={(e) => { e.stopPropagation(); onDeleteLabel(label); }}
                     >
                       <Trash2 className="w-3.5 h-3.5" />

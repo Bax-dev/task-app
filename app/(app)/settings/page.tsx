@@ -238,7 +238,7 @@ export default function SettingsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs h-7 text-destructive hover:text-destructive"
+                  className="text-xs h-7 text-muted-foreground hover:text-foreground"
                   onClick={handleRemoveAvatar}
                 >
                   Remove

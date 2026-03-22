@@ -18,6 +18,10 @@ const taskInclude = {
   issueType: {
     select: { id: true, name: true, icon: true, color: true },
   },
+  taskLabels: {
+    include: { label: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
 };
 
 export async function createTask(data: {

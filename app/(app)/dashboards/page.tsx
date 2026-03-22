@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, LayoutDashboard, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,9 +49,11 @@ export default function DashboardsPage() {
   );
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   const handleEditDashboard = (dashboard: any) => {
     setEditDashboard({ id: dashboard.id, name: dashboard.name });

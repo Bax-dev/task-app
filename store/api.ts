@@ -20,6 +20,7 @@ import type { Automation } from '@/types/automation';
 import type { Integration } from '@/types/integration';
 import type { SavedFilter } from '@/types/saved-filter';
 import type { Dashboard } from '@/types/dashboard';
+import type { Subtask } from '@/types/subtask';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: '/api',
@@ -35,7 +36,6 @@ const rawBaseQuery = fetchBaseQuery({
       if (response.ok) {
         return data.data ?? data;
       }
-      // Return parsed error data as-is so fetchBaseQuery sets error.status to the HTTP code
       return data;
     } catch {
       if (!response.ok) return { message: text || 'An error occurred' };
@@ -93,11 +93,14 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
     const refreshed = await refreshPromise;
 
     if (refreshed) {
-      // Retry the original request with new access token
       result = await rawBaseQuery(args, api, extraOptions);
     } else {
-      // Refresh failed — reset state and redirect to login
+      // Session expired — full logout to prevent stale user state
+      await rawBaseQuery({ url: '/auth/logout', method: 'POST' }, api, extraOptions);
       api.dispatch(apiSlice.util.resetApiState());
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
   }
 
@@ -130,6 +133,7 @@ export const apiSlice = createApi({
     'Integrations',
     'SavedFilters',
     'Dashboards',
+    'Subtasks',
   ],
   endpoints: (builder) => ({
     // ─── Auth ───
@@ -718,6 +722,31 @@ export const apiSlice = createApi({
       invalidatesTags: ['Dashboards'],
     }),
 
+    // ─── Subtasks ───
+    getTaskSubtasks: builder.query<Subtask[], string>({
+      query: (taskId) => `/tasks/${taskId}/subtasks`,
+      providesTags: (result, _, taskId) =>
+        result
+          ? [...result.map(({ id }) => ({ type: 'Subtasks' as const, id })), { type: 'Subtasks', id: `task-${taskId}` }]
+          : [{ type: 'Subtasks', id: `task-${taskId}` }],
+    }),
+    createSubtask: builder.mutation<Subtask, { taskId: string; title: string }>({
+      query: ({ taskId, ...body }) => ({ url: `/tasks/${taskId}/subtasks`, method: 'POST', body }),
+      invalidatesTags: (_, __, { taskId }) => [{ type: 'Subtasks', id: `task-${taskId}` }],
+    }),
+    updateSubtask: builder.mutation<Subtask, { taskId: string; subtaskId: string; title?: string; completed?: boolean; position?: number }>({
+      query: ({ taskId, subtaskId, ...body }) => ({ url: `/tasks/${taskId}/subtasks/${subtaskId}`, method: 'PATCH', body }),
+      invalidatesTags: (_, __, { taskId }) => [{ type: 'Subtasks', id: `task-${taskId}` }],
+    }),
+    deleteSubtask: builder.mutation<void, { taskId: string; subtaskId: string }>({
+      query: ({ taskId, subtaskId }) => ({ url: `/tasks/${taskId}/subtasks/${subtaskId}`, method: 'DELETE' }),
+      invalidatesTags: (_, __, { taskId }) => [{ type: 'Subtasks', id: `task-${taskId}` }],
+    }),
+    reorderSubtasks: builder.mutation<void, { taskId: string; subtaskIds: string[] }>({
+      query: ({ taskId, ...body }) => ({ url: `/tasks/${taskId}/subtasks`, method: 'PUT', body }),
+      invalidatesTags: (_, __, { taskId }) => [{ type: 'Subtasks', id: `task-${taskId}` }],
+    }),
+
     // ─── Reports ───
     getBurndownChart: builder.query<any, string>({
       query: (sprintId) => `/reports/burndown?sprintId=${sprintId}`,
@@ -879,4 +908,10 @@ export const {
   useGetBurndownChartQuery,
   useGetVelocityChartQuery,
   useGetCumulativeFlowQuery,
+  // Subtasks
+  useGetTaskSubtasksQuery,
+  useCreateSubtaskMutation,
+  useUpdateSubtaskMutation,
+  useDeleteSubtaskMutation,
+  useReorderSubtasksMutation,
 } = apiSlice;

@@ -39,7 +39,6 @@ export function useAuth() {
     try {
       await logoutTrigger().unwrap();
     } catch {
-      // Even if logout API fails, still clear state and redirect
     }
     dispatch(apiSlice.util.resetApiState());
     router.push('/login');

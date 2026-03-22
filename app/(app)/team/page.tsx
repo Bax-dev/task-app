@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, Loader2, Mail, Trash2, Search, Shield, RefreshCw, XCircle, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -132,9 +132,11 @@ export default function TeamPage() {
   };
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   if (orgsLoading) {
     return (

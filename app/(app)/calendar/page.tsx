@@ -200,7 +200,7 @@ export default function CalendarPage() {
               <div className="space-y-2">
                 {overdueTasks.slice(0, 5).map((task: any) => (
                   <Link key={task.id} href={`/projects/${task.projectId}/tasks/${task.id}`}>
-                    <div className="p-2 rounded-md hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
+                    <div className="p-2 rounded-md hover:bg-muted transition-colors">
                       <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
                       <p className="text-xs text-red-500 mt-0.5">
                         Due {new Date(task.dueDate).toLocaleDateString()}

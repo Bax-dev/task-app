@@ -54,6 +54,7 @@ interface NavItem {
   href: string;
   icon: any;
   adminOnly?: boolean;
+  comingSoon?: boolean;
 }
 
 const navSections: { label: string | null; items: NavItem[] }[] = [
@@ -89,7 +90,7 @@ const navSections: { label: string | null; items: NavItem[] }[] = [
       { name: 'Issue Types', href: '/issue-types', icon: Layers, adminOnly: true },
       { name: 'Workflows', href: '/workflows', icon: GaugeCircle, adminOnly: true },
       { name: 'Automations', href: '/automations', icon: Zap, adminOnly: true },
-      { name: 'Integrations', href: '/integrations', icon: Plug, adminOnly: true },
+      { name: 'Integrations', href: '/integrations', icon: Plug, adminOnly: true, comingSoon: true },
     ],
   },
   {
@@ -174,10 +175,15 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
                 return (
                   <Link key={item.href} href={item.href} onClick={onClose}>
                     <div className={`flex items-center gap-2.5 px-2.5 py-[7px] rounded-md transition-colors text-[13px] ${
-                      isActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                      item.comingSoon
+                        ? 'text-muted-foreground/40 cursor-default'
+                        : isActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                     }`}>
                       <Icon className="w-4 h-4 flex-shrink-0" />
                       <span>{item.name}</span>
+                      {item.comingSoon && (
+                        <span className="ml-auto text-[9px] font-medium bg-muted text-muted-foreground/60 px-1.5 py-0.5 rounded">Soon</span>
+                      )}
                     </div>
                   </Link>
                 );

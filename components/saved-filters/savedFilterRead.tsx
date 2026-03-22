@@ -318,7 +318,7 @@ export default function SavedFilterRead({
                       {!isGuest && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onDeleteFilter(filter); }}
-                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

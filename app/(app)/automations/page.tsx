@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,9 +42,11 @@ export default function AutomationsPage() {
   const isAdmin = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   const selectedOrgName = organizations.find((o: any) => o.id === selectedOrg)?.name || 'Organization';
 

@@ -594,7 +594,7 @@ export default function BoardRead({
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                      className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
                       onClick={(e) => { e.stopPropagation(); onDeleteBoard(board); }}
                     >
                       <Trash2 className="w-4 h-4" />

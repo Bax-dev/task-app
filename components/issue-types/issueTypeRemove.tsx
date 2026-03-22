@@ -69,7 +69,7 @@ export default function IssueTypeRemove({ open, onOpenChange, issueType }: Issue
           <AlertDialogAction
             onClick={handleDelete}
             disabled={isLoading}
-            className="bg-red-600 text-white hover:bg-red-700"
+            className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
             Delete

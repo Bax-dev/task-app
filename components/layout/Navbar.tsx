@@ -35,7 +35,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   invite: 'Invite',
 };
 
-export default function Navbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
+export default function Navbar({ onMenuToggle, onSearchClick }: { onMenuToggle?: () => void; onSearchClick?: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useAppDispatch();
@@ -104,13 +104,14 @@ export default function Navbar({ onMenuToggle }: { onMenuToggle?: () => void }) 
 
       {/* Right actions */}
       <div className="flex items-center gap-0.5">
-        {/* Search */}
+        {/* Search - opens Command Palette */}
         <button
-          onClick={() => router.push('/tasks')}
-          className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border text-muted-foreground text-xs"
+          onClick={onSearchClick}
+          className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border text-muted-foreground text-xs hover:border-primary/50 hover:text-foreground transition-colors"
         >
           <Search className="w-3 h-3" />
-          Search...
+          <span>Search...</span>
+          <kbd className="ml-1 px-1 py-0.5 rounded border border-border text-[9px] font-mono">Ctrl+K</kbd>
         </button>
 
         {/* Theme Toggle */}

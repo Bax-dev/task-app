@@ -28,6 +28,7 @@ import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
 import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation, useGetOrgMembersQuery, useGetOrgIssueTypesQuery } from '@/store/api';
+import { Loader2 as LoaderIcon } from 'lucide-react';
 import type { Member } from '@/types/organization';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -147,6 +148,9 @@ export default function TasksPage() {
           className="pl-9 max-w-sm"
         />
       </div>
+
+      {/* Quick Task Creation */}
+      {projects.length > 0 && <QuickTaskAdd projects={projects} />}
 
       {/* Status Filter Toggle Bar */}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
@@ -335,6 +339,85 @@ export default function TasksPage() {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+function QuickTaskAdd({ projects }: { projects: any[] }) {
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickProjectId, setQuickProjectId] = useState(projects[0]?.id || '');
+  const [quickPriority, setQuickPriority] = useState('MEDIUM');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [createTask, { isLoading: isQuickCreating }] = useCreateTaskMutation();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickTitle.trim() || !quickProjectId) return;
+    try {
+      await createTask({
+        title: quickTitle.trim(),
+        projectId: quickProjectId,
+        priority: quickPriority,
+        status: 'TODO',
+      }).unwrap();
+      toast.success('Task created!');
+      setQuickTitle('');
+      inputRef.current?.focus();
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to create task');
+    }
+  };
+
+  return (
+    <div className="mb-6">
+      <form onSubmit={handleQuickCreate} className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <input
+            ref={inputRef}
+            value={quickTitle}
+            onChange={(e) => { setQuickTitle(e.target.value); if (!isExpanded && e.target.value) setIsExpanded(true); }}
+            onFocus={() => setIsExpanded(true)}
+            placeholder="Quick add task... (type and press Enter)"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+            disabled={isQuickCreating}
+          />
+          {isQuickCreating && <LoaderIcon className="w-4 h-4 animate-spin text-muted-foreground" />}
+        </div>
+        {isExpanded && (
+          <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-secondary/20">
+            <Select value={quickProjectId} onValueChange={setQuickProjectId}>
+              <SelectTrigger className="h-7 text-xs w-[180px]">
+                <SelectValue placeholder="Project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={quickPriority} onValueChange={setQuickPriority}>
+              <SelectTrigger className="h-7 text-xs w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="LOW"><span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Low</span></SelectItem>
+                <SelectItem value="MEDIUM"><span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Medium</span></SelectItem>
+                <SelectItem value="HIGH"><span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-orange-500" /> High</span></SelectItem>
+                <SelectItem value="URGENT"><span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Urgent</span></SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex-1" />
+            <Button type="submit" size="sm" className="h-7 text-xs" disabled={isQuickCreating || !quickTitle.trim() || !quickProjectId}>
+              Add
+            </Button>
+            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setIsExpanded(false); setQuickTitle(''); }}>
+              Cancel
+            </Button>
+          </div>
+        )}
+      </form>
     </div>
   );
 }

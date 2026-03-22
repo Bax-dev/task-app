@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, FileText, Loader2, Trash2, Search } from 'lucide-react';
@@ -78,9 +78,11 @@ export default function NotesPage() {
   };
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   if (orgsLoading) {
     return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -21,9 +21,11 @@ export default function AuditLogsPage() {
   const { data: organizations = [], isLoading: orgsLoading } = useGetOrganizationsQuery();
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   const { data: members = [] } = useGetOrgMembersQuery(selectedOrg, { skip: !selectedOrg });
   const isAdmin = members.some((m: any) => m.id === user?.id && m.role === 'ADMIN');

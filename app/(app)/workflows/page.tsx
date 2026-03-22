@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, GitBranch, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,9 +43,11 @@ export default function WorkflowsPage() {
   const isAdmin = members.some((m: any) => m.id === user?.id && m.role === 'ADMIN');
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   const selectedOrgName = organizations.find((o: any) => o.id === selectedOrg)?.name || 'Organization';
 

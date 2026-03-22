@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers } from 'lucide-react';
+import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Tags } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Select,
@@ -44,6 +44,8 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
 import FileUpload from '@/components/ui/file-upload';
+import SubtaskList from '@/components/tasks/SubtaskList';
+import TaskLabelPicker from '@/components/tasks/TaskLabelPicker';
 
 export default function TaskDetailPage({
   params,
@@ -457,6 +459,28 @@ export default function TaskDetailPage({
             </Select>
           </div>
         )}
+      </div>
+
+      {/* Labels */}
+      {orgId && (
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Tags className="w-4 h-4" />
+            Labels
+          </h3>
+          <TaskLabelPicker
+            taskId={taskId}
+            orgId={orgId}
+            taskLabels={(task as any).taskLabels || []}
+            readOnly={isGuest}
+          />
+        </div>
+      )}
+
+      {/* Subtasks / Checklist */}
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+        <h3 className="font-semibold text-foreground mb-4">Subtasks</h3>
+        <SubtaskList taskId={taskId} readOnly={isGuest} />
       </div>
 
       {/* Attachments */}

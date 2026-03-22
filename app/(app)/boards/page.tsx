@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, LayoutGrid, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,9 +41,11 @@ export default function BoardsPage() {
   const isGuest = currentUserRole === 'GUEST';
 
   // Auto-select first org/space/project
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
   if (spaces.length > 0 && !selectedSpace) {
     setSelectedSpace(spaces[0].id);
   }

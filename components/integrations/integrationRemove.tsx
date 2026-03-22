@@ -53,7 +53,7 @@ export default function IntegrationRemove({
           <AlertDialogAction
             onClick={handleDelete}
             disabled={isDeleting}
-            className="bg-red-600 text-white hover:bg-red-700"
+            className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
           >
             {isDeleting ? (
               <>

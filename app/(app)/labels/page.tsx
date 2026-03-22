@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, Tag } from 'lucide-react';
 import {
   Select,
@@ -39,9 +39,11 @@ export default function LabelsPage() {
   const isGuest = currentUserRole === 'GUEST';
 
   // Auto-select first org
-  if (organizations.length > 0 && !selectedOrg) {
-    setSelectedOrg(organizations[0].id);
-  }
+  useEffect(() => {
+    if (organizations.length > 0 && !selectedOrg) {
+      setSelectedOrg(organizations[0].id);
+    }
+  }, [organizations, selectedOrg]);
 
   const handleEditLabel = (label: any) => {
     setEditingLabel({ id: label.id, name: label.name, color: label.color || '#64748b' });
