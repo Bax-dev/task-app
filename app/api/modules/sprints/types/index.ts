@@ -3,16 +3,16 @@ import { z } from 'zod';
 export const createSprintSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   goal: z.string().max(2000).optional(),
-  startDate: z.string().datetime().optional().nullable(),
-  endDate: z.string().datetime().optional().nullable(),
+  startDate: z.string().date().optional().nullable(),
+  endDate: z.string().date().optional().nullable(),
   organizationId: z.string().uuid('Invalid organization ID'),
 });
 
 export const updateSprintSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   goal: z.string().max(2000).optional().nullable(),
-  startDate: z.string().datetime().optional().nullable(),
-  endDate: z.string().datetime().optional().nullable(),
+  startDate: z.string().date().optional().nullable(),
+  endDate: z.string().date().optional().nullable(),
   status: z.enum(['PLANNING', 'ACTIVE', 'COMPLETED']).optional(),
 });
 
