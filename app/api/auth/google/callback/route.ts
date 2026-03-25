@@ -10,10 +10,11 @@ const client = new OAuth2Client(
 );
 
 export async function GET(request: NextRequest) {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url;
   const code = request.nextUrl.searchParams.get('code');
 
   if (!code) {
-    return NextResponse.redirect(new URL('/login?error=missing_code', request.url));
+    return NextResponse.redirect(new URL('/login?error=missing_code', baseUrl));
   }
 
   try {
@@ -22,16 +23,16 @@ export async function GET(request: NextRequest) {
     const idToken = tokens.id_token;
 
     if (!idToken) {
-      return NextResponse.redirect(new URL('/login?error=no_id_token', request.url));
+      return NextResponse.redirect(new URL('/login?error=no_id_token', baseUrl));
     }
 
     // Use existing googleAuth service which verifies the ID token
     const result = await authService.googleAuth(idToken);
     await setSessionCookie(result.token);
 
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/dashboard', baseUrl));
   } catch (error) {
     console.error('Google OAuth callback error:', error);
-    return NextResponse.redirect(new URL('/login?error=google_auth_failed', request.url));
+    return NextResponse.redirect(new URL('/login?error=google_auth_failed', baseUrl));
   }
 }
