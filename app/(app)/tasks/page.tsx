@@ -28,6 +28,7 @@ import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
 import { useGetUserTasksQuery, useGetProjectsQuery, useCreateTaskMutation, useUpdateTaskMutation, useGetOrgMembersQuery, useGetOrgIssueTypesQuery } from '@/store/api';
+import AiTaskSuggestion from '@/components/ai/AiTaskSuggestion';
 import { Loader2 as LoaderIcon } from 'lucide-react';
 import type { Member } from '@/types/organization';
 
@@ -519,6 +520,20 @@ function CreateTaskForm({ projects, onCreated }: { projects: any[]; onCreated: (
           </SelectContent>
         </Select>
       </div>
+
+      {/* AI Task Suggestion */}
+      {projectId && (
+        <AiTaskSuggestion
+          projectId={projectId}
+          onApply={(suggestion) => {
+            setTitle(suggestion.title);
+            setDescription(suggestion.description);
+            if (['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(suggestion.priority)) {
+              setPriority(suggestion.priority);
+            }
+          }}
+        />
+      )}
 
       <div className="space-y-2">
         <Label>Title</Label>

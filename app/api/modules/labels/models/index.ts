@@ -47,8 +47,10 @@ export async function deleteLabel(id: string) {
 }
 
 export async function addTaskLabel(taskId: string, labelId: string) {
-  return prisma.taskLabel.create({
-    data: { taskId, labelId },
+  return prisma.taskLabel.upsert({
+    where: { taskId_labelId: { taskId, labelId } },
+    create: { taskId, labelId },
+    update: {},
     include: { label: true },
   });
 }

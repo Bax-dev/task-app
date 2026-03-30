@@ -480,7 +480,7 @@ export default function TaskDetailPage({
       {/* Subtasks / Checklist */}
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
         <h3 className="font-semibold text-foreground mb-4">Subtasks</h3>
-        <SubtaskList taskId={taskId} readOnly={isGuest} />
+        <SubtaskList taskId={taskId} taskTitle={task?.title} taskDescription={task?.description || undefined} readOnly={isGuest} />
       </div>
 
       {/* Attachments */}

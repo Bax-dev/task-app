@@ -69,7 +69,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   let result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error && result.error.status === 401) {
-    const url = typeof args === 'string' ? args : args.url;
+     const url = typeof args === 'string' ? args : args.url;
     if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register' || url === '/auth/me') {
       return normalizeError(result);
     }
@@ -759,6 +759,20 @@ export const apiSlice = createApi({
     getCumulativeFlow: builder.query<any, { organizationId: string; days?: number }>({
       query: ({ organizationId, days = 30 }) => `/reports/cumulative-flow?organizationId=${organizationId}&days=${days}`,
     }),
+
+    // ─── AI (Bedrock) ───
+    aiSuggestTask: builder.mutation<{ title: string; description: string; priority: string; subtasks: string[] }, { prompt: string; projectId: string }>({
+      query: (body) => ({ url: '/ai/suggest-task', method: 'POST', body }),
+    }),
+    aiGenerateSubtasks: builder.mutation<string[], { taskTitle: string; taskDescription?: string }>({
+      query: (body) => ({ url: '/ai/generate-subtasks', method: 'POST', body }),
+    }),
+    aiSummarize: builder.mutation<{ summary: string }, { organizationId: string; type: 'sprint' | 'project' | 'daily'; targetId?: string }>({
+      query: (body) => ({ url: '/ai/summarize', method: 'POST', body }),
+    }),
+    aiChat: builder.mutation<{ response: string }, { message: string; organizationId: string; context?: 'general' | 'tasks' | 'planning' }>({
+      query: (body) => ({ url: '/ai/chat', method: 'POST', body }),
+    }),
   }),
 });
 
@@ -910,6 +924,11 @@ export const {
   useGetBurndownChartQuery,
   useGetVelocityChartQuery,
   useGetCumulativeFlowQuery,
+  // AI (Bedrock)
+  useAiSuggestTaskMutation,
+  useAiGenerateSubtasksMutation,
+  useAiSummarizeMutation,
+  useAiChatMutation,
   // Subtasks
   useGetTaskSubtasksQuery,
   useCreateSubtaskMutation,

@@ -39,6 +39,7 @@ import TaskBoard from '@/components/tasks/board/TaskBoard';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import type { Member } from '@/types/organization';
+import AiSummary from '@/components/ai/AiSummary';
 
 export default function ProjectPage({
   params,
@@ -88,6 +89,11 @@ export default function ProjectPage({
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{project.name}</h1>
             {project.description && (
               <p className="text-muted-foreground mt-2">{project.description}</p>
+            )}
+            {orgId && (
+              <div className="mt-2">
+                <AiSummary organizationId={orgId} type="project" targetId={id} />
+              </div>
             )}
           </div>
           {!isGuest && (

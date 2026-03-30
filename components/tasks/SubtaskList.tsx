@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, GripVertical, Loader2 } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Loader2, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,14 +11,17 @@ import {
   useCreateSubtaskMutation,
   useUpdateSubtaskMutation,
   useDeleteSubtaskMutation,
+  useAiGenerateSubtasksMutation,
 } from '@/store/api';
 
 interface SubtaskListProps {
   taskId: string;
+  taskTitle?: string;
+  taskDescription?: string;
   readOnly?: boolean;
 }
 
-export default function SubtaskList({ taskId, readOnly = false }: SubtaskListProps) {
+export default function SubtaskList({ taskId, taskTitle, taskDescription, readOnly = false }: SubtaskListProps) {
   const [newTitle, setNewTitle] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -27,6 +30,21 @@ export default function SubtaskList({ taskId, readOnly = false }: SubtaskListPro
   const [createSubtask, { isLoading: isCreating }] = useCreateSubtaskMutation();
   const [updateSubtask] = useUpdateSubtaskMutation();
   const [deleteSubtask] = useDeleteSubtaskMutation();
+  const [generateSubtasks, { isLoading: isGenerating }] = useAiGenerateSubtasksMutation();
+
+  const handleAiGenerate = async () => {
+    if (!taskTitle) return;
+    try {
+      const result = await generateSubtasks({ taskTitle, taskDescription }).unwrap();
+      const items = Array.isArray(result) ? result : [];
+      for (const title of items) {
+        await createSubtask({ taskId, title }).unwrap();
+      }
+      toast.success(`Added ${items.length} AI-generated subtasks`);
+    } catch {
+      toast.error('Failed to generate subtasks');
+    }
+  };
 
   const completedCount = subtasks.filter((s) => s.completed).length;
   const totalCount = subtasks.length;
@@ -155,21 +173,36 @@ export default function SubtaskList({ taskId, readOnly = false }: SubtaskListPro
 
       {/* Add new subtask */}
       {!readOnly && (
-        <form onSubmit={handleCreate} className="flex items-center gap-2">
-          <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-          <Input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Add a subtask..."
-            className="h-8 text-sm flex-1"
-            disabled={isCreating}
-          />
-          {newTitle.trim() && (
-            <Button type="submit" size="sm" variant="ghost" className="h-7 text-xs" disabled={isCreating}>
-              {isCreating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+        <div className="space-y-2">
+          <form onSubmit={handleCreate} className="flex items-center gap-2">
+            <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <Input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Add a subtask..."
+              className="h-8 text-sm flex-1"
+              disabled={isCreating}
+            />
+            {newTitle.trim() && (
+              <Button type="submit" size="sm" variant="ghost" className="h-7 text-xs" disabled={isCreating}>
+                {isCreating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Add'}
+              </Button>
+            )}
+          </form>
+          {taskTitle && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleAiGenerate}
+              disabled={isGenerating}
+              className="gap-1.5 text-xs"
+            >
+              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              {isGenerating ? 'Generating...' : 'AI generate subtasks'}
             </Button>
           )}
-        </form>
+        </div>
       )}
     </div>
   );

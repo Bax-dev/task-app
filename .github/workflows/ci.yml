@@ -134,7 +134,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
-          envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,NEXT_PUBLIC_APP_URL,GH_PAT
+          envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_GOOGLE_CLIENT_ID,GH_PAT
           script: |
             REPO_URL="https://${GH_PAT}@github.com/Bax-dev/task-app.git"
 
@@ -153,7 +153,12 @@ jobs:
             git pull origin main
 
             echo "==> Writing .env file..."
-            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNODE_ENV="production"\n' "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${REDIS_URL}" "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" "${NEXT_PUBLIC_APP_URL}" > .env
+            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNEXT_PUBLIC_GOOGLE_CLIENT_ID="%s"\nNODE_ENV="production"\n' "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${REDIS_URL}" "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" "${NEXT_PUBLIC_APP_URL}" "${NEXT_PUBLIC_GOOGLE_CLIENT_ID}" > .env
+
+            echo "==> Configuring AWS credentials for Bedrock..."
+            mkdir -p ~/.aws
+            printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\nregion = %s\n' "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_REGION}" > ~/.aws/credentials
+            printf '[default]\nregion = %s\noutput = json\n' "${AWS_REGION}" > ~/.aws/config
 
             if [ -z "$DATABASE_URL" ]; then
               echo "ERROR: DATABASE_URL is not set. Please configure it in GitHub Secrets."

@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings, User, Bell, Menu, Search, ChevronRight } from 'lucide-react';
+import { LogOut, Settings, User, Bell, Menu, Search, ChevronRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation, apiSlice } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
@@ -35,7 +35,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   invite: 'Invite',
 };
 
-export default function Navbar({ onMenuToggle, onSearchClick }: { onMenuToggle?: () => void; onSearchClick?: () => void }) {
+export default function Navbar({ onMenuToggle, onSearchClick, onAiClick }: { onMenuToggle?: () => void; onSearchClick?: () => void; onAiClick?: () => void }) {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useAppDispatch();
@@ -112,6 +112,15 @@ export default function Navbar({ onMenuToggle, onSearchClick }: { onMenuToggle?:
           <Search className="w-3 h-3" />
           <span>Search...</span>
           <kbd className="ml-1 px-1 py-0.5 rounded border border-border text-[9px] font-mono">Ctrl+K</kbd>
+        </button>
+
+        {/* AI Assistant */}
+        <button
+          onClick={onAiClick}
+          className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          title="TaskFlow AI"
+        >
+          <Sparkles className="w-[18px] h-[18px]" />
         </button>
 
         {/* Theme Toggle */}

@@ -17,6 +17,7 @@ import {
   useRemoveSprintTaskMutation,
   useGetUserTasksQuery,
 } from '@/store/api';
+import AiSummary from '@/components/ai/AiSummary';
 
 // ---------------------------------------------------------------------------
 // Constants & helpers
@@ -222,6 +223,9 @@ function SprintDetailView({
         {sprint.goal && (
           <p className="text-sm text-muted-foreground max-w-2xl">{sprint.goal}</p>
         )}
+
+        {/* AI Sprint Summary */}
+        <AiSummary organizationId={sprint.organizationId} type="sprint" targetId={sprintId} />
       </div>
 
       {/* Progress Section */}

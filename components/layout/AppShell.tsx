@@ -4,14 +4,17 @@ import { ReactNode, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Navbar from '@/components/layout/Navbar';
 import CommandPalette from '@/components/CommandPalette';
+import AiAssistantPanel from '@/components/ai/AiAssistantPanel';
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   return (
     <div className="flex h-screen overflow-hidden">
       <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+      <AiAssistantPanel open={aiPanelOpen} onOpenChange={setAiPanelOpen} />
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -31,7 +34,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar onMenuToggle={() => setSidebarOpen(true)} onSearchClick={() => setCommandPaletteOpen(true)} />
+        <Navbar
+          onMenuToggle={() => setSidebarOpen(true)}
+          onSearchClick={() => setCommandPaletteOpen(true)}
+          onAiClick={() => setAiPanelOpen(true)}
+        />
         <main className="flex-1 overflow-auto bg-background">
           {children}
         </main>

@@ -24,6 +24,7 @@ import {
   GripVertical,
 } from 'lucide-react';
 import { useGetOrganizationsQuery, useGetUserTasksQuery, useGetProjectsQuery, useGetMeQuery, useCreateSpaceMutation } from '@/store/api';
+import AiSummary from '@/components/ai/AiSummary';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -377,6 +378,13 @@ export default function DashboardPage() {
           </div>
         </Link>
       </div>
+
+      {/* AI Daily Summary */}
+      {organizations.length > 0 && (
+        <div className="mb-6">
+          <AiSummary organizationId={organizations[0].id} type="daily" />
+        </div>
+      )}
 
       {/* Module Cards - Drag & Drop */}
       <div className="mb-8">
