@@ -50,12 +50,13 @@ export async function handleGetOrgMembers(request: NextRequest, organizationId: 
   }
 }
 
-export async function handleAddMember(request: NextRequest) {
+export async function handleAddMember(request: NextRequest, organizationId?: string) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
     const body = await request.json();
+    if (organizationId) body.organizationId = organizationId;
     const validation = validateBody(addMemberSchema, body);
     if (!validation.success) return errorResponse(validation.error);
 
