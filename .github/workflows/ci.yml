@@ -165,8 +165,10 @@ jobs:
               exit 1
             fi
 
+            echo "==> Cleaning old build artifacts..."
+            rm -rf node_modules .next
+
             echo "==> Installing dependencies (including devDependencies for build)..."
-            rm -rf node_modules
             NODE_ENV=development npm install --no-package-lock --include=optional
 
             echo "==> Generating Prisma client..."
