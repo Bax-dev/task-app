@@ -45,7 +45,6 @@ export async function generatePresignedUploadUrl(
     Bucket: BUCKET,
     Key: fileKey,
     ContentType: mimeType,
-    ContentLength: fileSize,
   });
 
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 }); // 5 min

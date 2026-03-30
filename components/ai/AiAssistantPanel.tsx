@@ -68,7 +68,7 @@ export default function AiAssistantPanel({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[400px] sm:w-[440px] p-0 flex flex-col">
+      <SheetContent side="right" className="w-full max-w-[440px] p-0 flex flex-col">
         <SheetHeader className="px-4 py-3 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
