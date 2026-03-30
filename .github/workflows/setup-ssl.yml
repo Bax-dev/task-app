@@ -1,0 +1,57 @@
+name: Setup SSL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-ssl:
+    name: Install Nginx + Certbot on EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSL via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          command_timeout: 5m
+          script: |
+            echo "==> Installing Nginx and Certbot..."
+            sudo dnf install -y nginx python3-certbot-nginx || sudo yum install -y nginx python3-certbot-nginx || {
+              sudo amazon-linux-extras install nginx1 -y 2>/dev/null
+              sudo pip3 install certbot certbot-nginx
+            }
+
+            echo "==> Configuring Nginx..."
+            sudo tee /etc/nginx/conf.d/taskflow.conf > /dev/null <<'NGINX'
+            server {
+                listen 80;
+                server_name taskflow.skygridtech.org;
+
+                location / {
+                    proxy_pass http://127.0.0.1:3000;
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection 'upgrade';
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                    proxy_cache_bypass $http_upgrade;
+                }
+            }
+            NGINX
+
+            echo "==> Starting Nginx..."
+            sudo systemctl enable nginx
+            sudo systemctl restart nginx
+
+            echo "==> Obtaining SSL certificate..."
+            sudo certbot --nginx -d taskflow.skygridtech.org --non-interactive --agree-tos --email admin@skygridtech.org --redirect
+
+            echo "==> Setting up auto-renewal..."
+            echo "0 0 1 * * root certbot renew --quiet" | sudo tee /etc/cron.d/certbot-renew
+
+            echo "==> SSL setup complete!"
