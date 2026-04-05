@@ -61,7 +61,7 @@ export default function HeroScene() {
         </div>
 
         {/* Right — 3D scene */}
-        <div className="flex-1 relative hidden md:block">
+        <div className="flex-1 relative min-h-[300px] md:min-h-0">
           <SplineScene
             scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
             className="w-full h-full"
