@@ -87,6 +87,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
     steps:
@@ -109,6 +110,21 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Upload build artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          retention-days: 1
+          path: |
+            .next/
+            package.json
+            ecosystem.config.js
+            prisma/
+            public/
+            next.config.ts
+            middleware.ts
+
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
@@ -116,6 +132,25 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: build/
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync build to EC2
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/ec2_key" \
+            build/.next/ ec2-user@${{ secrets.EC2_HOST }}:~/task-app/.next/
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
@@ -138,6 +173,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
+          command_timeout: 10m
           envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,EMAIL_FROM,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_GOOGLE_CLIENT_ID,GH_PAT
           script: |
             REPO_URL="https://${GH_PAT}@github.com/Bax-dev/task-app.git"
@@ -165,28 +201,18 @@ jobs:
             printf '[default]\nregion = %s\noutput = json\n' "${AWS_REGION}" > ~/.aws/config
 
             if [ -z "$DATABASE_URL" ]; then
-              echo "ERROR: DATABASE_URL is not set. Please configure it in GitHub Secrets."
+              echo "ERROR: DATABASE_URL is not set."
               exit 1
             fi
 
-            echo "==> Cleaning old build artifacts..."
-            rm -rf .next
-            rm -rf node_modules 2>/dev/null || find node_modules -delete 2>/dev/null || true
-
-            echo "==> Installing dependencies (including devDependencies for build)..."
-            NODE_ENV=development npm install --no-package-lock --include=optional
+            echo "==> Installing production dependencies..."
+            npm install --no-package-lock --omit=dev --include=optional
 
             echo "==> Generating Prisma client..."
             npx prisma generate
 
             echo "==> Running database migrations..."
             npx prisma migrate deploy
-
-            echo "==> Building application..."
-            npm run build
-
-            echo "==> Setting NODE_ENV to production..."
-            export NODE_ENV=production
 
             echo "==> Restarting application..."
             pm2 delete taskflow 2>/dev/null || true
