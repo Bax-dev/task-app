@@ -15,7 +15,7 @@ export function useSSE(projectId?: string) {
   const dispatch = useAppDispatch();
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,17 +44,18 @@ export function useSSE(projectId?: string) {
 
           // Invalidate RTK Query tags from the event
           if (data.tags && Array.isArray(data.tags)) {
-            const tags: { type: string; id?: string }[] = [];
+            type TagType = Parameters<typeof apiSlice.util.invalidateTags>[0][number];
+            const tags: TagType[] = [];
 
             for (const tag of data.tags) {
-              tags.push({ type: tag });
+              tags.push({ type: tag } as TagType);
             }
 
             // Also invalidate specific IDs if provided
             if (data.ids && Array.isArray(data.ids)) {
               for (const id of data.ids) {
                 for (const tag of data.tags) {
-                  tags.push({ type: tag, id });
+                  tags.push({ type: tag, id } as TagType);
                 }
               }
             }
