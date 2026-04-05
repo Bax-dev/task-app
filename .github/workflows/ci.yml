@@ -170,7 +170,8 @@ jobs:
             fi
 
             echo "==> Cleaning old build artifacts..."
-            rm -rf node_modules .next
+            rm -rf .next
+            rm -rf node_modules 2>/dev/null || find node_modules -delete 2>/dev/null || true
 
             echo "==> Installing dependencies (including devDependencies for build)..."
             NODE_ENV=development npm install --no-package-lock --include=optional
