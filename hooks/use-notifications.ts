@@ -8,11 +8,13 @@ import {
 } from '@/store/api';
 
 export function useNotifications() {
-  return useGetNotificationsQuery(undefined, { pollingInterval: 30000 });
+  // SSE handles realtime push; polling is a fallback safety net
+  return useGetNotificationsQuery(undefined, { pollingInterval: 60000 });
 }
 
 export function useUnreadCount() {
-  return useGetUnreadCountQuery(undefined, { pollingInterval: 15000 });
+  // SSE handles realtime push; polling is a fallback safety net
+  return useGetUnreadCountQuery(undefined, { pollingInterval: 60000 });
 }
 
 export function useMarkAsRead() {

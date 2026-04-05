@@ -6,6 +6,7 @@ import { sendEmail, buildTaskAssignedEmail } from '@/lib/email';
 import * as taskModel from '../models';
 import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
 import { logAudit } from '@/lib/audit';
+import { publishEvent } from '@/lib/redis-pubsub';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -89,10 +90,12 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
     // Re-fetch task with assignments
     const updated = await taskModel.findTaskById(task.id);
     logAudit({ userId, organizationId: orgId, description: `created task "${task.title}"`, taskId: task.id });
+    publishEvent(`events:project:${dto.projectId}`, { type: 'TASK_CREATED', tags: ['Tasks'], ids: [`project-${dto.projectId}`] }).catch(() => {});
     if (updated) return updated;
   }
 
   logAudit({ userId, organizationId: orgId, description: `created task "${task.title}"`, taskId: task.id });
+  publishEvent(`events:project:${dto.projectId}`, { type: 'TASK_CREATED', tags: ['Tasks'], ids: [`project-${dto.projectId}`] }).catch(() => {});
   return task;
 }
 
@@ -126,6 +129,7 @@ export async function deleteTask(taskId: string, userId: string) {
   }
 
   logAudit({ userId, organizationId: orgId, description: `deleted task "${task.title}"` });
+  publishEvent(`events:project:${task.projectId}`, { type: 'TASK_DELETED', tags: ['Tasks'], ids: [taskId, `project-${task.projectId}`] }).catch(() => {});
   return taskModel.deleteTask(taskId);
 }
 
@@ -146,6 +150,7 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
     }
     await taskModel.unassignUser(taskId, dto.userId);
     logAudit({ userId, organizationId: orgId, description: `unassigned a member from "${task.title}"`, taskId });
+    publishEvent(`events:project:${task.projectId}`, { type: 'TASK_UPDATED', tags: ['Tasks'], ids: [taskId, `project-${task.projectId}`] }).catch(() => {});
     return { assigned: false, userId: dto.userId };
   }
 
@@ -173,6 +178,7 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
   }
 
   logAudit({ userId, organizationId: orgId, description: `assigned a member to "${task.title}"`, taskId });
+  publishEvent(`events:project:${task.projectId}`, { type: 'TASK_UPDATED', tags: ['Tasks'], ids: [taskId, `project-${task.projectId}`] }).catch(() => {});
   return { assigned: true, userId: dto.userId, user: assignment.user };
 }
 
@@ -238,6 +244,13 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
       taskLink: `/projects/${task.projectId}/tasks/${taskId}`,
     }).catch(() => {});
   }
+
+  publishEvent(`events:project:${task.projectId}`, {
+    type: 'TASK_UPDATED',
+    tags: ['Tasks'],
+    ids: [taskId, `project-${task.projectId}`],
+    projectId: task.projectId,
+  }).catch(() => {});
 
   return updated;
 }

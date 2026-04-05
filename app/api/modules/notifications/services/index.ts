@@ -1,5 +1,6 @@
 import { NotificationType } from '@prisma/client';
 import * as notificationModel from '../models';
+import { publishEvent } from '@/lib/redis-pubsub';
 
 export async function getUserNotifications(userId: string) {
   const [notifications, unreadCount] = await Promise.all([
@@ -32,13 +33,15 @@ export async function notifyTaskAssigned(params: {
   assignedByName: string;
   taskLink: string;
 }) {
-  return notificationModel.createNotification({
+  const result = await notificationModel.createNotification({
     userId: params.assigneeId,
     type: NotificationType.TASK_ASSIGNED,
     title: 'Task Assigned',
     message: `${params.assignedByName} assigned you to "${params.taskTitle}" in ${params.projectName}`,
     link: params.taskLink,
   });
+  publishEvent(`events:user:${params.assigneeId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  return result;
 }
 
 export async function notifyInvitationReceived(params: {
@@ -69,7 +72,11 @@ export async function notifyMemberJoined(params: {
     message: `${params.memberName} joined ${params.orgName}`,
     link: params.orgLink,
   }));
-  return notificationModel.createManyNotifications(notifications);
+  const result = await notificationModel.createManyNotifications(notifications);
+  for (const userId of params.orgMemberIds) {
+    publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  }
+  return result;
 }
 
 export async function notifyTaskUpdated(params: {
@@ -86,5 +93,9 @@ export async function notifyTaskUpdated(params: {
     message: `${params.updatedByName} ${params.change} on "${params.taskTitle}"`,
     link: params.taskLink,
   }));
-  return notificationModel.createManyNotifications(notifications);
+  const result = await notificationModel.createManyNotifications(notifications);
+  for (const userId of params.assigneeIds) {
+    publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  }
+  return result;
 }
