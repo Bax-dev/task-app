@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import {
   Plus, LayoutGrid, Loader2, Trash2, Search, Columns,
-  ArrowLeft, Calendar, AlertTriangle, ChevronRight, Users, Pencil,
+  ArrowLeft, Calendar, AlertTriangle, ChevronRight, Users, Pencil, GripVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,18 @@ import {
 } from '@/store/api';
 import type { Task } from '@/types/task';
 import type { BoardColumn } from '@/types/board';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  type DragStartEvent,
+  type DragEndEvent,
+  type DragOverEvent,
+} from '@dnd-kit/core';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -77,33 +89,33 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// ── Task Card ──────────────────────────────────────────────────────────────────
+// ── Task Card (static, used for DragOverlay) ─────────────────────────────────
 
-function TaskCard({
+function TaskCardContent({
   task,
-  columns,
-  onStatusChange,
-  isUpdating,
+  isDragging,
 }: {
   task: Task;
-  columns: BoardColumn[];
-  onStatusChange: (taskId: string, newStatus: string) => void;
-  isUpdating: boolean;
+  isDragging?: boolean;
 }) {
-  const [showStatusMenu, setShowStatusMenu] = useState(false);
   const overdue = isOverdue(task.dueDate);
   const priorityBorder = PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.NONE;
   const priorityBadge = PRIORITY_BADGE_STYLES[task.priority] ?? PRIORITY_BADGE_STYLES.NONE;
 
   return (
     <div
-      className={`bg-card border border-border border-l-[3px] ${priorityBorder} rounded-lg p-3 hover:border-primary/30 transition-colors cursor-pointer shadow-sm relative group`}
+      className={`bg-card border border-border border-l-[3px] ${priorityBorder} rounded-lg p-3 shadow-sm relative group ${
+        isDragging ? 'shadow-lg ring-2 ring-primary/30 opacity-95' : 'hover:border-primary/30'
+      } transition-colors`}
     >
-      {/* Header row: title + task number */}
+      {/* Header row: drag handle + title + task number */}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="text-sm font-medium text-foreground leading-snug line-clamp-2 flex-1">
-          {task.title}
-        </h4>
+        <div className="flex items-start gap-1.5 flex-1 min-w-0">
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0 mt-0.5 cursor-grab" />
+          <h4 className="text-sm font-medium text-foreground leading-snug line-clamp-2 flex-1">
+            {task.title}
+          </h4>
+        </div>
         {task.taskNumber && (
           <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
             #{task.taskNumber}
@@ -118,7 +130,7 @@ function TaskCard({
         </span>
       </div>
 
-      {/* Bottom row: assignees, due date, status switcher */}
+      {/* Bottom row: assignees, due date */}
       <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-border/50">
         {/* Assignees */}
         <div className="flex items-center -space-x-1.5">
@@ -156,75 +168,62 @@ function TaskCard({
             {overdue && <AlertTriangle className="w-3 h-3" />}
           </div>
         )}
-
-        {/* Status changer */}
-        <div className="relative ml-auto">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowStatusMenu(!showStatusMenu);
-            }}
-            disabled={isUpdating}
-            className="text-[10px] font-medium px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
-          >
-            {isUpdating ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              'Move'
-            )}
-          </button>
-          {showStatusMenu && (
-            <div className="absolute right-0 bottom-full mb-1 bg-popover border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]">
-              {columns.map((col) => {
-                const status = resolveColumnStatus(col.name);
-                const isCurrent = task.status === status;
-                return (
-                  <button
-                    key={col.id}
-                    disabled={isCurrent}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStatusChange(task.id, status);
-                      setShowStatusMenu(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                      isCurrent
-                        ? 'text-primary font-semibold bg-primary/5'
-                        : 'text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {isCurrent && <span className="mr-1">●</span>}
-                    {col.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
 }
 
-// ── Kanban Column ──────────────────────────────────────────────────────────────
+// ── Draggable Task Card ───────────────────────────────────────────────────────
+
+function DraggableTaskCard({
+  task,
+  columnId,
+}: {
+  task: Task;
+  columnId: string;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: task.id,
+    data: { type: 'task', task, columnId },
+  });
+
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)`, opacity: isDragging ? 0.4 : 1 }
+    : undefined;
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <TaskCardContent task={task} />
+    </div>
+  );
+}
+
+// ── Kanban Column (droppable) ─────────────────────────────────────────────────
 
 function KanbanColumn({
   column,
   tasks,
-  allColumns,
-  onStatusChange,
-  updatingTaskId,
   onAddTask,
   isCreating,
+  isDropTarget,
 }: {
   column: BoardColumn;
   tasks: Task[];
-  allColumns: BoardColumn[];
-  onStatusChange: (taskId: string, newStatus: string) => void;
-  updatingTaskId: string | null;
   onAddTask: (status: string, title: string) => void;
   isCreating: boolean;
+  isDropTarget: boolean;
 }) {
+  const { setNodeRef } = useDroppable({
+    id: column.id,
+    data: { type: 'column', columnId: column.id },
+  });
+
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
@@ -251,7 +250,12 @@ function KanbanColumn({
   };
 
   return (
-    <div className="bg-muted/30 rounded-lg p-3 min-w-[280px] max-w-[320px] flex flex-col gap-2 shrink-0">
+    <div
+      ref={setNodeRef}
+      className={`bg-muted/30 rounded-lg p-3 min-w-[280px] max-w-[320px] flex flex-col gap-2 shrink-0 transition-colors ${
+        isDropTarget ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''
+      }`}
+    >
       {/* Column header */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
@@ -266,17 +270,15 @@ function KanbanColumn({
       {/* Task list */}
       <div className="flex flex-col gap-2 flex-1 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
         {tasks.length === 0 && !adding && (
-          <div className="text-center py-6 text-xs text-muted-foreground/60">
-            No tasks
+          <div className={`text-center py-6 text-xs ${isDropTarget ? 'text-primary/60' : 'text-muted-foreground/60'}`}>
+            {isDropTarget ? 'Drop here' : 'No tasks'}
           </div>
         )}
         {tasks.map((task) => (
-          <TaskCard
+          <DraggableTaskCard
             key={task.id}
             task={task}
-            columns={allColumns}
-            onStatusChange={onStatusChange}
-            isUpdating={updatingTaskId === task.id}
+            columnId={column.id}
           />
         ))}
       </div>
@@ -335,13 +337,29 @@ function BoardDetailView({
   );
   const [updateTask] = useUpdateTaskMutation();
   const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
-  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+
+  // Drag state
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
 
   // Derive columns sorted by position
   const columns = useMemo(() => {
     if (!board?.columns) return [];
     return [...board.columns].sort((a, b) => a.position - b.position);
   }, [board?.columns]);
+
+  // Build a columnId→status lookup
+  const columnStatusMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const col of columns) {
+      map[col.id] = resolveColumnStatus(col.name);
+    }
+    return map;
+  }, [columns]);
 
   // Group tasks by column
   const tasksByColumn = useMemo(() => {
@@ -350,26 +368,73 @@ function BoardDetailView({
       const status = resolveColumnStatus(col.name);
       map[col.id] = tasks.filter((t) => t.status === status);
     }
-    // Also compute unmatched tasks
     const matchedStatuses = new Set(columns.map((c) => resolveColumnStatus(c.name)));
     const unmatched = tasks.filter((t) => !matchedStatuses.has(t.status));
     if (unmatched.length > 0 && columns.length > 0) {
-      // Put unmatched tasks in the first column
       map[columns[0].id] = [...(map[columns[0].id] ?? []), ...unmatched];
     }
     return map;
   }, [columns, tasks]);
 
-  const handleStatusChange = async (taskId: string, newStatus: string) => {
-    setUpdatingTaskId(taskId);
+  // ── Drag handlers ─────────────────────────────────────────────��─────────────
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const task = active.data.current?.task as Task | undefined;
+    if (task) setActiveTask(task);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) {
+      setOverColumnId(null);
+      return;
+    }
+    // Determine which column we're over
+    const overData = over.data.current;
+    if (overData?.type === 'column') {
+      setOverColumnId(over.id as string);
+    } else if (overData?.type === 'task') {
+      // Hovering over a task card → use its parent column
+      setOverColumnId(overData.columnId as string);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+    setOverColumnId(null);
+
+    if (!over) return;
+
+    const task = active.data.current?.task as Task | undefined;
+    if (!task) return;
+
+    // Determine target column id
+    const overData = over.data.current;
+    let targetColumnId: string;
+    if (overData?.type === 'column') {
+      targetColumnId = over.id as string;
+    } else if (overData?.type === 'task') {
+      targetColumnId = overData.columnId as string;
+    } else {
+      return;
+    }
+
+    const newStatus = columnStatusMap[targetColumnId];
+    if (!newStatus || task.status === newStatus) return;
+
     try {
-      await updateTask({ id: taskId, status: newStatus }).unwrap();
+      await updateTask({ id: task.id, status: newStatus }).unwrap();
       toast.success('Task moved');
     } catch (err: any) {
       toast.error(err?.data?.message || 'Failed to move task');
-    } finally {
-      setUpdatingTaskId(null);
     }
+  };
+
+  const handleDragCancel = () => {
+    setActiveTask(null);
+    setOverColumnId(null);
   };
 
   const handleAddTask = async (status: string, title: string) => {
@@ -429,7 +494,7 @@ function BoardDetailView({
         </div>
       </div>
 
-      {/* Kanban lanes */}
+      {/* Kanban lanes with DnD */}
       {columns.length === 0 ? (
         <div className="text-center py-16">
           <Columns className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -439,20 +504,35 @@ function BoardDetailView({
           </p>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
-          {columns.map((col) => (
-            <KanbanColumn
-              key={col.id}
-              column={col}
-              tasks={tasksByColumn[col.id] ?? []}
-              allColumns={columns}
-              onStatusChange={handleStatusChange}
-              updatingTaskId={updatingTaskId}
-              onAddTask={handleAddTask}
-              isCreating={isCreating}
-            />
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
+            {columns.map((col) => (
+              <KanbanColumn
+                key={col.id}
+                column={col}
+                tasks={tasksByColumn[col.id] ?? []}
+                onAddTask={handleAddTask}
+                isCreating={isCreating}
+                isDropTarget={overColumnId === col.id}
+              />
+            ))}
+          </div>
+
+          <DragOverlay dropAnimation={null}>
+            {activeTask ? (
+              <div className="w-[280px]">
+                <TaskCardContent task={activeTask} isDragging />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
     </div>
   );
