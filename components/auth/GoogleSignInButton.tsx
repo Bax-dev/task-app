@@ -97,7 +97,6 @@ export default function GoogleSignInButton() {
     }
     if (gsiReady && window.google) {
       window.google.accounts.id.prompt((notification: any) => {
-        // If One Tap is dismissed or not displayed, fall back to OAuth redirect
         if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
           // Redirect to Google OAuth consent screen
           const params = new URLSearchParams({
@@ -107,6 +106,7 @@ export default function GoogleSignInButton() {
             scope: 'openid email profile',
             access_type: 'offline',
             prompt: 'select_account',
+            ...(redirect ? { state: redirect } : {}),
           });
           window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
         }
@@ -121,6 +121,7 @@ export default function GoogleSignInButton() {
           scope: 'openid email profile',
           access_type: 'offline',
           prompt: 'select_account',
+          ...(redirect ? { state: redirect } : {}),
         });
         window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
       }

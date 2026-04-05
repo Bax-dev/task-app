@@ -118,6 +118,7 @@ export default function OrganizationsPage() {
                         <Link href={`/organizations/${org.id}`}>
                           <Button variant="outline" size="sm">View</Button>
                         </Link>
+                        {org.currentUserRole === 'ADMIN' && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-8 w-8">
@@ -139,6 +140,7 @@ export default function OrganizationsPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -174,6 +176,7 @@ function OrgCard({ org, onDelete }: { org: any; onDelete: (id: string) => void }
         <Link href={`/organizations/${org.id}`} className="flex-1">
           <h3 className="text-lg font-bold text-primary hover:underline">{org.name}</h3>
         </Link>
+        {org.currentUserRole === 'ADMIN' && (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-8 w-8">
@@ -195,6 +198,7 @@ function OrgCard({ org, onDelete }: { org: any; onDelete: (id: string) => void }
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        )}
       </div>
       <div className="space-y-2 mb-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

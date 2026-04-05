@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, XCircle, LogIn, UserPlus } from 'lucide-react';
@@ -23,20 +23,35 @@ export default function AcceptInvitePage({
   const isLoggedIn = !!user;
 
   const [acceptInvitation, { isLoading: isAccepting }] = useAcceptInvitationMutation();
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+  const autoAcceptAttempted = useRef(false);
 
-  const handleAccept = async () => {
-    try {
-      await acceptInvitation(token).unwrap();
-      toast.success('Invitation accepted! Welcome to the organization.');
-      router.push('/dashboard');
-    } catch (error: any) {
-      if (error?.status === 401) {
-        toast.error('Please log in first to accept this invitation.');
-      } else {
-        toast.error(error?.data?.message || error?.message || 'Failed to accept invitation');
-      }
+  // Auto-accept: when user is logged in and invitation is valid, accept automatically
+  useEffect(() => {
+    if (
+      isLoggedIn &&
+      invitation &&
+      invitation.status === 'PENDING' &&
+      new Date(invitation.expiresAt) > new Date() &&
+      !autoAcceptAttempted.current
+    ) {
+      autoAcceptAttempted.current = true;
+      acceptInvitation(token)
+        .unwrap()
+        .then(() => {
+          toast.success('Invitation accepted! Welcome to the organization.');
+          router.push('/dashboard');
+        })
+        .catch((err: any) => {
+          const msg = err?.data?.message || err?.message || 'Failed to accept invitation';
+          if (err?.status === 401) {
+            setAcceptError('Please log in first to accept this invitation.');
+          } else {
+            setAcceptError(msg);
+          }
+        });
     }
-  };
+  }, [isLoggedIn, invitation, token, acceptInvitation, router]);
 
   if (isLoading || authLoading) {
     return (
@@ -89,6 +104,34 @@ export default function AcceptInvitePage({
     );
   }
 
+  // Logged-in user: show auto-accepting state or error
+  if (isLoggedIn) {
+    if (acceptError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-foreground mb-2">Could Not Join</h1>
+            <p className="text-muted-foreground mb-4">{acceptError}</p>
+            <Button onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
+          </div>
+        </div>
+      );
+    }
+
+    // Auto-accepting in progress
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-foreground mb-2">Joining {invitation.organization?.name}...</h1>
+          <p className="text-muted-foreground">Please wait while we add you to the organization.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in — show login/signup options
   const inviteUrl = `/invite/${token}`;
 
   return (
@@ -113,44 +156,31 @@ export default function AcceptInvitePage({
           <p>Email: <strong className="text-foreground">{invitation.email}</strong></p>
         </div>
 
-        {isLoggedIn ? (
-          /* User is logged in - show accept button */
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground mb-4">
+            You need an account to join. Log in or create one below.
+          </p>
+
           <Button
-            onClick={handleAccept}
-            disabled={isAccepting}
-            className="w-full"
+            variant="default"
+            className="w-full gap-2"
             size="lg"
+            onClick={() => router.push(`/login?redirect=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(invitation.email)}`)}
           >
-            {isAccepting ? 'Accepting...' : 'Accept Invitation'}
+            <LogIn className="w-4 h-4" />
+            Log In &amp; Accept
           </Button>
-        ) : (
-          /* User is NOT logged in - show login/signup options */
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground mb-4">
-              You need an account to join. Log in or create one below.
-            </p>
 
-            <Button
-              variant="default"
-              className="w-full gap-2"
-              size="lg"
-              onClick={() => router.push(`/login?redirect=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(invitation.email)}`)}
-            >
-              <LogIn className="w-4 h-4" />
-              Log In &amp; Accept
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              size="lg"
-              onClick={() => router.push(`/signup?redirect=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(invitation.email)}`)}
-            >
-              <UserPlus className="w-4 h-4" />
-              Create Account &amp; Accept
-            </Button>
-          </div>
-        )}
+          <Button
+            variant="outline"
+            className="w-full gap-2"
+            size="lg"
+            onClick={() => router.push(`/signup?redirect=${encodeURIComponent(inviteUrl)}&email=${encodeURIComponent(invitation.email)}`)}
+          >
+            <UserPlus className="w-4 h-4" />
+            Create Account &amp; Accept
+          </Button>
+        </div>
       </div>
     </div>
   );

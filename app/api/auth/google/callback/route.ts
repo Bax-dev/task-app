@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { OAuth2Client } from 'google-auth-library';
 import { setSessionCookie } from '@/lib/auth/session';
+import { setRefreshTokenCookie } from '@/lib/auth/refresh-token';
 import * as authService from '@/app/api/modules/auth/services';
 
 const client = new OAuth2Client(
@@ -12,6 +13,7 @@ const client = new OAuth2Client(
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.url;
   const code = request.nextUrl.searchParams.get('code');
+  const state = request.nextUrl.searchParams.get('state');
 
   if (!code) {
     return NextResponse.redirect(new URL('/login?error=missing_code', baseUrl));
@@ -29,8 +31,11 @@ export async function GET(request: NextRequest) {
     // Use existing googleAuth service which verifies the ID token
     const result = await authService.googleAuth(idToken);
     await setSessionCookie(result.token);
+    await setRefreshTokenCookie(result.refreshToken);
 
-    return NextResponse.redirect(new URL('/dashboard', baseUrl));
+    // Redirect to the original page (e.g. invite link) or dashboard
+    const redirectTo = state && state.startsWith('/') ? state : '/dashboard';
+    return NextResponse.redirect(new URL(redirectTo, baseUrl));
   } catch (error) {
     console.error('Google OAuth callback error:', error);
     return NextResponse.redirect(new URL('/login?error=google_auth_failed', baseUrl));

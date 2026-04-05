@@ -60,6 +60,7 @@ export async function handleGetInvitation(request: NextRequest, token: string) {
     return successResponse({
       organization: invitation.organization,
       email: invitation.email,
+      role: invitation.role,
       status: invitation.status,
       expiresAt: invitation.expiresAt,
     });

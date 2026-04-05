@@ -45,15 +45,25 @@ export async function findOrganizationBySlug(slug: string) {
 }
 
 export async function findUserOrganizations(userId: string) {
-  return prisma.organization.findMany({
+  const orgs = await prisma.organization.findMany({
     where: {
       memberships: { some: { userId } },
     },
     include: {
+      memberships: {
+        where: { userId },
+        select: { role: true },
+      },
       _count: { select: { spaces: true, memberships: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  return orgs.map((org) => ({
+    ...org,
+    currentUserRole: org.memberships[0]?.role ?? null,
+    memberships: undefined,
+  }));
 }
 
 export async function updateOrganization(id: string, data: { name?: string }) {
