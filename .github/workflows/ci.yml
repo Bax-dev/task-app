@@ -110,20 +110,17 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Package build artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: tar -czf build-output.tar.gz .next
+
       - name: Upload build artifact
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: build-output
           retention-days: 1
-          path: |
-            .next/
-            package.json
-            ecosystem.config.js
-            prisma/
-            public/
-            next.config.ts
-            middleware.ts
+          path: build-output.tar.gz
 
   deploy:
     name: Deploy to EC2
@@ -136,7 +133,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-output
-          path: build/
 
       - name: Setup SSH key
         run: |
@@ -145,11 +141,10 @@ jobs:
           chmod 600 ~/.ssh/ec2_key
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Sync build to EC2
+      - name: Upload and extract build on EC2
         run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/ec2_key" \
-            build/.next/ ec2-user@${{ secrets.EC2_HOST }}:~/task-app/.next/
+          scp -i ~/.ssh/ec2_key build-output.tar.gz ec2-user@${{ secrets.EC2_HOST }}:~/build-output.tar.gz
+          ssh -i ~/.ssh/ec2_key ec2-user@${{ secrets.EC2_HOST }} "cd ~/task-app && rm -rf .next && tar -xzf ~/build-output.tar.gz && rm ~/build-output.tar.gz"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
