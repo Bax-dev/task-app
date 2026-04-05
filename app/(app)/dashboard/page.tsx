@@ -348,36 +348,86 @@ export default function DashboardPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <Link href="/organizations">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-            <Users className="w-5 h-5 text-primary/40 mb-2" />
+          <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <Users className="w-4.5 h-4.5 text-primary" />
+              </div>
+            </div>
             <p className="text-2xl font-bold text-foreground">{organizations.length}</p>
-            <p className="text-xs text-muted-foreground">Organizations</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Organizations</p>
           </div>
         </Link>
         <Link href="/projects">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-            <FolderOpen className="w-5 h-5 text-primary/40 mb-2" />
+          <div className="bg-card border border-border rounded-lg p-4 hover:border-blue-500/30 hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                <FolderOpen className="w-4.5 h-4.5 text-blue-500" />
+              </div>
+            </div>
             <p className="text-2xl font-bold text-foreground">
               {projectsError ? <span className="text-destructive text-sm">--</span> : projects.length}
             </p>
-            <p className="text-xs text-muted-foreground">Projects</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Projects</p>
           </div>
         </Link>
         <Link href="/tasks">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-            <Zap className="w-5 h-5 text-amber-500/40 mb-2" />
+          <div className="bg-card border border-border rounded-lg p-4 hover:border-amber-500/30 hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                <Zap className="w-4.5 h-4.5 text-amber-500" />
+              </div>
+            </div>
             <p className="text-2xl font-bold text-foreground">{inProgressCount}</p>
-            <p className="text-xs text-muted-foreground">In Progress</p>
+            <p className="text-xs text-muted-foreground mt-0.5">In Progress</p>
           </div>
         </Link>
         <Link href="/tasks">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-            <CheckSquare className="w-5 h-5 text-green-500/40 mb-2" />
+          <div className="bg-card border border-border rounded-lg p-4 hover:border-green-500/30 hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
+                <CheckSquare className="w-4.5 h-4.5 text-green-500" />
+              </div>
+            </div>
             <p className="text-2xl font-bold text-foreground">{doneCount}</p>
-            <p className="text-xs text-muted-foreground">Completed</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Completed</p>
           </div>
         </Link>
       </div>
+
+      {/* Progress overview bar */}
+      {tasks.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-foreground">Task Progress</h3>
+            <span className="text-xs text-muted-foreground">
+              {doneCount}/{tasks.length} completed
+            </span>
+          </div>
+          <div className="flex h-2 rounded-full overflow-hidden bg-muted gap-0.5">
+            {doneCount > 0 && (
+              <div className="bg-green-500 rounded-full transition-all duration-500" style={{ width: `${(doneCount / tasks.length) * 100}%` }} />
+            )}
+            {inProgressCount > 0 && (
+              <div className="bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${(inProgressCount / tasks.length) * 100}%` }} />
+            )}
+            {todoCount > 0 && (
+              <div className="bg-slate-400 rounded-full transition-all duration-500" style={{ width: `${(todoCount / tasks.length) * 100}%` }} />
+            )}
+          </div>
+          <div className="flex items-center gap-4 mt-2">
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-green-500" /> Done ({doneCount})
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-amber-500" /> In Progress ({inProgressCount})
+            </span>
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-slate-400" /> To Do ({todoCount})
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* AI Daily Summary */}
       {organizations.length > 0 && (

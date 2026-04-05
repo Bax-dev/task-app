@@ -15,6 +15,7 @@ import AnimatedCounter from '@/components/landing/AnimatedCounter';
 import FeatureTabs from '@/components/landing/FeatureTabs';
 import TestimonialCarousel from '@/components/landing/TestimonialCarousel';
 import LandingNav from '@/components/landing/LandingNav';
+import HeroScene from '@/components/landing/HeroScene';
 
 export default function Home() {
   const jsonLd = {
@@ -49,93 +50,8 @@ export default function Home() {
       <LandingNav />
 
       {/* ─── Hero ─── */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 md:pt-32 md:pb-24">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
-          <div className="space-y-6">
-            <span className="inline-block px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-semibold">
-              Free forever for small teams
-            </span>
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-foreground leading-[1.1] tracking-tight">
-              Ship Projects{' '}
-              <span className="text-primary">Faster,</span>
-              <br className="hidden md:block" />
-              Together
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-lg">
-              TaskFlow gives your team one place to plan work, track progress, and collaborate — so nothing falls through the cracks.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 pt-2">
-              <Link href="/signup">
-                <Button size="lg" className="w-full sm:w-auto text-base px-8">
-                  Start For Free <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
-              <a href="#features">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto text-base px-8">
-                  See Features
-                </Button>
-              </a>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground pt-2">
-              <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> No credit card
-              </span>
-              <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> Unlimited projects
-              </span>
-              <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500 shrink-0" /> 5 team members free
-              </span>
-            </div>
-          </div>
-
-          {/* Hero Visual — Animated Dashboard Preview */}
-          <div className="hidden md:block">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-purple-500/10 rounded-3xl blur-3xl" />
-              <div className="relative bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
-                {/* Top bar */}
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
-                  <div className="w-3 h-3 rounded-full bg-red-400" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                  <div className="w-3 h-3 rounded-full bg-green-400" />
-                  <span className="ml-3 text-xs text-muted-foreground">TaskFlow Dashboard</span>
-                </div>
-                {/* Content */}
-                <div className="p-6 space-y-4">
-                  {/* Stats row */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: 'Tasks Done', value: '24', color: 'text-green-500' },
-                      { label: 'In Progress', value: '8', color: 'text-blue-500' },
-                      { label: 'Team Members', value: '12', color: 'text-purple-500' },
-                    ].map((s, i) => (
-                      <div key={i} className="bg-background rounded-lg p-3 border border-border/50">
-                        <p className="text-xs text-muted-foreground">{s.label}</p>
-                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Task list */}
-                  <div className="space-y-2">
-                    {[
-                      { title: 'Design system update', tag: 'Design', dot: 'bg-purple-500' },
-                      { title: 'API rate limiting', tag: 'Backend', dot: 'bg-blue-500' },
-                      { title: 'User onboarding flow', tag: 'Product', dot: 'bg-green-500' },
-                      { title: 'Mobile responsive fix', tag: 'Frontend', dot: 'bg-orange-500' },
-                    ].map((t, i) => (
-                      <div key={i} className="flex items-center gap-3 bg-background rounded-lg p-3 border border-border/50">
-                        <div className={`w-2 h-2 rounded-full ${t.dot}`} />
-                        <span className="text-sm text-foreground flex-1">{t.title}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-muted text-muted-foreground">{t.tag}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <section className="relative w-full bg-black/[0.96] overflow-hidden">
+        <HeroScene />
       </section>
 
       {/* ─── Social Proof Stats ─── */}
