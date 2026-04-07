@@ -18,3 +18,11 @@ export interface CreateSpaceDTO {
   icon?: string;
   organizationId: string;
 }
+
+export interface UpdateSpaceDTO {
+  id: string;
+  name?: string;
+  description?: string | null;
+  color?: string;
+  icon?: string;
+}

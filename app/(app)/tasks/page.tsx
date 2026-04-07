@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,10 +43,39 @@ export default function TasksPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [open, setOpen] = useState(false);
+  const [selectedAssignees, setSelectedAssignees] = useState<Set<string>>(new Set());
 
   const { data: tasks = [], isLoading } = useGetUserTasksQuery();
   const { data: projects = [] } = useGetProjectsQuery();
   const [updateTask] = useUpdateTaskMutation();
+
+  // Collect all unique assignees across tasks
+  const allAssignees = useMemo(() => {
+    const map = new Map<string, { id: string; name: string | null; email: string }>();
+    tasks.forEach((t: any) => {
+      t.assignments?.forEach((a: any) => {
+        if (!map.has(a.user.id)) map.set(a.user.id, a.user);
+      });
+    });
+    return Array.from(map.values());
+  }, [tasks]);
+
+  const toggleAssignee = useCallback((userId: string) => {
+    setSelectedAssignees((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }, []);
+
+  // Filter tasks by selected assignees
+  const filteredByAssignee = useMemo(() => {
+    if (selectedAssignees.size === 0) return tasks;
+    return tasks.filter((t: any) =>
+      t.assignments?.some((a: any) => selectedAssignees.has(a.user.id))
+    );
+  }, [tasks, selectedAssignees]);
 
   const handleStatusUpdate = async (taskId: string, newStatus: string) => {
     try {
@@ -64,11 +93,11 @@ export default function TasksPage() {
     );
   }
 
-  const todoTasks = tasks.filter((t: any) => t.status === 'TODO');
-  const inProgressTasks = tasks.filter((t: any) => t.status === 'IN_PROGRESS');
-  const doneTasks = tasks.filter((t: any) => t.status === 'DONE');
-  const cancelledTasks = tasks.filter((t: any) => t.status === 'CANCELLED');
-  const rejectedTasks = tasks.filter((t: any) => t.status === 'REJECTED');
+  const todoTasks = filteredByAssignee.filter((t: any) => t.status === 'TODO');
+  const inProgressTasks = filteredByAssignee.filter((t: any) => t.status === 'IN_PROGRESS');
+  const doneTasks = filteredByAssignee.filter((t: any) => t.status === 'DONE');
+  const cancelledTasks = filteredByAssignee.filter((t: any) => t.status === 'CANCELLED');
+  const rejectedTasks = filteredByAssignee.filter((t: any) => t.status === 'REJECTED');
 
   const priorityColors: Record<string, string> = {
     URGENT: 'bg-red-500/10 text-red-600 border-red-200',
@@ -124,21 +153,6 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-        {sections.map((s) => (
-          <div key={s.key} className="bg-card border border-border rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              {s.icon}
-              <div>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-                <p className="text-2xl font-bold text-foreground">{s.tasks.length}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Search */}
       <div className="relative mb-6">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -153,10 +167,49 @@ export default function TasksPage() {
       {/* Quick Task Creation */}
       {projects.length > 0 && <QuickTaskAdd projects={projects} />}
 
+      {/* Assignee Filter */}
+      {allAssignees.length > 0 && (
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-xs text-muted-foreground font-medium">Filter by:</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {allAssignees.map((user) => {
+              const isSelected = selectedAssignees.has(user.id);
+              return (
+                <button
+                  key={user.id}
+                  onClick={() => toggleAssignee(user.id)}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors border ${
+                    isSelected
+                      ? 'bg-primary/15 border-primary/40 text-primary'
+                      : 'bg-muted/50 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                  title={user.name || user.email}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isSelected ? 'bg-primary text-primary-foreground' : 'bg-primary/20 text-primary'
+                  }`}>
+                    {(user.name?.[0] || user.email[0]).toUpperCase()}
+                  </span>
+                  <span className="truncate max-w-[80px]">{user.name || user.email.split('@')[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+          {selectedAssignees.size > 0 && (
+            <button
+              onClick={() => setSelectedAssignees(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Status Filter Toggle Bar */}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         {[
-          { key: 'ALL', label: 'All', count: tasks.length },
+          { key: 'ALL', label: 'All', count: filteredByAssignee.length },
           { key: 'TODO', label: 'To Do', dot: 'bg-blue-500', count: todoTasks.length },
           { key: 'IN_PROGRESS', label: 'In Progress', dot: 'bg-yellow-500', count: inProgressTasks.length },
           { key: 'DONE', label: 'Done', dot: 'bg-green-500', count: doneTasks.length },

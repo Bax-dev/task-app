@@ -1,7 +1,8 @@
 'use client';
 
-import { use, useState, useRef, useEffect, useMemo } from 'react';
+import { use, useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,14 +22,27 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, ArrowLeft, Loader2, X, AtSign, Users, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, X, AtSign, Users, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Pencil, Trash2, Check } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   useGetProjectQuery,
   useGetProjectTasksQuery,
   useGetOrgMembersQuery,
   useGetOrgIssueTypesQuery,
   useCreateTaskMutation,
+  useUpdateProjectMutation,
+  useDeleteProjectMutation,
 } from '@/store/api';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -47,8 +61,12 @@ export default function ProjectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { user: currentUser } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [selectedAssignees, setSelectedAssignees] = useState<Set<string>>(new Set());
 
   const { data: project, isLoading: projectLoading } = useGetProjectQuery(id);
   const { data: tasks = [], isLoading: tasksLoading } = useGetProjectTasksQuery(id);
@@ -56,6 +74,65 @@ export default function ProjectPage({
   const orgId = project?.space?.organizationId;
   const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
   const isGuest = members.find((m: any) => m.id === currentUser?.id)?.role === 'GUEST';
+
+  const [updateProject] = useUpdateProjectMutation();
+  const [deleteProject] = useDeleteProjectMutation();
+
+  const handleRenameProject = async (name: string) => {
+    try {
+      await updateProject({ id, name }).unwrap();
+      toast.success('Project renamed');
+      setIsEditing(false);
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to rename project');
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    const spaceId = project?.spaceId || project?.space?.id;
+    try {
+      await deleteProject(id).unwrap();
+      toast.success('Project deleted');
+      router.push(spaceId ? `/spaces/${spaceId}` : '/projects');
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to delete project');
+    }
+  };
+
+  // Collect all unique assignees across tasks
+  const allAssignees = useMemo(() => {
+    const map = new Map<string, { id: string; name: string | null; email: string }>();
+    tasks.forEach((t: any) => {
+      t.assignments?.forEach((a: any) => {
+        if (!map.has(a.user.id)) map.set(a.user.id, a.user);
+      });
+    });
+    return Array.from(map.values());
+  }, [tasks]);
+
+  const toggleAssignee = useCallback((userId: string) => {
+    setSelectedAssignees((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }, []);
+
+  // Filter tasks by selected assignees
+  const filteredTasks = useMemo(() => {
+    if (selectedAssignees.size === 0) return tasks;
+    return tasks.filter((t: any) =>
+      t.assignments?.some((a: any) => selectedAssignees.has(a.user.id))
+    );
+  }, [tasks, selectedAssignees]);
+
+  const tasksByStatus = {
+    TODO: filteredTasks.filter((t: any) => t.status === 'TODO'),
+    IN_PROGRESS: filteredTasks.filter((t: any) => t.status === 'IN_PROGRESS'),
+    DONE: filteredTasks.filter((t: any) => t.status === 'DONE'),
+    CANCELLED: filteredTasks.filter((t: any) => t.status === 'CANCELLED'),
+  };
 
   if (projectLoading || tasksLoading) {
     return (
@@ -66,13 +143,6 @@ export default function ProjectPage({
   }
 
   if (!project) return null;
-
-  const tasksByStatus = {
-    TODO: tasks.filter((t: any) => t.status === 'TODO'),
-    IN_PROGRESS: tasks.filter((t: any) => t.status === 'IN_PROGRESS'),
-    DONE: tasks.filter((t: any) => t.status === 'DONE'),
-    CANCELLED: tasks.filter((t: any) => t.status === 'CANCELLED'),
-  };
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
@@ -86,7 +156,38 @@ export default function ProjectPage({
         </Link>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{project.name}</h1>
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="text-2xl font-bold h-10"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && editName.trim()) handleRenameProject(editName.trim());
+                    if (e.key === 'Escape') setIsEditing(false);
+                  }}
+                />
+                <Button size="icon" variant="ghost" onClick={() => { if (editName.trim()) handleRenameProject(editName.trim()); }}>
+                  <Check className="w-4 h-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => setIsEditing(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{project.name}</h1>
+                {!isGuest && (
+                  <button
+                    onClick={() => { setEditName(project.name); setIsEditing(true); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
             {project.description && (
               <p className="text-muted-foreground mt-2">{project.description}</p>
             )}
@@ -96,29 +197,93 @@ export default function ProjectPage({
               </div>
             )}
           </div>
-          {!isGuest && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="w-4 h-4" />
-                  New Task
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>New Task</DialogTitle>
-                </DialogHeader>
-                <NewTaskModal
-                  projectId={id}
-                  members={members}
-                  orgId={orgId || ''}
-                  onCreated={() => setDialogOpen(false)}
-                />
-              </DialogContent>
-            </Dialog>
-          )}
+          <div className="flex gap-2">
+            {!isGuest && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Project</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will delete &quot;{project.name}&quot; and all its tasks. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteProject} className="bg-muted-foreground text-background hover:bg-muted-foreground/90">
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {!isGuest && (
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    New Task
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>New Task</DialogTitle>
+                  </DialogHeader>
+                  <NewTaskModal
+                    projectId={id}
+                    members={members}
+                    orgId={orgId || ''}
+                    onCreated={() => setDialogOpen(false)}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Assignee filter */}
+      {allAssignees.length > 0 && (
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-xs text-muted-foreground font-medium">Filter by:</span>
+          <div className="flex items-center gap-1.5">
+            {allAssignees.map((user) => {
+              const isSelected = selectedAssignees.has(user.id);
+              return (
+                <button
+                  key={user.id}
+                  onClick={() => toggleAssignee(user.id)}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs transition-colors border ${
+                    isSelected
+                      ? 'bg-primary/15 border-primary/40 text-primary'
+                      : 'bg-muted/50 border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                  title={user.name || user.email}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isSelected ? 'bg-primary text-primary-foreground' : 'bg-primary/20 text-primary'
+                  }`}>
+                    {(user.name?.[0] || user.email[0]).toUpperCase()}
+                  </span>
+                  <span className="truncate max-w-[80px]">{user.name || user.email.split('@')[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+          {selectedAssignees.size > 0 && (
+            <button
+              onClick={() => setSelectedAssignees(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       <TaskBoard projectId={id} tasksByStatus={tasksByStatus} />
     </div>

@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useGetOrganizationsQuery, useCreateSpaceMutation, useGetOrgSpacesQuery, useGetOrgMembersQuery, useGetMeQuery } from '@/store/api';
 
@@ -115,6 +116,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaceName, setSpaceName] = useState('');
   const [spaceColor, setSpaceColor] = useState('#7c3aed');
+  const [spaceDesc, setSpaceDesc] = useState('');
   const [spaceOrgId, setSpaceOrgId] = useState('');
 
   const { data: user } = useGetMeQuery();
@@ -137,10 +139,11 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
   const handleCreateSpace = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createSpace({ name: spaceName, color: spaceColor, organizationId: spaceOrgId }).unwrap();
+      await createSpace({ name: spaceName, description: spaceDesc.trim() || undefined, color: spaceColor, organizationId: spaceOrgId }).unwrap();
       toast.success('Space created!');
       setNewSpaceOpen(false);
       setSpaceName('');
+      setSpaceDesc('');
       setSpaceColor('#7c3aed');
     } catch (error: any) {
       toast.error(error?.data?.message || error?.message || 'Failed to create space');
@@ -160,7 +163,8 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      <nav className="p-2 space-y-3 overflow-auto">
+      <div className="flex-1 overflow-y-auto">
+      <nav className="p-2 space-y-3">
         {navSections.map((section, idx) => (
           <div key={idx}>
             {section.label && (
@@ -194,7 +198,7 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       {/* Spaces Section */}
-      <div className="flex-1 overflow-auto border-t border-border">
+      <div className="border-t border-border">
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">Spaces</span>
           <Dialog open={newSpaceOpen} onOpenChange={setNewSpaceOpen}>
@@ -221,7 +225,11 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
                 </div>
                 <div className="space-y-2">
                   <Label>Space Name</Label>
-                  <Input value={spaceName} onChange={(e) => setSpaceName(e.target.value)} placeholder="e.g. Sales, Marketing" required />
+                  <Input value={spaceName} onChange={(e) => setSpaceName(e.target.value)} placeholder="e.g. Sales, Marketing" required maxLength={100} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description (optional)</Label>
+                  <Textarea value={spaceDesc} onChange={(e) => setSpaceDesc(e.target.value)} placeholder="What is this space for? (max 500 characters)" rows={3} maxLength={500} />
                 </div>
                 <div className="space-y-2">
                   <Label>Color</Label>
@@ -251,8 +259,9 @@ export default function Sidebar({ onClose }: { onClose?: () => void }) {
           ))}
         </div>
       </div>
+      </div>
 
-      <div className="p-2 border-t border-border">
+      <div className="p-2 border-t border-border shrink-0">
         <Link href="/settings" onClick={onClose}>
           <div className={`flex items-center gap-2.5 px-2.5 py-[7px] rounded-md transition-colors text-[13px] ${
             pathname === '/settings' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
