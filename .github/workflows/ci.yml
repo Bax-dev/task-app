@@ -129,6 +129,10 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -145,6 +149,11 @@ jobs:
         run: |
           scp -i ~/.ssh/ec2_key build-output.tar.gz ec2-user@${{ secrets.EC2_HOST }}:~/build-output.tar.gz
           ssh -i ~/.ssh/ec2_key ec2-user@${{ secrets.EC2_HOST }} "cd ~/task-app && rm -rf .next && tar -xzf ~/build-output.tar.gz && rm ~/build-output.tar.gz"
+
+      - name: Sync Nginx config
+        run: |
+          scp -i ~/.ssh/ec2_key deploy/nginx-taskflow.conf ec2-user@${{ secrets.EC2_HOST }}:~/nginx-taskflow.conf
+          ssh -i ~/.ssh/ec2_key ec2-user@${{ secrets.EC2_HOST }} "sudo cp ~/nginx-taskflow.conf /etc/nginx/conf.d/taskflow.conf && rm ~/nginx-taskflow.conf && sudo nginx -t && sudo systemctl reload nginx"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
