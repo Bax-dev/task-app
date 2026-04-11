@@ -227,6 +227,8 @@ jobs:
             pm2 save
 
             echo "==> Setting up reminder cron job..."
+            sudo yum install -y cronie 2>/dev/null || true
+            sudo systemctl enable crond --now 2>/dev/null || true
             (crontab -l 2>/dev/null | grep -v 'daily-reports/reminders'; echo "* * * * * curl -s -X POST ${NEXT_PUBLIC_APP_URL}/api/daily-reports/reminders -H 'x-taskflow-cron-secret: ${TASKFLOW_CRON_SECRET}' >> /var/log/reminder-cron.log 2>&1") | crontab -
 
             echo "==> Deploy complete!"
