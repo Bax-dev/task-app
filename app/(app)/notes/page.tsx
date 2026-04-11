@@ -97,7 +97,7 @@ export default function NotesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Notes</h1>
-          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Documents and system design notes</p>
+          <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">Your private notes and drafts</p>
         </div>
         <div className="flex items-center gap-4">
           <Select value={selectedOrg} onValueChange={setSelectedOrg}>
@@ -145,7 +145,7 @@ export default function NotesPage() {
       {!selectedOrg ? (
         <div className="text-center py-12">
           <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">Select an organization to view notes</p>
+          <p className="text-muted-foreground">Select an organization to view your notes</p>
         </div>
       ) : notesLoading ? (
         <div className="flex items-center justify-center py-12">

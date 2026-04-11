@@ -16,6 +16,8 @@ import BoardCreate from '@/components/boards/boardCreate';
 import BoardEdit from '@/components/boards/boardEdit';
 import BoardRemove from '@/components/boards/boardRemove';
 import BoardRead from '@/components/boards/boardRead';
+import PageHeader from '@/components/layout/PageHeader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function BoardsPage() {
   const { user: currentUser } = useAuth();
@@ -46,12 +48,16 @@ export default function BoardsPage() {
       setSelectedOrg(organizations[0].id);
     }
   }, [organizations, selectedOrg]);
-  if (spaces.length > 0 && !selectedSpace) {
-    setSelectedSpace(spaces[0].id);
-  }
-  if (projects.length > 0 && !selectedProject) {
-    setSelectedProject(projects[0].id);
-  }
+  useEffect(() => {
+    if (spaces.length > 0 && !selectedSpace) {
+      setSelectedSpace(spaces[0].id);
+    }
+  }, [spaces, selectedSpace]);
+  useEffect(() => {
+    if (projects.length > 0 && !selectedProject) {
+      setSelectedProject(projects[0].id);
+    }
+  }, [projects, selectedProject]);
 
   const handleOrgChange = (orgId: string) => {
     setSelectedOrg(orgId);
@@ -73,8 +79,9 @@ export default function BoardsPage() {
 
   if (orgsLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
@@ -83,61 +90,69 @@ export default function BoardsPage() {
     <div className="p-4 sm:p-6 md:p-8">
       {/* Header */}
       {!selectedBoardId && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Boards</h1>
-            <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
-              Kanban boards for project task management
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Select value={selectedOrg} onValueChange={handleOrgChange}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Organization" />
-              </SelectTrigger>
-              <SelectContent>
-                {organizations.map((org: any) => (
-                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedOrg && (
-              <Select value={selectedSpace} onValueChange={handleSpaceChange}>
+        <PageHeader
+          eyebrow={
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
+              <LayoutGrid className="h-3.5 w-3.5 text-primary" />
+              Kanban view for active work
+            </div>
+          }
+          title="Boards"
+          description="Choose a project, open a board, and move work across columns with less setup friction."
+          meta={[
+            { label: 'boards', value: boards.length },
+            { label: 'projects', value: projects.length },
+          ]}
+          actions={
+            <>
+              <Select value={selectedOrg} onValueChange={handleOrgChange}>
                 <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Space" />
+                  <SelectValue placeholder="Organization" />
                 </SelectTrigger>
                 <SelectContent>
-                  {spaces.map((space: any) => (
-                    <SelectItem key={space.id} value={space.id}>{space.name}</SelectItem>
+                  {organizations.map((org: any) => (
+                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
-            {selectedSpace && (
-              <Select value={selectedProject} onValueChange={handleProjectChange}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Project" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project: any) => (
-                    <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {selectedProject && !isGuest && (
-              <Button className="gap-2" onClick={() => setCreateOpen(true)}>
-                <Plus className="w-4 h-4" />
-                New Board
-              </Button>
-            )}
-          </div>
-        </div>
+              {selectedOrg && (
+                <Select value={selectedSpace} onValueChange={handleSpaceChange}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Space" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {spaces.map((space: any) => (
+                      <SelectItem key={space.id} value={space.id}>{space.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {selectedSpace && (
+                <Select value={selectedProject} onValueChange={handleProjectChange}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project: any) => (
+                      <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {selectedProject && !isGuest && (
+                <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                  New Board
+                </Button>
+              )}
+            </>
+          }
+        />
       )}
 
       {/* Content */}
       {!selectedProject ? (
-        <div className="text-center py-16">
+        <div className="mt-6 text-center rounded-2xl border border-dashed border-border bg-card py-16">
           <LayoutGrid className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">Select an organization, space, and project to view boards</p>
         </div>

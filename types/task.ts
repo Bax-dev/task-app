@@ -5,6 +5,7 @@ export interface Task {
   description: string | null;
   status: string;
   priority: string;
+  assignToSpace?: boolean;
   dueDate: string | null;
   rejectionReason?: string | null;
   issueTypeId?: string | null;
@@ -23,6 +24,7 @@ export interface CreateTaskDTO {
   description?: string;
   status?: string;
   priority?: string;
+  assignToSpace?: boolean;
   dueDate?: string | null;
   projectId: string;
 }
@@ -32,6 +34,7 @@ export interface UpdateTaskDTO {
   description?: string | null;
   status?: string;
   priority?: string;
+  assignToSpace?: boolean;
   dueDate?: string | null;
   rejectionReason?: string | null;
 }

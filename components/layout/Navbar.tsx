@@ -11,11 +11,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, Settings, User, Bell, Menu, Search, ChevronRight, Sparkles } from 'lucide-react';
+import {
+  Bell,
+  ChevronRight,
+  LogOut,
+  Menu,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  User,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation, apiSlice } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import ThemeToggle from '@/components/ThemeToggle';
+import { Button } from '@/components/ui/button';
 
 const BREADCRUMB_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -31,11 +42,24 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   notifications: 'Notifications',
   'activity-logs': 'Audit Logs',
   spaces: 'Spaces',
-  new: 'New',
-  invite: 'Invite',
+  boards: 'Boards',
+  sprints: 'Sprints',
+  labels: 'Labels',
+  workflows: 'Workflows',
+  automations: 'Automations',
+  dashboards: 'Dashboards',
+  'saved-filters': 'Saved Filters',
 };
 
-export default function Navbar({ onMenuToggle, onSearchClick, onAiClick }: { onMenuToggle?: () => void; onSearchClick?: () => void; onAiClick?: () => void }) {
+export default function Navbar({
+  onMenuToggle,
+  onSearchClick,
+  onAiClick,
+}: {
+  onMenuToggle?: () => void;
+  onSearchClick?: () => void;
+  onAiClick?: () => void;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const dispatch = useAppDispatch();
@@ -44,149 +68,168 @@ export default function Navbar({ onMenuToggle, onSearchClick, onAiClick }: { onM
   const { data: notifData } = useGetNotificationsQuery();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
 
-  const handleLogout = async () => {
-    try {
-      await logout().unwrap();
-    } catch {
-      // Still clear state even if API call fails
-    }
-    dispatch(apiSlice.util.resetApiState());
-    toast.success('Logged out successfully');
-    router.push('/login');
-  };
-
   const unreadCount = notifData?.unreadCount ?? 0;
   const displayName = user?.name || user?.email || 'User';
   const initials = user?.name
-    ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    ? user.name
+        .split(' ')
+        .map((part: string) => part[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
     : user?.email?.[0]?.toUpperCase() || 'U';
 
   const segments = pathname.split('/').filter(Boolean);
   const breadcrumbs = segments
-    .map((seg, i) => ({
-      label: BREADCRUMB_LABELS[seg] || (seg.length > 12 ? `${seg.slice(0, 8)}...` : seg),
-      href: '/' + segments.slice(0, i + 1).join('/'),
-      isLast: i === segments.length - 1,
+    .map((segment, index) => ({
+      label: BREADCRUMB_LABELS[segment] || (segment.length > 12 ? `${segment.slice(0, 8)}...` : segment),
+      href: '/' + segments.slice(0, index + 1).join('/'),
+      isLast: index === segments.length - 1,
     }))
     .slice(0, 3);
 
+  const pageTitle = breadcrumbs[breadcrumbs.length - 1]?.label || 'Dashboard';
+  const primaryAction =
+    pageTitle === 'Tasks'
+      ? { label: 'New Task', href: '/tasks' }
+      : pageTitle === 'Projects'
+        ? { label: 'View Projects', href: '/projects' }
+        : null;
+
+  async function handleLogout() {
+    try {
+      await logout().unwrap();
+    } catch {
+      // Clear client state even if the network request fails.
+    }
+    dispatch(apiSlice.util.resetApiState());
+    toast.success('Logged out successfully');
+    router.push('/login');
+  }
+
   return (
-    <nav className="border-b border-border bg-card/80 backdrop-blur-sm h-12 flex items-center px-3 sm:px-4 gap-1.5 shrink-0">
-      {/* Mobile menu */}
+    <nav className="flex min-h-16 items-center gap-3 border-b border-border bg-card/90 px-3 sm:px-4 backdrop-blur-sm">
       {onMenuToggle && (
-        <button onClick={onMenuToggle} className="md:hidden p-1.5 rounded-md text-muted-foreground">
-          <Menu className="w-5 h-5" />
+        <button onClick={onMenuToggle} className="rounded-md p-2 text-muted-foreground md:hidden">
+          <Menu className="h-5 w-5" />
         </button>
       )}
 
-      {/* Breadcrumbs */}
-      <div className="hidden sm:flex items-center gap-1 text-[13px] min-w-0">
-        {breadcrumbs.map((crumb, i) => (
-          <span key={crumb.href} className="flex items-center gap-1 min-w-0">
-            {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/50 flex-shrink-0" />}
-            {crumb.isLast ? (
-              <span className="text-foreground font-medium truncate max-w-[160px]">{crumb.label}</span>
-            ) : (
-              <Link href={crumb.href} className="text-muted-foreground hover:text-foreground truncate max-w-[120px] transition-colors">
-                {crumb.label}
-              </Link>
-            )}
-          </span>
-        ))}
+      <div className="min-w-0 flex-1">
+        <div className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
+          {breadcrumbs.map((crumb, index) => (
+            <span key={crumb.href} className="flex min-w-0 items-center gap-1">
+              {index > 0 && <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />}
+              {crumb.isLast ? (
+                <span className="truncate font-semibold text-foreground">{crumb.label}</span>
+              ) : (
+                <Link href={crumb.href} className="truncate hover:text-foreground">
+                  {crumb.label}
+                </Link>
+              )}
+            </span>
+          ))}
+        </div>
       </div>
 
-      {/* Mobile page title */}
-      <span className="sm:hidden text-sm font-medium text-foreground truncate">
-        {breadcrumbs[breadcrumbs.length - 1]?.label}
-      </span>
+      {primaryAction && (
+        <Link href={primaryAction.href} className="hidden lg:block">
+          <Button variant="outline" size="sm" className="gap-2">
+            <Plus className="h-3.5 w-3.5" />
+            {primaryAction.label}
+          </Button>
+        </Link>
+      )}
 
-      <div className="flex-1" />
-
-      {/* Right actions */}
-      <div className="flex items-center gap-0.5">
-        {/* Search - opens Command Palette */}
+      <div className="flex items-center gap-1">
         <button
           onClick={onSearchClick}
-          className="hidden sm:flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border text-muted-foreground text-xs hover:border-primary/50 hover:text-foreground transition-colors"
+          className="hidden h-9 items-center gap-2 rounded-xl border border-border px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:flex"
         >
-          <Search className="w-3 h-3" />
-          <span>Search...</span>
-          <kbd className="ml-1 px-1 py-0.5 rounded border border-border text-[9px] font-mono">Ctrl+K</kbd>
+          <Search className="h-4 w-4" />
+          Search or jump
+          <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px] font-mono">Ctrl+K</kbd>
         </button>
 
-        {/* AI Assistant */}
         <button
           onClick={onAiClick}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+          className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
           title="TaskFlow AI"
         >
-          <Sparkles className="w-[18px] h-[18px]" />
+          <Sparkles className="h-[18px] w-[18px]" />
         </button>
 
-        {/* Theme Toggle */}
         <ThemeToggle />
 
-        {/* Notifications */}
-        <Link href="/notifications" className="relative p-1.5 rounded-md text-muted-foreground">
-          <Bell className="w-[18px] h-[18px]" />
+        <Link href="/notifications" className="relative rounded-xl p-2 text-muted-foreground">
+          <Bell className="h-[18px] w-[18px]" />
           {unreadCount > 0 && (
-            <span className="absolute top-0.5 right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            <span className="absolute right-1 top-1 flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
             </span>
           )}
         </Link>
 
-        {/* User */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-1.5 p-1 rounded-md">
-              <div className="w-6 h-6 rounded-full overflow-hidden bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <button className="flex items-center gap-2 rounded-xl p-1.5">
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary/15">
                 {user?.avatar ? (
-                  <Image src={user.avatar} alt="" width={24} height={24} className="w-full h-full object-cover" />
+                  <Image
+                    src={user.avatar}
+                    alt=""
+                    width={32}
+                    height={32}
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
-                  <span className="text-[9px] font-bold text-primary">{initials}</span>
+                  <span className="text-[10px] font-semibold text-primary">{initials}</span>
                 )}
               </div>
-              <span className="text-xs hidden md:inline truncate max-w-[100px] text-foreground">{displayName}</span>
+              <span className="hidden max-w-[120px] truncate text-sm text-foreground md:inline">
+                {displayName}
+              </span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal py-2">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-primary/15 flex items-center justify-center flex-shrink-0">
+                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary/15">
                   {user?.avatar ? (
-                    <Image src={user.avatar} alt="" width={32} height={32} className="w-full h-full object-cover" />
+                    <Image
+                      src={user.avatar}
+                      alt=""
+                      width={36}
+                      height={36}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <span className="text-[10px] font-bold text-primary">{initials}</span>
+                    <span className="text-[10px] font-semibold text-primary">{initials}</span>
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{displayName}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{user?.email}</p>
+                  <p className="truncate text-sm font-medium">{displayName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
                 </div>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <Link href="/settings">
-              <DropdownMenuItem className="cursor-pointer text-[13px] py-1.5">
-                <User className="mr-2 h-3.5 w-3.5" />
+              <DropdownMenuItem className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
             </Link>
             <Link href="/settings">
-              <DropdownMenuItem className="cursor-pointer text-[13px] py-1.5">
-                <Settings className="mr-2 h-3.5 w-3.5" />
+              <DropdownMenuItem className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
             </Link>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleLogout}
-              className="cursor-pointer text-[13px] py-1.5 text-muted-foreground"
-              disabled={isLoggingOut}
-            >
-              <LogOut className="mr-2 h-3.5 w-3.5" />
+            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer" disabled={isLoggingOut}>
+              <LogOut className="mr-2 h-4 w-4" />
               {isLoggingOut ? 'Logging out...' : 'Log out'}
             </DropdownMenuItem>
           </DropdownMenuContent>

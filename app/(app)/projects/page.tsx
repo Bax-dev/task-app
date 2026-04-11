@@ -26,6 +26,9 @@ import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
 import { toast } from 'sonner';
 import { useGetProjectsQuery, useGetOrganizationsQuery, useGetOrgSpacesQuery, useCreateProjectMutation } from '@/store/api';
+import PageHeader from '@/components/layout/PageHeader';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ProjectsPage() {
   const [search, setSearch] = useState('');
@@ -58,8 +61,13 @@ export default function ProjectsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-40 rounded-2xl" />
+        </div>
       </div>
     );
   }
@@ -82,98 +90,108 @@ export default function ProjectsPage() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Projects</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {projects.length} project{projects.length !== 1 ? 's' : ''} across your organizations
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'projects', mode: v }))} />
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5">
-                <Plus className="w-3.5 h-3.5" />
-                New Project
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Project</DialogTitle>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => { e.preventDefault(); handleCreateProject(); }}
-                className="space-y-4 mt-4"
-              >
-                <div className="space-y-2">
-                  <Label>Organization</Label>
-                  <Select value={selectedOrg} onValueChange={(v) => { setSelectedOrg(v); setSpaceId(''); }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select organization" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {organizations.map((org: any) => (
-                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {selectedOrg && (
+      <PageHeader
+        eyebrow={
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
+            <FolderOpen className="h-3.5 w-3.5 text-primary" />
+            Spaces keep projects organized
+          </div>
+        }
+        title="Projects"
+        description="Browse by organization, switch views quickly, and create new projects without leaving the page."
+        meta={[
+          { label: 'projects', value: projects.length },
+          { label: 'organizations', value: organizations.length },
+        ]}
+        actions={
+          <>
+            <ViewToggle view={view} onViewChange={(v) => dispatch(setView({ page: 'projects', mode: v }))} />
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5">
+                  <Plus className="w-3.5 h-3.5" />
+                  New Project
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Project</DialogTitle>
+                </DialogHeader>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleCreateProject(); }}
+                  className="space-y-4 mt-4"
+                >
+                  <div className="rounded-xl border border-border bg-secondary/20 p-4 text-sm text-muted-foreground">
+                    Pick the organization and space first, then add the project details.
+                  </div>
                   <div className="space-y-2">
-                    <Label>Space</Label>
-                    <Select value={spaceId} onValueChange={setSpaceId} required>
+                    <Label>Organization</Label>
+                    <Select value={selectedOrg} onValueChange={(v) => { setSelectedOrg(v); setSpaceId(''); }}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select space" />
+                        <SelectValue placeholder="Select organization" />
                       </SelectTrigger>
                       <SelectContent>
-                        {spaces.map((space: any) => (
-                          <SelectItem key={space.id} value={space.id}>
-                            <span className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: space.color }} />
-                              {space.name}
-                            </span>
-                          </SelectItem>
+                        {organizations.map((org: any) => (
+                          <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="project-name">Project Name</Label>
-                  <Input
-                    id="project-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="My Project"
-                    required
-                    disabled={isCreatingProject}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="project-desc">Description (optional)</Label>
-                  <Textarea
-                    id="project-desc"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Brief description"
-                    rows={3}
-                    disabled={isCreatingProject}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={isCreatingProject || !spaceId}>
-                  {isCreatingProject ? 'Creating...' : 'Create Project'}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+                  {selectedOrg && (
+                    <div className="space-y-2">
+                      <Label>Space</Label>
+                      <Select value={spaceId} onValueChange={setSpaceId} required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select space" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {spaces.map((space: any) => (
+                            <SelectItem key={space.id} value={space.id}>
+                              <span className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: space.color }} />
+                                {space.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="project-name">Project Name</Label>
+                    <Input
+                      id="project-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="My Project"
+                      required
+                      disabled={isCreatingProject}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="project-desc">Description (optional)</Label>
+                    <Textarea
+                      id="project-desc"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Brief description"
+                      rows={3}
+                      disabled={isCreatingProject}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isCreatingProject || !spaceId}>
+                    {isCreatingProject ? 'Creating...' : 'Create Project'}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </>
+        }
+      />
 
       {/* Search */}
       {projects.length > 0 && (
-        <div className="relative mb-6">
+        <div className="relative my-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search by name, space, or organization..."
@@ -190,9 +208,12 @@ export default function ProjectsPage() {
           <div className="space-y-8">
             {Object.entries(groupedByOrg).map(([orgId, { orgName, projects: orgProjects }]) => (
               <div key={orgId}>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  {orgName}
-                </h3>
+                <div className="mb-3 flex items-center gap-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {orgName}
+                  </h3>
+                  <Badge variant="outline">{orgProjects.length}</Badge>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {orgProjects.map((project: any) => (
                     <Link key={project.id} href={`/projects/${project.id}`} className="group">
@@ -226,7 +247,7 @@ export default function ProjectsPage() {
             ))}
           </div>
         ) : (
-          <div className="bg-card border border-border rounded-lg overflow-x-auto">
+          <div className="bg-card border border-border rounded-2xl overflow-x-auto">
             <table className="w-full min-w-[600px]">
               <thead className="border-b border-border bg-secondary/20">
                 <tr>
@@ -275,7 +296,7 @@ export default function ProjectsPage() {
           <p className="text-sm text-muted-foreground">No projects match &quot;{search}&quot;</p>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-lg p-8">
+        <div className="bg-card border border-border rounded-2xl p-8 mt-6">
           <div className="text-center max-w-sm mx-auto">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <FolderOpen className="w-6 h-6 text-primary" />

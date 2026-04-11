@@ -16,18 +16,20 @@ export async function getNote(noteId: string, userId: string) {
   const note = await noteModel.findNoteById(noteId);
   if (!note) throw new Error('Note not found');
   await requireOrgMembership(userId, note.organizationId);
+  if (note.createdById !== userId) throw new Error('Note is private');
   return note;
 }
 
 export async function getOrganizationNotes(organizationId: string, userId: string) {
   await requireOrgMembership(userId, organizationId);
-  return noteModel.findNotesByOrganization(organizationId);
+  return noteModel.findNotesByOrganization(organizationId, userId);
 }
 
 export async function updateNote(noteId: string, userId: string, dto: UpdateNoteDTO) {
   const note = await noteModel.findNoteById(noteId);
   if (!note) throw new Error('Note not found');
   await requireNonGuest(userId, note.organizationId);
+  if (note.createdById !== userId) throw new Error('Note is private');
   return noteModel.updateNote(noteId, dto);
 }
 
@@ -35,5 +37,6 @@ export async function deleteNote(noteId: string, userId: string) {
   const note = await noteModel.findNoteById(noteId);
   if (!note) throw new Error('Note not found');
   await requireNonGuest(userId, note.organizationId);
+  if (note.createdById !== userId) throw new Error('Note is private');
   return noteModel.deleteNote(noteId);
 }

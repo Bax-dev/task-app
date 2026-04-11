@@ -31,7 +31,7 @@ export async function handleGetNote(request: NextRequest, noteId: string) {
     return successResponse(note);
   } catch (error: any) {
     if (error.message === 'Note not found') return notFoundResponse();
-    if (error.message === 'Not a member of this organization') return forbiddenResponse();
+    if (error.message === 'Not a member of this organization' || error.message === 'Note is private') return forbiddenResponse();
     return errorResponse(error.message, 500);
   }
 }
@@ -62,7 +62,7 @@ export async function handleUpdateNote(request: NextRequest, noteId: string) {
     return successResponse(note);
   } catch (error: any) {
     if (error.message === 'Note not found') return notFoundResponse();
-    if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
+    if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access' || error.message === 'Note is private') return forbiddenResponse();
     return errorResponse(error.message, 500);
   }
 }
@@ -76,7 +76,7 @@ export async function handleDeleteNote(request: NextRequest, noteId: string) {
     return successResponse({ message: 'Note deleted' });
   } catch (error: any) {
     if (error.message === 'Note not found') return notFoundResponse();
-    if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
+    if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access' || error.message === 'Note is private') return forbiddenResponse();
     return errorResponse(error.message, 500);
   }
 }

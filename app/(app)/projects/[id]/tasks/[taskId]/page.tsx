@@ -1,11 +1,11 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Tags } from 'lucide-react';
+import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Tags, Users, AtSign } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Select,
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useGetTaskQuery, useGetProjectQuery, useGetOrgMembersQuery, useGetOrgIssueTypesQuery, useUpdateTaskMutation, useDeleteTaskMutation, useToggleAssignmentMutation } from '@/store/api';
@@ -46,6 +47,7 @@ import { useAuth } from '@/hooks/use-auth';
 import FileUpload from '@/components/ui/file-upload';
 import SubtaskList from '@/components/tasks/SubtaskList';
 import TaskLabelPicker from '@/components/tasks/TaskLabelPicker';
+import type { Member } from '@/types/organization';
 
 export default function TaskDetailPage({
   params,
@@ -65,6 +67,10 @@ export default function TaskDetailPage({
   const [editDesc, setEditDesc] = useState('');
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [editDueDate, setEditDueDate] = useState('');
+  const [assignSearch, setAssignSearch] = useState('');
+  const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+  const assignInputRef = useRef<HTMLInputElement>(null);
+  const assignDropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: task, isLoading } = useGetTaskQuery(taskId);
 
@@ -112,6 +118,49 @@ export default function TaskDetailPage({
     }
   };
 
+  const assignedIds = useMemo(
+    () => new Set(task?.assignments?.map((a: any) => a.user.id) || []),
+    [task?.assignments]
+  );
+
+  const unassignedMembers = useMemo(
+    () => members.filter((m: any) => !assignedIds.has(m.id)),
+    [members, assignedIds]
+  );
+
+  const filteredUnassignedMembers = useMemo(() => {
+    const search = assignSearch.trim().toLowerCase();
+    return unassignedMembers.filter((member: Member) => {
+      if (!search) return true;
+      return (
+        member.name?.toLowerCase().includes(search) ||
+        member.email.toLowerCase().includes(search)
+      );
+    });
+  }, [assignSearch, unassignedMembers]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (assignDropdownRef.current && !assignDropdownRef.current.contains(event.target as Node)) {
+        setShowAssignDropdown(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleAssignMember = async (userId: string) => {
+    try {
+      await toggleAssignment({ taskId, userId }).unwrap();
+      setAssignSearch('');
+      setShowAssignDropdown(false);
+      toast.success('Member assigned');
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to assign member');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -121,9 +170,6 @@ export default function TaskDetailPage({
   }
 
   if (!task) return null;
-
-  const assignedIds = new Set(task.assignments?.map((a: any) => a.user.id) || []);
-  const unassignedMembers = members.filter((m: any) => !assignedIds.has(m.id));
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-3xl">
@@ -408,7 +454,38 @@ export default function TaskDetailPage({
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
         <h3 className="font-semibold text-foreground mb-4">Assigned Members</h3>
 
-        {task.assignments && task.assignments.length > 0 ? (
+        {!isGuest && (
+          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 mb-4">
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                Assign to whole space
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Everyone in {task.project?.space?.name || 'this space'} will be notified. Turning this on removes member assignees.
+              </p>
+            </div>
+            <Switch
+              checked={Boolean(task.assignToSpace)}
+              disabled={isUpdating || !isAdmin}
+              onCheckedChange={async (checked) => {
+                try {
+                  await updateTask({ id: taskId, assignToSpace: checked }).unwrap();
+                  toast.success(checked ? 'Task assigned to whole space' : 'Whole-space assignment removed');
+                } catch (error: any) {
+                  toast.error(error?.data?.message || error?.message || 'Failed to update assignment');
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {task.assignToSpace ? (
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm mb-4">
+            <Users className="w-4 h-4" />
+            <span className="font-medium">Whole {task.project?.space?.name || 'space'} assigned</span>
+          </div>
+        ) : task.assignments && task.assignments.length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-4">
             {task.assignments.map((a: any) => {
               const canUnassign = isAdmin || a.user.id === currentUser?.id;
@@ -441,22 +518,56 @@ export default function TaskDetailPage({
           <p className="text-sm text-muted-foreground mb-4">No one assigned yet</p>
         )}
 
-        {/* Admin-only: assign from dropdown */}
-        {isAdmin && unassignedMembers.length > 0 && (
-          <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Assign member</Label>
-            <Select onValueChange={(userId) => toggleAssignment({ taskId, userId })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a member to assign" />
-              </SelectTrigger>
-              <SelectContent>
-                {unassignedMembers.map((member: any) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.name || member.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Admin-only: assign from searchable options */}
+        {isAdmin && !task.assignToSpace && unassignedMembers.length > 0 && (
+          <div className="space-y-2" ref={assignDropdownRef}>
+            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Assign member one by one
+            </Label>
+            <div className="relative">
+              <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                ref={assignInputRef}
+                value={assignSearch}
+                onChange={(e) => {
+                  setAssignSearch(e.target.value);
+                  setShowAssignDropdown(true);
+                }}
+                onFocus={() => setShowAssignDropdown(true)}
+                placeholder="Search by name or email"
+                className="pl-8"
+                disabled={isAssigning}
+              />
+            </div>
+            {showAssignDropdown && (
+              <div className="mt-1 bg-card border border-border rounded-lg shadow-lg max-h-56 overflow-auto">
+                {filteredUnassignedMembers.length > 0 ? (
+                  filteredUnassignedMembers.map((member: Member) => (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => handleAssignMember(member.id)}
+                      disabled={isAssigning}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/50 transition-colors text-left disabled:opacity-60"
+                    >
+                      <span className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
+                        {(member.name?.[0] || member.email[0]).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{member.name || 'No name'}</p>
+                        <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground ml-auto capitalize">{member.role.toLowerCase()}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-3 text-sm text-muted-foreground text-center">
+                    No available members match this search
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

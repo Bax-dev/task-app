@@ -10,6 +10,8 @@ export function getNotificationIcon(type: NotificationType): string {
     PROJECT_CREATED: 'folder-plus',
     SPACE_CREATED: 'layout',
     MEMBER_JOINED: 'user-check',
+    DAILY_REPORT_REMINDER: 'calendar-clock',
+    DAILY_REPORT_SUBMITTED: 'calendar-check',
   };
   return icons[type] || 'bell';
 }

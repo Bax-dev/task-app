@@ -1,8 +1,8 @@
 import { TaskStatus, TaskPriority } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
 import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
-import { notifyTaskAssigned, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
-import { sendEmail, buildTaskAssignedEmail } from '@/lib/email';
+import { notifyTaskAssigned, notifyTaskAssignedToMany, notifyTaskOverdue, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
+import { sendEmail, buildTaskAssignedEmail, buildTaskOverdueEmail } from '@/lib/email';
 import * as taskModel from '../models';
 import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
 import { logAudit } from '@/lib/audit';
@@ -31,6 +31,22 @@ async function sendAssignmentEmail(assigneeId: string, task: any, assignerName: 
   sendEmail({ to: assignee.email, subject, html }).catch(() => {});
 }
 
+async function sendOverdueEmail(recipient: { id: string; name: string | null; email: string }, task: any, scopeLabel?: string) {
+  if (!recipient.email) return;
+
+  const { subject, html } = buildTaskOverdueEmail({
+    recipientName: recipient.name || recipient.email,
+    taskTitle: task.title,
+    projectName: task.project.name,
+    taskUrl: `${APP_URL}/projects/${task.projectId}/tasks/${task.id}`,
+    dueDate: task.dueDate ? new Date(task.dueDate).toISOString() : null,
+    description: task.description,
+    scopeLabel,
+  });
+
+  sendEmail({ to: recipient.email, subject, html }).catch(() => {});
+}
+
 async function getProjectOrgId(projectId: string): Promise<string> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -44,6 +60,15 @@ function getOrgIdFromTask(task: { project: { space: { organizationId: string } }
   return task.project.space.organizationId;
 }
 
+async function getOrganizationMemberIds(organizationId: string) {
+  const memberships = await prisma.membership.findMany({
+    where: { organizationId },
+    select: { userId: true },
+  });
+
+  return memberships.map((membership) => membership.userId);
+}
+
 export async function createTask(userId: string, dto: CreateTaskDTO) {
   const orgId = await getProjectOrgId(dto.projectId);
   await requireNonGuest(userId, orgId);
@@ -53,11 +78,41 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
     description: dto.description,
     status: dto.status as TaskStatus,
     priority: dto.priority as TaskPriority,
+    assignToSpace: dto.assignToSpace,
     dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
     projectId: dto.projectId,
     createdById: userId,
     issueTypeId: dto.issueTypeId,
   });
+
+  if (dto.assignToSpace) {
+    const assigner = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    const assignerName = assigner?.name || assigner?.email || 'Someone';
+    const orgMemberIds = (await getOrganizationMemberIds(orgId)).filter((id) => id !== userId);
+
+    if (orgMemberIds.length > 0) {
+      notifyTaskAssignedToMany({
+        assigneeIds: orgMemberIds,
+        taskTitle: task.title,
+        projectName: task.project.name,
+        assignedByName: assignerName,
+        taskLink: `/projects/${task.projectId}/tasks/${task.id}`,
+        spaceName: task.project.space.name,
+      }).catch(() => {});
+    }
+
+    logAudit({
+      userId,
+      organizationId: orgId,
+      description: `assigned task "${task.title}" to the whole ${task.project.space.name} space`,
+      taskId: task.id,
+    });
+    publishEvent(`events:project:${dto.projectId}`, { type: 'TASK_CREATED', tags: ['Tasks'], ids: [`project-${dto.projectId}`] }).catch(() => {});
+    return task;
+  }
 
   // Assign users if provided
   if (dto.assigneeIds && dto.assigneeIds.length > 0) {
@@ -137,6 +192,10 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
   const task = await taskModel.findTaskById(taskId);
   if (!task) throw new Error('Task not found');
 
+  if (task.assignToSpace) {
+    throw new Error('Task is assigned to the whole space');
+  }
+
   const orgId = getOrgIdFromTask(task);
   await requireOrgMembership(dto.userId, orgId);
 
@@ -199,6 +258,7 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
     description: dto.description,
     status: dto.status as TaskStatus | undefined,
     priority: dto.priority as TaskPriority | undefined,
+    assignToSpace: dto.assignToSpace,
     dueDate: dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
     issueTypeId: dto.issueTypeId !== undefined ? (dto.issueTypeId || null) : undefined,
   };
@@ -210,12 +270,18 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
     updateData.rejectionReason = null; // Clear rejection when status changes away
   }
 
+  if (dto.assignToSpace === true) {
+    await taskModel.clearAssignments(taskId);
+  }
+
   const updated = await taskModel.updateTask(taskId, updateData);
 
   // Audit log
   let auditDesc = `updated task "${task.title}"`;
   if (dto.status) auditDesc = `changed status of "${task.title}" to ${dto.status}`;
   else if (dto.priority) auditDesc = `changed priority of "${task.title}" to ${dto.priority}`;
+  else if (dto.assignToSpace === true) auditDesc = `assigned "${task.title}" to the whole ${task.project.space.name} space`;
+  else if (dto.assignToSpace === false && task.assignToSpace) auditDesc = `removed whole-space assignment from "${task.title}"`;
   logAudit({ userId, organizationId: orgId, description: auditDesc, taskId });
 
   // Notify assigned users + task creator about the update
@@ -224,7 +290,25 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
     task.createdById,
   ].filter((id, i, arr) => id !== userId && arr.indexOf(id) === i); // dedupe, exclude self
 
-  if (notifyIds.length > 0) {
+  if (dto.assignToSpace === true) {
+    const updater = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    const updaterName = updater?.name || updater?.email || 'Someone';
+    const orgMemberIds = (await getOrganizationMemberIds(orgId)).filter((id) => id !== userId);
+
+    if (orgMemberIds.length > 0) {
+      notifyTaskAssignedToMany({
+        assigneeIds: orgMemberIds,
+        taskTitle: task.title,
+        projectName: task.project.name,
+        assignedByName: updaterName,
+        taskLink: `/projects/${task.projectId}/tasks/${taskId}`,
+        spaceName: task.project.space.name,
+      }).catch(() => {});
+    }
+  } else if (notifyIds.length > 0) {
     const updater = await prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
@@ -253,4 +337,43 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
   }).catch(() => {});
 
   return updated;
+}
+
+export async function sendOverdueReminders() {
+  const overdueTasks = await taskModel.findOverdueTasks();
+  let remindersSent = 0;
+
+  for (const task of overdueTasks) {
+    const recipients = task.assignToSpace
+      ? task.project.space.organization.memberships.map((membership) => membership.user)
+      : task.assignments.map((assignment) => assignment.user);
+
+    const dedupedRecipients = recipients.filter(
+      (recipient, index, list) => recipient.email && list.findIndex((item) => item.id === recipient.id) === index
+    );
+
+    if (dedupedRecipients.length === 0) {
+      continue;
+    }
+
+    const scopeLabel = task.assignToSpace ? `${task.project.space.name} space` : null;
+
+    await notifyTaskOverdue({
+      userIds: dedupedRecipients.map((recipient) => recipient.id),
+      taskTitle: task.title,
+      projectName: task.project.name,
+      taskLink: `/projects/${task.projectId}/tasks/${task.id}`,
+      scopeLabel: scopeLabel ?? undefined,
+    }).catch(() => {});
+
+    for (const recipient of dedupedRecipients) {
+      await sendOverdueEmail(recipient, task, scopeLabel ?? undefined);
+      remindersSent += 1;
+    }
+  }
+
+  return {
+    tasksChecked: overdueTasks.length,
+    remindersSent,
+  };
 }

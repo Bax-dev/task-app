@@ -29,6 +29,7 @@ export async function createTask(data: {
   description?: string;
   status: TaskStatus;
   priority: TaskPriority;
+  assignToSpace?: boolean;
   dueDate?: Date | null;
   projectId: string;
   createdById: string;
@@ -54,6 +55,7 @@ export async function createTask(data: {
       description: data.description,
       status: data.status,
       priority: data.priority,
+      assignToSpace: data.assignToSpace ?? false,
       dueDate: data.dueDate,
       projectId: data.projectId,
       createdById: data.createdById,
@@ -85,6 +87,10 @@ export async function findTasksByUser(userId: string) {
       OR: [
         { createdById: userId },
         { assignments: { some: { userId } } },
+        {
+          assignToSpace: true,
+          project: { space: { organization: { memberships: { some: { userId } } } } },
+        },
       ],
     },
     include: taskInclude,
@@ -97,6 +103,7 @@ export async function updateTask(id: string, data: {
   description?: string | null;
   status?: TaskStatus;
   priority?: TaskPriority;
+  assignToSpace?: boolean;
   dueDate?: Date | null;
   rejectionReason?: string | null;
   issueTypeId?: string | null;
@@ -130,5 +137,48 @@ export async function unassignUser(taskId: string, userId: string) {
 export async function findAssignment(taskId: string, userId: string) {
   return prisma.taskAssignment.findUnique({
     where: { taskId_userId: { taskId, userId } },
+  });
+}
+
+export async function clearAssignments(taskId: string) {
+  return prisma.taskAssignment.deleteMany({
+    where: { taskId },
+  });
+}
+
+export async function findOverdueTasks(referenceDate = new Date()) {
+  return prisma.task.findMany({
+    where: {
+      dueDate: { lt: referenceDate },
+      status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
+    },
+    include: {
+      ...taskInclude,
+      project: {
+        select: {
+          id: true,
+          name: true,
+          spaceId: true,
+          space: {
+            select: {
+              id: true,
+              name: true,
+              organizationId: true,
+              organization: {
+                select: {
+                  slug: true,
+                  memberships: {
+                    select: {
+                      user: { select: { id: true, name: true, email: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { dueDate: 'asc' },
   });
 }

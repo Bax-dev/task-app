@@ -20,10 +20,8 @@ export const THEME_COLORS: ThemeColor[] = [
   { id: 'violet', label: 'Violet', primary: 'oklch(0.45 0.31 283)', primaryDark: 'oklch(0.65 0.25 283)' },
   { id: 'blue', label: 'Blue', primary: 'oklch(0.45 0.24 260)', primaryDark: 'oklch(0.65 0.22 260)' },
   { id: 'green', label: 'Green', primary: 'oklch(0.45 0.18 155)', primaryDark: 'oklch(0.65 0.2 155)' },
-  { id: 'orange', label: 'Orange', primary: 'oklch(0.55 0.22 50)', primaryDark: 'oklch(0.7 0.2 50)' },
   { id: 'rose', label: 'Rose', primary: 'oklch(0.5 0.22 10)', primaryDark: 'oklch(0.65 0.22 10)' },
   { id: 'teal', label: 'Teal', primary: 'oklch(0.48 0.15 195)', primaryDark: 'oklch(0.65 0.15 195)' },
-  { id: 'amber', label: 'Amber', primary: 'oklch(0.55 0.2 75)', primaryDark: 'oklch(0.7 0.18 75)' },
   { id: 'slate', label: 'Slate', primary: 'oklch(0.35 0.02 260)', primaryDark: 'oklch(0.6 0.02 260)' },
 ];
 
@@ -37,13 +35,21 @@ const DEFAULT_MODULE_CARDS: ModuleCard[] = [
   { id: 'activity', name: 'Activity', href: '/activity-logs', icon: 'Activity', visible: false },
 ];
 
+function sanitizeThemeColorId(themeColorId?: string) {
+  const validIds = new Set(THEME_COLORS.map((theme) => theme.id));
+  return themeColorId && validIds.has(themeColorId) ? themeColorId : 'silver';
+}
+
 interface PreferencesState {
   moduleCards: ModuleCard[];
   themeColorId: string;
+  dueSoonEnabled: boolean;
 }
 
 function loadFromStorage(): PreferencesState {
-  if (typeof window === 'undefined') return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver' };
+  if (typeof window === 'undefined') {
+    return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver', dueSoonEnabled: true };
+  }
   try {
     const saved = localStorage.getItem('taskflow-preferences');
     if (saved) {
@@ -55,11 +61,12 @@ function loadFromStorage(): PreferencesState {
       ];
       return {
         moduleCards: merged,
-        themeColorId: parsed.themeColorId || 'violet',
+        themeColorId: sanitizeThemeColorId(parsed.themeColorId),
+        dueSoonEnabled: parsed.dueSoonEnabled ?? true,
       };
     }
   } catch {}
-  return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver' };
+  return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver', dueSoonEnabled: true };
 }
 
 function saveToStorage(state: PreferencesState) {
@@ -98,13 +105,24 @@ const preferencesSlice = createSlice({
       saveToStorage(state);
     },
     setThemeColor: (state, action: PayloadAction<string>) => {
-      state.themeColorId = action.payload;
+      state.themeColorId = sanitizeThemeColorId(action.payload);
+      saveToStorage(state);
+    },
+    setDueSoonEnabled: (state, action: PayloadAction<boolean>) => {
+      state.dueSoonEnabled = action.payload;
       saveToStorage(state);
     },
   },
 });
 
-export const { renameModuleCard, toggleModuleCard, reorderModuleCards, resetModuleCards, setThemeColor } =
+export const {
+  renameModuleCard,
+  toggleModuleCard,
+  reorderModuleCards,
+  resetModuleCards,
+  setThemeColor,
+  setDueSoonEnabled,
+} =
   preferencesSlice.actions;
 
 export const selectModuleCards = (state: { preferences: PreferencesState }) =>
@@ -115,5 +133,8 @@ export const selectVisibleModuleCards = (state: { preferences: PreferencesState 
 
 export const selectThemeColorId = (state: { preferences: PreferencesState }) =>
   state.preferences.themeColorId;
+
+export const selectDueSoonEnabled = (state: { preferences: PreferencesState }) =>
+  state.preferences.dueSoonEnabled;
 
 export default preferencesSlice.reducer;

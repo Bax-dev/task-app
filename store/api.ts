@@ -21,6 +21,12 @@ import type { Integration } from '@/types/integration';
 import type { SavedFilter } from '@/types/saved-filter';
 import type { Dashboard } from '@/types/dashboard';
 import type { Subtask } from '@/types/subtask';
+import type {
+  DailyReport,
+  DailyReportSchedule,
+  DailyReportsOverview,
+  Weekday,
+} from '@/types/daily-report';
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: '/api',
@@ -136,6 +142,8 @@ export const apiSlice = createApi({
     'SavedFilters',
     'Dashboards',
     'Subtasks',
+    'DailyReports',
+    'DailyReportSchedule',
   ],
   endpoints: (builder) => ({
     // ─── Auth ───
@@ -290,15 +298,80 @@ export const apiSlice = createApi({
       query: (id) => `/tasks/${id}`,
       providesTags: (_, __, id) => [{ type: 'Tasks', id }],
     }),
-    createTask: builder.mutation<Task, { title: string; description?: string; status?: string; priority?: string; dueDate?: string | null; projectId: string; assigneeIds?: string[]; issueTypeId?: string | null }>({
+    createTask: builder.mutation<Task, { title: string; description?: string; status?: string; priority?: string; assignToSpace?: boolean; dueDate?: string | null; projectId: string; assigneeIds?: string[]; issueTypeId?: string | null }>({
       query: (body) => ({ url: '/tasks', method: 'POST', body }),
       invalidatesTags: (_, __, { projectId }) => [
         { type: 'Tasks', id: 'LIST' },
         { type: 'Tasks', id: `project-${projectId}` },
       ],
     }),
-    updateTask: builder.mutation<Task, { id: string; title?: string; description?: string | null; status?: string; priority?: string; dueDate?: string | null; rejectionReason?: string | null; issueTypeId?: string | null }>({
+    updateTask: builder.mutation<Task, { id: string; title?: string; description?: string | null; status?: string; priority?: string; assignToSpace?: boolean; dueDate?: string | null; rejectionReason?: string | null; issueTypeId?: string | null }>({
       query: ({ id, ...body }) => ({ url: `/tasks/${id}`, method: 'PATCH', body }),
+      async onQueryStarted({ id, ...patch }, { dispatch, getState, queryFulfilled }) {
+        const state = getState() as any;
+        const patchResults: { undo: () => void }[] = [];
+
+        const updateTaskInList = (draft: Task[]) => {
+          const task = draft.find((item) => item.id === id);
+          if (!task) return;
+
+          if (patch.title !== undefined) task.title = patch.title;
+          if (patch.description !== undefined) task.description = patch.description;
+          if (patch.status !== undefined) task.status = patch.status as any;
+          if (patch.priority !== undefined) task.priority = patch.priority as any;
+          if (patch.dueDate !== undefined) task.dueDate = patch.dueDate ?? null;
+          if (patch.issueTypeId !== undefined) task.issueTypeId = patch.issueTypeId ?? null;
+          if (patch.assignToSpace !== undefined) task.assignToSpace = patch.assignToSpace;
+          if (patch.rejectionReason !== undefined) task.rejectionReason = patch.rejectionReason ?? null;
+        };
+
+        patchResults.push(
+          dispatch(
+            apiSlice.util.updateQueryData('getUserTasks', undefined, (draft) => {
+              updateTaskInList(draft);
+            })
+          )
+        );
+
+        const projectTaskSubscriptions = state.api?.queries
+          ? Object.values(state.api.queries).filter(
+              (query: any) =>
+                query?.endpointName === 'getProjectTasks' &&
+                query?.originalArgs !== undefined
+            )
+          : [];
+
+        for (const query of projectTaskSubscriptions as any[]) {
+          patchResults.push(
+            dispatch(
+              apiSlice.util.updateQueryData('getProjectTasks', query.originalArgs, (draft) => {
+                updateTaskInList(draft);
+              })
+            )
+          );
+        }
+
+        patchResults.push(
+          dispatch(
+            apiSlice.util.updateQueryData('getTask', id, (draft) => {
+              if (patch.title !== undefined) draft.title = patch.title;
+              if (patch.description !== undefined) draft.description = patch.description;
+              if (patch.status !== undefined) draft.status = patch.status as any;
+              if (patch.priority !== undefined) draft.priority = patch.priority as any;
+              if (patch.dueDate !== undefined) draft.dueDate = patch.dueDate ?? null;
+              if (patch.issueTypeId !== undefined) draft.issueTypeId = patch.issueTypeId ?? null;
+              if (patch.assignToSpace !== undefined) draft.assignToSpace = patch.assignToSpace;
+              if (patch.rejectionReason !== undefined) draft.rejectionReason = patch.rejectionReason ?? null;
+            })
+          )
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResults.forEach((result) => result.undo());
+        }
+      },
       invalidatesTags: (result) =>
         result
           ? [{ type: 'Tasks', id: result.id }, { type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: `project-${result.projectId}` }]
@@ -311,6 +384,10 @@ export const apiSlice = createApi({
     toggleAssignment: builder.mutation<any, { taskId: string; userId: string }>({
       query: ({ taskId, userId }) => ({ url: `/tasks/${taskId}/assign`, method: 'POST', body: { userId } }),
       invalidatesTags: (_, __, { taskId }) => [{ type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: taskId }],
+    }),
+    sendOverdueReminders: builder.mutation<{ tasksChecked: number; remindersSent: number }, void>({
+      query: () => ({ url: '/tasks/overdue-reminders', method: 'POST' }),
+      invalidatesTags: ['Notifications'],
     }),
 
     // ─── Notifications ───
@@ -773,6 +850,38 @@ export const apiSlice = createApi({
     aiChat: builder.mutation<{ response: string }, { message: string; organizationId: string; context?: 'general' | 'tasks' | 'planning' }>({
       query: (body) => ({ url: '/ai/chat', method: 'POST', body }),
     }),
+
+    // ─── Daily Reports ───
+    getDailyReports: builder.query<DailyReportsOverview, { organizationId: string; date?: string }>({
+      query: ({ organizationId, date }) =>
+        `/organizations/${organizationId}/daily-reports${date ? `?date=${date}` : ''}`,
+      providesTags: (_, __, { organizationId, date }) => [
+        { type: 'DailyReports', id: `${organizationId}-${date || 'today'}` },
+        { type: 'DailyReports', id: 'LIST' },
+      ],
+    }),
+    submitDailyReport: builder.mutation<
+      DailyReport,
+      { organizationId: string; reportDate?: string; whatDid: string; blockers?: string | null; goalTomorrow: string }
+    >({
+      query: (body) => ({ url: '/daily-reports', method: 'POST', body }),
+      invalidatesTags: [{ type: 'DailyReports', id: 'LIST' }, 'Notifications'],
+    }),
+    getDailyReportSchedule: builder.query<DailyReportSchedule, string>({
+      query: (organizationId) => `/organizations/${organizationId}/daily-report-schedule`,
+      providesTags: (_, __, organizationId) => [{ type: 'DailyReportSchedule', id: organizationId }],
+    }),
+    updateDailyReportSchedule: builder.mutation<
+      DailyReportSchedule,
+      { organizationId: string; time: string; timezone: string; weekdays: Weekday[]; enabled: boolean }
+    >({
+      query: ({ organizationId, ...body }) => ({
+        url: `/organizations/${organizationId}/daily-report-schedule`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_, __, { organizationId }) => [{ type: 'DailyReportSchedule', id: organizationId }],
+    }),
   }),
 });
 
@@ -819,6 +928,7 @@ export const {
   useUpdateTaskMutation,
   useDeleteTaskMutation,
   useToggleAssignmentMutation,
+  useSendOverdueRemindersMutation,
   // Notifications
   useGetNotificationsQuery,
   useGetUnreadCountQuery,
@@ -935,4 +1045,9 @@ export const {
   useUpdateSubtaskMutation,
   useDeleteSubtaskMutation,
   useReorderSubtasksMutation,
+  // Daily Reports
+  useGetDailyReportsQuery,
+  useSubmitDailyReportMutation,
+  useGetDailyReportScheduleQuery,
+  useUpdateDailyReportScheduleMutation,
 } = apiSlice;

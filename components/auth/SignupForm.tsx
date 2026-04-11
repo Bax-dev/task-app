@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useRegisterMutation } from '@/store/api';
+import { useAcceptInvitationMutation, useRegisterMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -19,10 +19,14 @@ interface FieldErrors {
 }
 
 export default function SignupForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
   const prefillEmail = searchParams.get('email') || '';
+  const inviteToken = useMemo(() => {
+    if (!redirect) return null;
+    const match = redirect.match(/^\/invite\/([^/?#]+)/);
+    return match?.[1] ?? null;
+  }, [redirect]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState(prefillEmail);
@@ -33,6 +37,7 @@ export default function SignupForm() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [register, { isLoading }] = useRegisterMutation();
+  const [acceptInvitation] = useAcceptInvitationMutation();
 
   const passwordStrength = useMemo(() => {
     if (!password) return { score: 0, label: '', color: '' };
@@ -87,6 +92,34 @@ export default function SignupForm() {
     const name = `${firstName.trim()} ${lastName.trim()}`;
     try {
       await register({ name, email: email.trim(), password }).unwrap();
+
+      if (inviteToken) {
+        try {
+          await acceptInvitation(inviteToken).unwrap();
+          toast.success('Account created and invitation accepted!');
+          window.location.href = '/dashboard';
+          return;
+        } catch (inviteError: any) {
+          const status = inviteError?.status;
+          const message =
+            inviteError?.data?.error ||
+            inviteError?.data?.message ||
+            inviteError?.message ||
+            '';
+
+          // Fall back to the invite page when the fresh session is not ready yet.
+          if (status === 401) {
+            window.location.href = redirect || '/dashboard';
+            return;
+          }
+
+          toast.success('Account created successfully!');
+          toast.error(message || 'We could not join the organization automatically. Please continue to accept the invitation.');
+          window.location.href = redirect || '/dashboard';
+          return;
+        }
+      }
+
       toast.success('Account created successfully!');
       window.location.href = redirect || '/dashboard';
     } catch (error: any) {
@@ -104,6 +137,12 @@ export default function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full" noValidate>
+      {inviteToken && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+          Create your account and we&apos;ll take you straight back to the invite to finish joining.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="firstName">First Name</Label>
@@ -234,6 +273,12 @@ export default function SignupForm() {
       <Button type="submit" className="w-full" disabled={isLoading}>
         {isLoading ? 'Creating account...' : 'Create Account'}
       </Button>
+
+      {inviteToken && (
+        <p className="text-center text-xs text-muted-foreground">
+          After signup, we&apos;ll take you straight into your invited organization.
+        </p>
+      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}

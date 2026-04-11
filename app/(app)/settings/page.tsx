@@ -24,10 +24,12 @@ import {
   Sun,
   Moon,
   Monitor,
+  MailWarning,
+  Settings2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
-import { useUpdateProfileMutation, useGetMeQuery } from '@/store/api';
+import { useUpdateProfileMutation, useGetMeQuery, useSendOverdueRemindersMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
@@ -36,10 +38,14 @@ import {
   toggleModuleCard,
   resetModuleCards,
   selectThemeColorId,
+  selectDueSoonEnabled,
   setThemeColor,
+  setDueSoonEnabled,
   THEME_COLORS,
 } from '@/store/slices/preferencesSlice';
 import type { LucideIcon } from 'lucide-react';
+import PageHeader from '@/components/layout/PageHeader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   CheckSquare,
@@ -67,6 +73,7 @@ export default function SettingsPage() {
   const dispatch = useAppDispatch();
   const moduleCards = useAppSelector(selectModuleCards);
   const themeColorId = useAppSelector(selectThemeColorId);
+  const dueSoonEnabled = useAppSelector(selectDueSoonEnabled);
   const [editingCard, setEditingCard] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -83,6 +90,7 @@ export default function SettingsPage() {
   }, [user]);
 
   const [updateProfile, { isLoading: isUpdating }] = useUpdateProfileMutation();
+  const [sendOverdueReminders, { isLoading: isSendingOverdueReminders }] = useSendOverdueRemindersMutation();
 
   const handleUpdate = async () => {
     try {
@@ -170,19 +178,33 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-2xl">
-      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Settings</h1>
-      <p className="text-muted-foreground mb-6 sm:mb-8">Manage your account, appearance, and dashboard</p>
+    <div className="p-4 sm:p-6 md:p-8 max-w-5xl">
+      <PageHeader
+        eyebrow={
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
+            <Settings2 className="h-3.5 w-3.5 text-primary" />
+            Personalize how TaskFlow feels
+          </div>
+        }
+        title="Settings"
+        description="Manage your account, appearance, reminders, and dashboard shortcuts in one place."
+        meta={[
+          { label: 'visible modules', value: moduleCards.filter((card) => card.visible).length },
+          { label: 'theme', value: mounted ? theme || 'system' : 'system' },
+        ]}
+      />
 
       {/* Profile Section */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 my-6">
         <h2 className="text-lg font-semibold text-foreground mb-4">Profile</h2>
 
         {/* Avatar */}
@@ -273,7 +295,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Theme Color */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 mb-6">
         <h2 className="text-lg font-semibold text-foreground mb-1">Theme Color</h2>
         <p className="text-xs text-muted-foreground mb-4">Choose your accent color across the app</p>
 
@@ -304,7 +326,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Appearance Mode */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 mb-6">
         <h2 className="text-lg font-semibold text-foreground mb-1">Appearance</h2>
         <p className="text-xs text-muted-foreground mb-4">Choose between light, dark, or system theme</p>
 
@@ -339,8 +361,77 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-1">Task Preferences</h2>
+            <p className="text-xs text-muted-foreground">
+              Control how the task page prioritizes work.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-border p-4">
+          <div className="pr-4">
+            <p className="text-sm font-medium text-foreground">Show Due Soon prioritization</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Keeps the Due Soon sort option and summary card visible on the task page.
+            </p>
+          </div>
+          <Switch
+            checked={dueSoonEnabled}
+            onCheckedChange={(checked) => dispatch(setDueSoonEnabled(checked))}
+          />
+        </div>
+      </div>
+
+      {/* Reminders */}
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-1">Overdue Reminders</h2>
+            <p className="text-xs text-muted-foreground">
+              Send overdue task emails and in-app notifications to assigned users, or to everyone in the space when whole-space assignment is enabled.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              This action is intended for admins and can be run manually from here.
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-secondary text-foreground flex items-center justify-center shrink-0">
+            <MailWarning className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <Button
+            onClick={async () => {
+              try {
+                const result = await sendOverdueReminders().unwrap();
+                toast.success(`Checked ${result.tasksChecked} overdue task${result.tasksChecked === 1 ? '' : 's'} and sent ${result.remindersSent} reminder${result.remindersSent === 1 ? '' : 's'}`);
+              } catch (error: any) {
+                toast.error(error?.data?.message || error?.message || 'Failed to send overdue reminders');
+              }
+            }}
+            disabled={isSendingOverdueReminders}
+            className="gap-2"
+          >
+            {isSendingOverdueReminders ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Sending Reminders...
+              </>
+            ) : (
+              <>
+                <MailWarning className="w-4 h-4" />
+                Run Overdue Reminders
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
       {/* Dashboard Customization */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Dashboard Modules</h2>

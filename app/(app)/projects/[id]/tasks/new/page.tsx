@@ -37,6 +37,7 @@ import {
   useGetOrgIssueTypesQuery,
   useGetMeQuery,
 } from '@/store/api';
+import { Switch } from '@/components/ui/switch';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   circle: Circle, square: Square, triangle: Triangle, star: Star,
@@ -72,6 +73,7 @@ export default function NewTaskPage({
   const [status, setStatus] = useState('TODO');
   const [dueDate, setDueDate] = useState('');
   const [issueTypeId, setIssueTypeId] = useState('');
+  const [assignToSpace, setAssignToSpace] = useState(false);
 
   // Assignment state
   const [assignedUsers, setAssignedUsers] = useState<Member[]>([]);
@@ -114,6 +116,14 @@ export default function NewTaskPage({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  useEffect(() => {
+    if (assignToSpace && assignedUsers.length > 0) {
+      setAssignedUsers([]);
+      setAssignSearch('');
+      setShowAssignDropdown(false);
+    }
+  }, [assignToSpace, assignedUsers.length]);
 
   const handleAssignInput = (value: string) => {
     setAssignSearch(value);
@@ -188,9 +198,10 @@ export default function NewTaskPage({
         description: description || undefined,
         priority,
         status,
+        assignToSpace,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         projectId,
-        assigneeIds: assignedUsers.length > 0 ? assignedUsers.map((u) => u.id) : undefined,
+        assigneeIds: !assignToSpace && assignedUsers.length > 0 ? assignedUsers.map((u) => u.id) : undefined,
         issueTypeId: issueTypeId || null,
       }).unwrap();
 
@@ -327,96 +338,107 @@ export default function NewTaskPage({
 
         {/* Assign Members */}
         <div className="space-y-2">
-          <Label className="flex items-center gap-1.5">
-            <Users className="w-4 h-4" />
-            Assign Members
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            Type <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">@name</kbd> to assign a member or <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">@all</kbd> to assign everyone
-          </p>
-
-          {/* Assigned badges */}
-          {assignedUsers.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {assignedUsers.map((member) => (
-                <Badge
-                  key={member.id}
-                  variant="secondary"
-                  className="gap-1 pr-1 text-xs"
-                >
-                  <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary flex-shrink-0">
-                    {member.name?.[0]?.toUpperCase() || member.email[0].toUpperCase()}
-                  </span>
-                  {member.name || member.email}
-                  <button
-                    type="button"
-                    onClick={() => removeAssignee(member.id)}
-                    className="ml-0.5 p-0.5 rounded-full hover:bg-muted transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
-              ))}
+          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Users className="w-4 h-4" />
+                Assign to whole space
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Everyone in this task&apos;s space will be notified and member assignees will be cleared.
+              </p>
             </div>
-          )}
+            <Switch checked={assignToSpace} onCheckedChange={setAssignToSpace} />
+          </div>
 
-          {/* @ input with dropdown */}
-          <div className="relative" ref={dropdownRef}>
-            <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              ref={assignInputRef}
-              value={assignSearch}
-              onChange={(e) => handleAssignInput(e.target.value)}
-              onFocus={() => { if (assignSearch.length > 0) setShowAssignDropdown(true); }}
-              placeholder="Type @name or @all..."
-              className="pl-9"
-            />
+          {!assignToSpace && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Type <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">@name</kbd> to assign a member or <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">@all</kbd> to assign everyone
+              </p>
 
-            {showAssignDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-48 overflow-auto">
-                {assignSearch.toLowerCase().startsWith('@al') && assignSearch.toLowerCase() !== '@all' && (
-                  <button
-                    type="button"
-                    onClick={() => handleAssignInput('@all')}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/50 transition-colors text-left border-b border-border"
-                  >
-                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Users className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Assign everyone</p>
-                      <p className="text-xs text-muted-foreground">{members.length} member{members.length !== 1 ? 's' : ''}</p>
-                    </div>
-                  </button>
-                )}
-                {filteredMembers.length > 0 ? (
-                  filteredMembers.map((member: Member) => (
-                    <button
+              {assignedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {assignedUsers.map((member) => (
+                    <Badge
                       key={member.id}
-                      type="button"
-                      onClick={() => addAssignee(member)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/50 transition-colors text-left"
+                      variant="secondary"
+                      className="gap-1 pr-1 text-xs"
                     >
-                      <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[10px] font-bold text-primary">
-                          {member.name?.[0]?.toUpperCase() || member.email[0].toUpperCase()}
-                        </span>
+                      <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary flex-shrink-0">
+                        {member.name?.[0]?.toUpperCase() || member.email[0].toUpperCase()}
+                      </span>
+                      {member.name || member.email}
+                      <button
+                        type="button"
+                        onClick={() => removeAssignee(member.id)}
+                        className="ml-0.5 p-0.5 rounded-full hover:bg-muted transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              <div className="relative" ref={dropdownRef}>
+                <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  ref={assignInputRef}
+                  value={assignSearch}
+                  onChange={(e) => handleAssignInput(e.target.value)}
+                  onFocus={() => { if (assignSearch.length > 0) setShowAssignDropdown(true); }}
+                  placeholder="Type @name or @all..."
+                  className="pl-9"
+                />
+
+                {showAssignDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-48 overflow-auto">
+                    {assignSearch.toLowerCase().startsWith('@al') && assignSearch.toLowerCase() !== '@all' && (
+                      <button
+                        type="button"
+                        onClick={() => handleAssignInput('@all')}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/50 transition-colors text-left border-b border-border"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <Users className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Assign everyone</p>
+                          <p className="text-xs text-muted-foreground">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+                        </div>
+                      </button>
+                    )}
+                    {filteredMembers.length > 0 ? (
+                      filteredMembers.map((member: Member) => (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => addAssignee(member)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/50 transition-colors text-left"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] font-bold text-primary">
+                              {member.name?.[0]?.toUpperCase() || member.email[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{member.name || 'No name'}</p>
+                            <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground ml-auto flex-shrink-0 capitalize">{member.role.toLowerCase()}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-3 text-sm text-muted-foreground text-center">
+                        No matching members
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{member.name || 'No name'}</p>
-                        <p className="text-xs text-muted-foreground truncate">{member.email}</p>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground ml-auto flex-shrink-0 capitalize">{member.role.toLowerCase()}</span>
-                    </button>
-                  ))
-                ) : (
-                  <div className="px-3 py-3 text-sm text-muted-foreground text-center">
-                    No matching members
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* File Attachments */}

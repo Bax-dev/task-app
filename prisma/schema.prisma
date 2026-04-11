@@ -46,6 +46,18 @@ enum NotificationType {
   PROJECT_CREATED
   SPACE_CREATED
   MEMBER_JOINED
+  DAILY_REPORT_REMINDER
+  DAILY_REPORT_SUBMITTED
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }
 
 enum ActivityStatus {
@@ -139,6 +151,8 @@ model User {
   savedFilters         SavedFilter[]    @relation("SavedFilterCreatedBy")
   dashboards           Dashboard[]      @relation("DashboardCreatedBy")
   createdSubtasks      Subtask[]        @relation("SubtaskCreatedBy")
+  dailyReports         DailyReport[]    @relation("DailyReportCreatedBy")
+  createdDailyReportSchedules DailyReportSchedule[] @relation("DailyReportScheduleCreatedBy")
 }
 
 model Organization {
@@ -165,6 +179,8 @@ model Organization {
   savedFilters SavedFilter[]
   dashboards   Dashboard[]
   sprints      Sprint[]
+  dailyReports DailyReport[]
+  dailyReportSchedule DailyReportSchedule?
 
   @@index([createdById])
   @@index([slug])
@@ -249,6 +265,7 @@ model Task {
   description     String?
   status          TaskStatus   @default(TODO)
   priority        TaskPriority @default(MEDIUM)
+  assignToSpace   Boolean      @default(false)
   dueDate         DateTime?
   rejectionReason String?
   projectId       String       @db.Uuid
@@ -332,6 +349,43 @@ model Notification {
   @@index([userId])
   @@index([userId, read])
   @@index([createdAt])
+}
+
+model DailyReportSchedule {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @unique @db.Uuid
+  time           String    @default("17:00")
+  timezone       String    @default("UTC")
+  weekdays       Weekday[]
+  enabled        Boolean   @default(true)
+  createdById    String    @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("DailyReportScheduleCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+}
+
+model DailyReport {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  createdById    String   @db.Uuid
+  reportDate     DateTime @db.Date
+  whatDid        String
+  blockers       String?
+  goalTomorrow   String
+  submittedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("DailyReportCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, createdById, reportDate])
+  @@index([organizationId, reportDate])
+  @@index([createdById, reportDate])
 }
 
 model Note {

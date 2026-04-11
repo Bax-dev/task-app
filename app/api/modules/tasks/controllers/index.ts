@@ -4,6 +4,12 @@ import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createTaskSchema, updateTaskSchema, assignTaskSchema } from '../types';
 import * as taskService from '../services';
+import { prisma } from '@/lib/db/client';
+
+function isTaskSchemaMismatch(error: any) {
+  const message = String(error?.message || '');
+  return message.includes('assignToSpace') || message.includes('column') || message.includes('schema');
+}
 
 export async function handleCreateTask(request: NextRequest) {
   try {
@@ -59,6 +65,9 @@ export async function handleGetUserTasks(request: NextRequest) {
     const tasks = await taskService.getUserTasks(session.userId);
     return successResponse(tasks);
   } catch (error: any) {
+    if (isTaskSchemaMismatch(error)) {
+      return errorResponse('Database schema is out of date. Apply the latest Prisma migration for task assignment.', 500);
+    }
     return errorResponse(error.message, 500);
   }
 }
@@ -110,7 +119,35 @@ export async function handleToggleAssignment(request: NextRequest, taskId: strin
     return successResponse(result);
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();
+    if (error.message === 'Task is assigned to the whole space') return errorResponse(error.message, 400);
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access' || error.message === 'Admin access required') return forbiddenResponse();
+    return errorResponse(error.message, 500);
+  }
+}
+
+export async function handleSendOverdueReminders(request: NextRequest) {
+  try {
+    const cronSecret = process.env.TASKFLOW_CRON_SECRET;
+    const providedSecret = request.headers.get('x-taskflow-cron-secret');
+
+    if (cronSecret && providedSecret === cronSecret) {
+      const result = await taskService.sendOverdueReminders();
+      return successResponse(result);
+    }
+
+    const session = await authenticateRequest(request);
+    if (!session) return unauthorizedResponse();
+
+    const membership = await prisma.membership.findFirst({
+      where: { userId: session.userId, role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    if (!membership) return forbiddenResponse('Admin access required');
+
+    const result = await taskService.sendOverdueReminders();
+    return successResponse(result);
+  } catch (error: any) {
     return errorResponse(error.message, 500);
   }
 }

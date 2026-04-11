@@ -147,6 +147,85 @@ export function buildTaskAssignedEmail(params: {
   };
 }
 
+export function buildTaskOverdueEmail(params: {
+  recipientName: string;
+  taskTitle: string;
+  projectName: string;
+  taskUrl: string;
+  dueDate?: string | null;
+  description?: string | null;
+  scopeLabel?: string | null;
+}): { subject: string; html: string } {
+  const dueLine = params.dueDate
+    ? `<p style="margin: 4px 0; color: #555; font-size: 14px;"><strong>Due:</strong> ${new Date(params.dueDate).toLocaleDateString()}</p>`
+    : '';
+  const descLine = params.description
+    ? `<p style="margin: 12px 0; color: #555; font-size: 14px;">${params.description}</p>`
+    : '';
+  const scopeLine = params.scopeLabel
+    ? `<p style="margin: 4px 0; color: #555; font-size: 14px;"><strong>Assignment:</strong> ${params.scopeLabel}</p>`
+    : '';
+
+  return {
+    subject: `Overdue task: "${params.taskTitle}" - TaskFlow`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Task Overdue</h2>
+        <p>Hi ${params.recipientName},</p>
+        <p>The following task in <strong>${params.projectName}</strong> is overdue:</p>
+        <div style="margin: 16px 0; padding: 16px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #dc2626;">
+          <h3 style="margin: 0 0 8px 0; color: #111;">${params.taskTitle}</h3>
+          ${descLine}
+          ${dueLine}
+          ${scopeLine}
+        </div>
+        <a href="${params.taskUrl}" style="display: inline-block; padding: 12px 24px; background: #dc2626; color: white; text-decoration: none; border-radius: 6px;">
+          Review Task
+        </a>
+        <p style="margin-top: 16px; color: #666; font-size: 14px;">
+          This is an automated overdue reminder from TaskFlow.
+        </p>
+      </div>
+    `,
+  };
+}
+
+export function buildDailyReportReminderEmail(params: {
+  recipientName: string;
+  reportDate: string;
+  link: string;
+}): { subject: string; html: string } {
+  const displayDate = new Date(`${params.reportDate}T00:00:00.000Z`).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  return {
+    subject: `Daily report reminder for ${displayDate} - TaskFlow`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Daily Report Reminder</h2>
+        <p>Hi ${params.recipientName},</p>
+        <p>This is a friendly reminder to submit your daily report for <strong>${displayDate}</strong>.</p>
+        <p>Please share:</p>
+        <ul style="color: #555; font-size: 14px; line-height: 1.8;">
+          <li>What you worked on today</li>
+          <li>Any blockers you're facing</li>
+          <li>Your goal for tomorrow</li>
+        </ul>
+        <a href="${params.link}" style="display: inline-block; padding: 12px 24px; background: #4b5563; color: white; text-decoration: none; border-radius: 6px; margin-top: 8px;">
+          Submit Report
+        </a>
+        <p style="margin-top: 16px; color: #666; font-size: 14px;">
+          This is an automated reminder from TaskFlow.
+        </p>
+      </div>
+    `,
+  };
+}
+
 export function buildInviteEmail(orgName: string, inviteUrl: string): { subject: string; html: string } {
   return {
     subject: `You've been invited to join ${orgName} on TaskFlow`,

@@ -6,3 +6,4 @@ export type { Space, CreateSpaceDTO } from './space';
 export type { Notification, NotificationsResponse } from './notification';
 export type { Invitation, CreateInvitationDTO } from './invitation';
 export type { ActivityLog, Attachment, CreateActivityLogDTO, UpdateActivityLogDTO } from './activity-log';
+export type { DailyReport, DailyReportSchedule, DailyReportsOverview, Weekday } from './daily-report';

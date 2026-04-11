@@ -44,6 +44,30 @@ export async function notifyTaskAssigned(params: {
   return result;
 }
 
+export async function notifyTaskAssignedToMany(params: {
+  assigneeIds: string[];
+  taskTitle: string;
+  projectName: string;
+  assignedByName: string;
+  taskLink: string;
+  spaceName?: string;
+}) {
+  const notifications = params.assigneeIds.map((userId) => ({
+    userId,
+    type: NotificationType.TASK_ASSIGNED as NotificationType,
+    title: 'Task Assigned',
+    message: params.spaceName
+      ? `${params.assignedByName} assigned "${params.taskTitle}" to the whole ${params.spaceName} space in ${params.projectName}`
+      : `${params.assignedByName} assigned you to "${params.taskTitle}" in ${params.projectName}`,
+    link: params.taskLink,
+  }));
+  const result = await notificationModel.createManyNotifications(notifications);
+  for (const userId of params.assigneeIds) {
+    publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  }
+  return result;
+}
+
 export async function notifyInvitationReceived(params: {
   userId: string;
   orgName: string;
@@ -95,6 +119,71 @@ export async function notifyTaskUpdated(params: {
   }));
   const result = await notificationModel.createManyNotifications(notifications);
   for (const userId of params.assigneeIds) {
+    publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  }
+  return result;
+}
+
+export async function notifyDailyReportReminder(params: {
+  userIds: string[];
+  organizationId: string;
+  reportDate: string;
+}) {
+  const link = `/daily-reports?organizationId=${params.organizationId}`;
+  const notifications = params.userIds.map((userId) => ({
+    userId,
+    type: NotificationType.DAILY_REPORT_REMINDER as NotificationType,
+    title: 'Daily Report Reminder',
+    message: `Please submit your daily report for ${params.reportDate}`,
+    link,
+  }));
+  const result = await notificationModel.createManyNotifications(notifications);
+  for (const userId of params.userIds) {
+    publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  }
+  return result;
+}
+
+export async function notifyDailyReportSubmitted(params: {
+  adminIds: string[];
+  memberName: string;
+  reportDate: string;
+  organizationId: string;
+}) {
+  const link = `/daily-reports?organizationId=${params.organizationId}`;
+  const displayDate = new Date(params.reportDate).toISOString().slice(0, 10);
+  const notifications = params.adminIds.map((userId) => ({
+    userId,
+    type: NotificationType.DAILY_REPORT_SUBMITTED as NotificationType,
+    title: 'Daily Report Submitted',
+    message: `${params.memberName} submitted a daily report for ${displayDate}`,
+    link,
+  }));
+  const result = await notificationModel.createManyNotifications(notifications);
+  for (const userId of params.adminIds) {
+    publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
+  }
+  return result;
+}
+
+export async function notifyTaskOverdue(params: {
+  userIds: string[];
+  taskTitle: string;
+  projectName: string;
+  taskLink: string;
+  scopeLabel?: string;
+}) {
+  const notifications = params.userIds.map((userId) => ({
+    userId,
+    type: NotificationType.TASK_UPDATED as NotificationType,
+    title: 'Task Overdue',
+    message: params.scopeLabel
+      ? `"${params.taskTitle}" is overdue in ${params.projectName} for ${params.scopeLabel}`
+      : `"${params.taskTitle}" is overdue in ${params.projectName}`,
+    link: params.taskLink,
+  }));
+  const result = await notificationModel.createManyNotifications(notifications);
+  for (const userId of params.userIds) {
     publishEvent(`events:user:${userId}`, { type: 'NOTIFICATION', tags: ['Notifications'] }).catch(() => {});
   }
   return result;

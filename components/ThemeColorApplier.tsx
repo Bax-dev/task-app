@@ -8,7 +8,7 @@ export default function ThemeColorApplier() {
   const themeColorId = useAppSelector(selectThemeColorId);
 
   useEffect(() => {
-    const theme = THEME_COLORS.find((t) => t.id === themeColorId);
+    const theme = THEME_COLORS.find((t) => t.id === themeColorId) || THEME_COLORS[0];
     if (!theme) return;
 
     const root = document.documentElement;
@@ -17,6 +17,8 @@ export default function ThemeColorApplier() {
       const primary = isDark ? theme.primaryDark : theme.primary;
       root.style.setProperty('--primary', primary);
       root.style.setProperty('--ring', primary);
+      root.style.setProperty('--accent', isDark ? 'oklch(0.25 0.005 240)' : 'oklch(0.93 0.004 240)');
+      root.style.setProperty('--accent-foreground', isDark ? 'oklch(0.88 0.006 240)' : 'oklch(0.2 0.01 240)');
 
       const hueMatch = primary.match(/oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/);
       if (hueMatch) {

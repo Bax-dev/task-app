@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, LayoutGrid, Loader2, Trash2, Search, Columns,
   ArrowLeft, Calendar, AlertTriangle, ChevronRight, Users, Pencil, GripVertical,
@@ -341,6 +341,11 @@ function BoardDetailView({
   // Drag state
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
+  const [optimisticTasks, setOptimisticTasks] = useState<Task[]>([]);
+
+  useEffect(() => {
+    setOptimisticTasks(tasks);
+  }, [tasks]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -366,15 +371,15 @@ function BoardDetailView({
     const map: Record<string, Task[]> = {};
     for (const col of columns) {
       const status = resolveColumnStatus(col.name);
-      map[col.id] = tasks.filter((t) => t.status === status);
+      map[col.id] = optimisticTasks.filter((t) => t.status === status);
     }
     const matchedStatuses = new Set(columns.map((c) => resolveColumnStatus(c.name)));
-    const unmatched = tasks.filter((t) => !matchedStatuses.has(t.status));
+    const unmatched = optimisticTasks.filter((t) => !matchedStatuses.has(t.status));
     if (unmatched.length > 0 && columns.length > 0) {
       map[columns[0].id] = [...(map[columns[0].id] ?? []), ...unmatched];
     }
     return map;
-  }, [columns, tasks]);
+  }, [columns, optimisticTasks]);
 
   // ── Drag handlers ─────────────────────────────────────────────��─────────────
 
@@ -424,10 +429,18 @@ function BoardDetailView({
     const newStatus = columnStatusMap[targetColumnId];
     if (!newStatus || task.status === newStatus) return;
 
+    const previousTasks = optimisticTasks;
+    setOptimisticTasks((current) =>
+      current.map((item) =>
+        item.id === task.id ? { ...item, status: newStatus } : item
+      )
+    );
+
     try {
       await updateTask({ id: task.id, status: newStatus }).unwrap();
       toast.success('Task moved');
     } catch (err: any) {
+      setOptimisticTasks(previousTasks);
       toast.error(err?.data?.message || 'Failed to move task');
     }
   };
@@ -466,7 +479,7 @@ function BoardDetailView({
     );
   }
 
-  const totalTasks = tasks.length;
+  const totalTasks = optimisticTasks.length;
 
   return (
     <div className="flex flex-col h-full">

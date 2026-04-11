@@ -31,9 +31,9 @@ export async function findNoteById(id: string) {
   });
 }
 
-export async function findNotesByOrganization(organizationId: string) {
+export async function findNotesByOrganization(organizationId: string, createdById: string) {
   return prisma.note.findMany({
-    where: { organizationId },
+    where: { organizationId, createdById },
     include: {
       createdBy: { select: { id: true, name: true, email: true } },
       attachments: {
