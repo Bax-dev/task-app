@@ -171,6 +171,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          TASKFLOW_CRON_SECRET: ${{ secrets.TASKFLOW_CRON_SECRET }}
           GH_PAT: ${{ secrets.GH_PAT }}
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -178,7 +179,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
           command_timeout: 10m
-          envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,EMAIL_FROM,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_GOOGLE_CLIENT_ID,GH_PAT
+          envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,EMAIL_FROM,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_GOOGLE_CLIENT_ID,TASKFLOW_CRON_SECRET,GH_PAT
           script: |
             REPO_URL="https://${GH_PAT}@github.com/Bax-dev/task-app.git"
 
@@ -197,7 +198,7 @@ jobs:
             git pull origin main
 
             echo "==> Writing .env file..."
-            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nEMAIL_FROM="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nGOOGLE_CLIENT_ID="%s"\nGOOGLE_CLIENT_SECRET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNEXT_PUBLIC_GOOGLE_CLIENT_ID="%s"\nNODE_ENV="production"\n' "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${EMAIL_FROM}" "${REDIS_URL}" "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" "${GOOGLE_CLIENT_ID}" "${GOOGLE_CLIENT_SECRET}" "${NEXT_PUBLIC_APP_URL}" "${NEXT_PUBLIC_GOOGLE_CLIENT_ID}" > .env
+            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nEMAIL_FROM="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nGOOGLE_CLIENT_ID="%s"\nGOOGLE_CLIENT_SECRET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNEXT_PUBLIC_GOOGLE_CLIENT_ID="%s"\nTASKFLOW_CRON_SECRET="%s"\nNODE_ENV="production"\n' "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${EMAIL_FROM}" "${REDIS_URL}" "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" "${GOOGLE_CLIENT_ID}" "${GOOGLE_CLIENT_SECRET}" "${NEXT_PUBLIC_APP_URL}" "${NEXT_PUBLIC_GOOGLE_CLIENT_ID}" "${TASKFLOW_CRON_SECRET}" > .env
 
             echo "==> Configuring AWS credentials for Bedrock..."
             mkdir -p ~/.aws
@@ -224,5 +225,8 @@ jobs:
 
             echo "==> Saving PM2 process list..."
             pm2 save
+
+            echo "==> Setting up reminder cron job..."
+            (crontab -l 2>/dev/null | grep -v 'daily-reports/reminders'; echo "* * * * * curl -s -X POST ${NEXT_PUBLIC_APP_URL}/api/daily-reports/reminders -H 'x-taskflow-cron-secret: ${TASKFLOW_CRON_SECRET}' >> /var/log/reminder-cron.log 2>&1") | crontab -
 
             echo "==> Deploy complete!"
