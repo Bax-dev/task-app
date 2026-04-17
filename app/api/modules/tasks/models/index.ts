@@ -89,7 +89,14 @@ export async function findTasksByUser(userId: string) {
         { assignments: { some: { userId } } },
         {
           assignToSpace: true,
-          project: { space: { organization: { memberships: { some: { userId } } } } },
+          project: {
+            space: {
+              OR: [
+                { organization: { memberships: { some: { userId, role: 'ADMIN' } } } },
+                { members: { some: { userId } } },
+              ],
+            },
+          },
         },
       ],
     },
@@ -164,14 +171,10 @@ export async function findOverdueTasks(referenceDate = new Date()) {
               id: true,
               name: true,
               organizationId: true,
-              organization: {
+              organization: { select: { slug: true } },
+              members: {
                 select: {
-                  slug: true,
-                  memberships: {
-                    select: {
-                      user: { select: { id: true, name: true, email: true } },
-                    },
-                  },
+                  user: { select: { id: true, name: true, email: true } },
                 },
               },
             },

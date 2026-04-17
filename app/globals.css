@@ -154,13 +154,37 @@
   to { transform: rotate(360deg); }
 }
 
+/* Display font utility classes */
+.font-display {
+  font-family: var(--font-display), 'Inter', system-ui, -apple-system, sans-serif;
+}
+.font-serif-display {
+  font-family: var(--font-serif), Georgia, 'Times New Roman', serif;
+}
+
+/* Default headings to the display font app-wide; override locally where needed (tiptap, serif hero). */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), 'Inter', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Make placeholders feel truly like placeholders — thin, dim, and non-bold —
+   even when the underlying input uses a heavier font-weight for its value. */
+input::placeholder,
+textarea::placeholder,
+[contenteditable][data-placeholder]:empty::before {
+  font-weight: 400;
+  opacity: 1;
+  color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+}
+
 /* Tiptap editor styles */
 .tiptap {
   outline: none;
 }
-.tiptap h1 { font-size: 2em; font-weight: 700; margin: 0.67em 0; }
-.tiptap h2 { font-size: 1.5em; font-weight: 600; margin: 0.5em 0; }
-.tiptap h3 { font-size: 1.25em; font-weight: 600; margin: 0.4em 0; }
+.tiptap h1 { font-family: inherit; font-size: 2em; font-weight: 700; margin: 0.67em 0; letter-spacing: normal; }
+.tiptap h2 { font-family: inherit; font-size: 1.5em; font-weight: 600; margin: 0.5em 0; letter-spacing: normal; }
+.tiptap h3 { font-family: inherit; font-size: 1.25em; font-weight: 600; margin: 0.4em 0; letter-spacing: normal; }
 .tiptap p { margin: 0.5em 0; }
 .tiptap ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
 .tiptap ol { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }

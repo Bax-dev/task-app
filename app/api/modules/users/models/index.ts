@@ -36,6 +36,23 @@ export async function findUserByEmail(email: string) {
   });
 }
 
+export async function findUserPreferences(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { preferences: true },
+  });
+  return user?.preferences ?? null;
+}
+
+export async function updateUserPreferences(userId: string, preferences: any) {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { preferences },
+    select: { preferences: true },
+  });
+  return user.preferences;
+}
+
 export async function findMembership(userId: string, organizationId: string) {
   return prisma.membership.findUnique({
     where: { userId_organizationId: { userId, organizationId } },

@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import {
-  Loader2,
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -10,6 +9,7 @@ import {
   BarChart3,
   Target,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   BarChart,
   Bar,
@@ -97,8 +97,9 @@ export default function ReportsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }

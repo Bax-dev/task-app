@@ -22,7 +22,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, ArrowLeft, Loader2, X, AtSign, Users, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Pencil, Trash2, Check } from 'lucide-react';
+import { Plus, ArrowLeft, X, AtSign, Users, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Pencil, Trash2, Check } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertDialog,
@@ -136,8 +137,9 @@ export default function ProjectPage({
 
   if (projectLoading || tasksLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }

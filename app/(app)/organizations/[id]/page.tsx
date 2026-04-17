@@ -12,10 +12,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Users, FolderOpen, Loader2, Mail, Layout } from 'lucide-react';
+import { Plus, Users, FolderOpen, Mail, Layout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetOrganizationQuery, useGetOrgSpacesQuery, useGetOrgMembersQuery, useCreateSpaceMutation } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const SPACE_COLORS = [
   '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
@@ -59,8 +60,9 @@ export default function OrgDetailPage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }

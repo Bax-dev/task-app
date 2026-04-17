@@ -9,7 +9,10 @@ export async function createSpace(data: {
   createdById: string;
 }) {
   return prisma.space.create({
-    data,
+    data: {
+      ...data,
+      members: { create: { userId: data.createdById } },
+    },
     include: {
       _count: { select: { projects: true } },
       createdBy: { select: { id: true, name: true, email: true } },
@@ -35,14 +38,44 @@ export async function findSpaceById(id: string) {
   });
 }
 
-export async function findSpacesByOrganization(organizationId: string) {
+export async function findSpacesByOrganization(organizationId: string, spaceIds?: string[]) {
   return prisma.space.findMany({
-    where: { organizationId },
+    where: {
+      organizationId,
+      ...(spaceIds ? { id: { in: spaceIds } } : {}),
+    },
     include: {
       _count: { select: { projects: true } },
       createdBy: { select: { id: true, name: true, email: true } },
     },
     orderBy: { createdAt: 'asc' },
+  });
+}
+
+export async function findSpaceMembers(spaceId: string) {
+  return prisma.spaceMember.findMany({
+    where: { spaceId },
+    include: {
+      user: { select: { id: true, name: true, email: true, avatar: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
+export async function addSpaceMember(spaceId: string, userId: string) {
+  return prisma.spaceMember.upsert({
+    where: { spaceId_userId: { spaceId, userId } },
+    create: { spaceId, userId },
+    update: {},
+    include: {
+      user: { select: { id: true, name: true, email: true, avatar: true } },
+    },
+  });
+}
+
+export async function removeSpaceMember(spaceId: string, userId: string) {
+  return prisma.spaceMember.delete({
+    where: { spaceId_userId: { spaceId, userId } },
   });
 }
 

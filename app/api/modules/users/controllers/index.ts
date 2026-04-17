@@ -3,7 +3,7 @@ import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { requireOrgMembership, requireOrgAdmin } from '@/lib/guards/org-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { updateUserSchema, addMemberSchema } from '../types';
+import { updateUserSchema, addMemberSchema, updatePreferencesSchema } from '../types';
 import * as userService from '../services';
 
 export async function handleGetProfile(request: NextRequest) {
@@ -29,6 +29,34 @@ export async function handleUpdateProfile(request: NextRequest) {
 
     const user = await userService.updateUserProfile(session.userId, validation.data);
     return successResponse(user);
+  } catch (error: any) {
+    return errorResponse(error.message, 500);
+  }
+}
+
+export async function handleGetPreferences(request: NextRequest) {
+  try {
+    const session = await authenticateRequest(request);
+    if (!session) return unauthorizedResponse();
+
+    const prefs = await userService.getUserPreferences(session.userId);
+    return successResponse(prefs);
+  } catch (error: any) {
+    return errorResponse(error.message, 500);
+  }
+}
+
+export async function handleUpdatePreferences(request: NextRequest) {
+  try {
+    const session = await authenticateRequest(request);
+    if (!session) return unauthorizedResponse();
+
+    const body = await request.json();
+    const validation = validateBody(updatePreferencesSchema, body);
+    if (!validation.success) return errorResponse(validation.error);
+
+    const prefs = await userService.updateUserPreferences(session.userId, validation.data);
+    return successResponse(prefs);
   } catch (error: any) {
     return errorResponse(error.message, 500);
   }

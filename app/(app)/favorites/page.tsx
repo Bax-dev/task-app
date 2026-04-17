@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import {
-  Loader2,
   Star,
   FolderOpen,
   CheckSquare,
@@ -11,6 +10,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useGetUserTasksQuery, useGetProjectsQuery } from '@/store/api';
 
 const priorityColors: Record<string, string> = {
@@ -86,8 +86,9 @@ export default function FavoritesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }

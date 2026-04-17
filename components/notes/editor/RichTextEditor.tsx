@@ -41,9 +41,17 @@ interface RichTextEditorProps {
   content: string;
   onChange: (html: string) => void;
   editable?: boolean;
+  placeholder?: string;
+  minHeight?: number;
 }
 
-export default function RichTextEditor({ content, onChange, editable = true }: RichTextEditorProps) {
+export default function RichTextEditor({
+  content,
+  onChange,
+  editable = true,
+  placeholder = 'Start writing...',
+  minHeight = 400,
+}: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -51,7 +59,7 @@ export default function RichTextEditor({ content, onChange, editable = true }: R
       }),
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Placeholder.configure({ placeholder: 'Start writing...' }),
+      Placeholder.configure({ placeholder }),
       Highlight.configure({ multicolor: true }),
       TextStyle,
       Color,
@@ -68,7 +76,8 @@ export default function RichTextEditor({ content, onChange, editable = true }: R
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[400px] px-4 py-3',
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none px-4 py-3',
+        style: `min-height: ${minHeight}px;`,
       },
     },
   });

@@ -24,8 +24,12 @@ export const updateTaskSchema = z.object({
 });
 
 export const assignTaskSchema = z.object({
-  userId: z.string().uuid('Invalid user ID'),
-});
+  userId: z.string().uuid('Invalid user ID').optional(),
+  userIds: z.array(z.string().uuid('Invalid user ID')).min(1).optional(),
+}).refine(
+  (data) => Boolean(data.userId) !== Boolean(data.userIds?.length),
+  'Provide either userId or userIds'
+);
 
 export type CreateTaskDTO = z.infer<typeof createTaskSchema>;
 export type UpdateTaskDTO = z.infer<typeof updateTaskSchema>;

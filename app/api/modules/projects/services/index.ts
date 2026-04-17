@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/client';
 import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireSpaceAccess } from '@/lib/guards/space-guard';
 import * as projectModel from '../models';
 import { CreateProjectDTO, UpdateProjectDTO } from '../types';
 
@@ -15,6 +16,7 @@ async function getOrgIdFromSpace(spaceId: string): Promise<string> {
 export async function createProject(userId: string, dto: CreateProjectDTO) {
   const orgId = await getOrgIdFromSpace(dto.spaceId);
   await requireNonGuest(userId, orgId);
+  await requireSpaceAccess(userId, dto.spaceId);
 
   return projectModel.createProject({
     name: dto.name,
@@ -28,13 +30,12 @@ export async function getProject(projectId: string, userId: string) {
   const project = await projectModel.findProjectById(projectId);
   if (!project) throw new Error('Project not found');
 
-  await requireOrgMembership(userId, project.space.organizationId);
+  await requireSpaceAccess(userId, project.space.id);
   return project;
 }
 
 export async function getSpaceProjects(spaceId: string, userId: string) {
-  const orgId = await getOrgIdFromSpace(spaceId);
-  await requireOrgMembership(userId, orgId);
+  await requireSpaceAccess(userId, spaceId);
   return projectModel.findProjectsBySpace(spaceId);
 }
 
@@ -47,6 +48,7 @@ export async function updateProject(projectId: string, userId: string, dto: Upda
   if (!project) throw new Error('Project not found');
 
   await requireNonGuest(userId, project.space.organizationId);
+  await requireSpaceAccess(userId, project.space.id);
   return projectModel.updateProject(projectId, dto);
 }
 

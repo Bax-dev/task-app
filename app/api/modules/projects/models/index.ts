@@ -42,9 +42,10 @@ export async function findProjectsByUser(userId: string) {
   return prisma.project.findMany({
     where: {
       space: {
-        organization: {
-          memberships: { some: { userId } },
-        },
+        OR: [
+          { organization: { memberships: { some: { userId, role: 'ADMIN' } } } },
+          { members: { some: { userId } } },
+        ],
       },
     },
     include: {

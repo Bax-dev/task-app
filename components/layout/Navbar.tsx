@@ -16,6 +16,8 @@ import {
   ChevronRight,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Settings,
@@ -53,10 +55,14 @@ const BREADCRUMB_LABELS: Record<string, string> = {
 
 export default function Navbar({
   onMenuToggle,
+  onDesktopToggle,
+  sidebarCollapsed,
   onSearchClick,
   onAiClick,
 }: {
   onMenuToggle?: () => void;
+  onDesktopToggle?: () => void;
+  sidebarCollapsed?: boolean;
   onSearchClick?: () => void;
   onAiClick?: () => void;
 }) {
@@ -112,6 +118,15 @@ export default function Navbar({
       {onMenuToggle && (
         <button onClick={onMenuToggle} className="rounded-md p-2 text-muted-foreground md:hidden">
           <Menu className="h-5 w-5" />
+        </button>
+      )}
+      {onDesktopToggle && (
+        <button
+          onClick={onDesktopToggle}
+          className="hidden md:inline-flex rounded-md p-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
       )}
 

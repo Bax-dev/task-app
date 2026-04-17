@@ -100,7 +100,11 @@ export async function getInvitationByToken(token: string) {
   if (!invitation) {
     throw new Error('Invitation not found');
   }
-  return invitation;
+  const existingUser = await prisma.user.findUnique({
+    where: { email: invitation.email },
+    select: { id: true },
+  });
+  return { ...invitation, userExists: !!existingUser };
 }
 
 export async function getOrganizationInvitations(organizationId: string) {

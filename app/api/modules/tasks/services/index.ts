@@ -1,6 +1,7 @@
 import { TaskStatus, TaskPriority } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
-import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireSpaceAccess } from '@/lib/guards/space-guard';
 import { notifyTaskAssigned, notifyTaskAssignedToMany, notifyTaskOverdue, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
 import { sendEmail, buildTaskAssignedEmail, buildTaskOverdueEmail } from '@/lib/email';
 import * as taskModel from '../models';
@@ -28,7 +29,9 @@ async function sendAssignmentEmail(assigneeId: string, task: any, assignerName: 
     description: task.description,
   });
 
-  sendEmail({ to: assignee.email, subject, html }).catch(() => {});
+  sendEmail({ to: assignee.email, subject, html }).catch((err) =>
+    console.error(`[task-email] assignment email failed for ${assignee.email}:`, err?.message || err),
+  );
 }
 
 async function sendOverdueEmail(recipient: { id: string; name: string | null; email: string }, task: any, scopeLabel?: string) {
@@ -47,31 +50,48 @@ async function sendOverdueEmail(recipient: { id: string; name: string | null; em
   sendEmail({ to: recipient.email, subject, html }).catch(() => {});
 }
 
-async function getProjectOrgId(projectId: string): Promise<string> {
+async function getProjectScope(projectId: string): Promise<{ orgId: string; spaceId: string }> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { space: { select: { organizationId: true } } },
+    select: { spaceId: true, space: { select: { organizationId: true } } },
   });
   if (!project) throw new Error('Project not found');
-  return project.space.organizationId;
+  return { orgId: project.space.organizationId, spaceId: project.spaceId };
 }
 
 function getOrgIdFromTask(task: { project: { space: { organizationId: string } } }): string {
   return task.project.space.organizationId;
 }
 
-async function getOrganizationMemberIds(organizationId: string) {
-  const memberships = await prisma.membership.findMany({
-    where: { organizationId },
+function getSpaceIdFromTask(task: { project: { spaceId: string } }): string {
+  return task.project.spaceId;
+}
+
+async function getSpaceMemberIds(spaceId: string) {
+  const members = await prisma.spaceMember.findMany({
+    where: { spaceId },
     select: { userId: true },
   });
+  return members.map((m) => m.userId);
+}
 
-  return memberships.map((membership) => membership.userId);
+async function emailSpaceAssignmentFanout(spaceId: string, task: any, assignerName: string, excludeUserId: string) {
+  const members = await prisma.spaceMember.findMany({
+    where: { spaceId, userId: { not: excludeUserId } },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+  for (const m of members) {
+    if (!m.user.email) continue;
+    sendAssignmentEmail(m.user.id, task, assignerName).catch((err) =>
+      console.error(`[task-email] space-assignment email failed for ${m.user.email}:`, err?.message || err),
+    );
+  }
 }
 
 export async function createTask(userId: string, dto: CreateTaskDTO) {
-  const orgId = await getProjectOrgId(dto.projectId);
+  const { orgId, spaceId } = await getProjectScope(dto.projectId);
   await requireNonGuest(userId, orgId);
+  await requireSpaceAccess(userId, spaceId);
 
   const task = await taskModel.createTask({
     title: dto.title,
@@ -91,17 +111,18 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
       select: { name: true, email: true },
     });
     const assignerName = assigner?.name || assigner?.email || 'Someone';
-    const orgMemberIds = (await getOrganizationMemberIds(orgId)).filter((id) => id !== userId);
+    const spaceMemberIds = (await getSpaceMemberIds(spaceId)).filter((id) => id !== userId);
 
-    if (orgMemberIds.length > 0) {
+    if (spaceMemberIds.length > 0) {
       notifyTaskAssignedToMany({
-        assigneeIds: orgMemberIds,
+        assigneeIds: spaceMemberIds,
         taskTitle: task.title,
         projectName: task.project.name,
         assignedByName: assignerName,
         taskLink: `/projects/${task.projectId}/tasks/${task.id}`,
         spaceName: task.project.space.name,
       }).catch(() => {});
+      emailSpaceAssignmentFanout(spaceId, task, assignerName, userId);
     }
 
     logAudit({
@@ -124,7 +145,7 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
 
     for (const assigneeId of dto.assigneeIds) {
       try {
-        await requireOrgMembership(assigneeId, orgId);
+        await requireSpaceAccess(assigneeId, spaceId);
         await taskModel.assignUser(task.id, assigneeId);
 
         if (assigneeId !== userId) {
@@ -138,7 +159,7 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
           sendAssignmentEmail(assigneeId, task, assignerName).catch(() => {});
         }
       } catch {
-        // Skip users who aren't org members
+        // Skip users who aren't members of this space
       }
     }
 
@@ -158,13 +179,13 @@ export async function getTask(taskId: string, userId: string) {
   const task = await taskModel.findTaskById(taskId);
   if (!task) throw new Error('Task not found');
 
-  await requireOrgMembership(userId, getOrgIdFromTask(task));
+  await requireSpaceAccess(userId, getSpaceIdFromTask(task));
   return task;
 }
 
 export async function getProjectTasks(projectId: string, userId: string) {
-  const orgId = await getProjectOrgId(projectId);
-  await requireOrgMembership(userId, orgId);
+  const { spaceId } = await getProjectScope(projectId);
+  await requireSpaceAccess(userId, spaceId);
   return taskModel.findTasksByProject(projectId);
 }
 
@@ -178,6 +199,7 @@ export async function deleteTask(taskId: string, userId: string) {
 
   const orgId = getOrgIdFromTask(task);
   await requireNonGuest(userId, orgId);
+  await requireSpaceAccess(userId, getSpaceIdFromTask(task));
 
   if (task.createdById !== userId) {
     await requireOrgAdmin(userId, orgId);
@@ -191,35 +213,39 @@ export async function deleteTask(taskId: string, userId: string) {
 export async function toggleAssignment(taskId: string, userId: string, dto: AssignTaskDTO) {
   const task = await taskModel.findTaskById(taskId);
   if (!task) throw new Error('Task not found');
+  const targetUserId = dto.userId;
+  if (!targetUserId) throw new Error('User ID is required');
 
   if (task.assignToSpace) {
     throw new Error('Task is assigned to the whole space');
   }
 
   const orgId = getOrgIdFromTask(task);
-  await requireOrgMembership(dto.userId, orgId);
+  const spaceId = getSpaceIdFromTask(task);
+  await requireSpaceAccess(userId, spaceId);
+  await requireSpaceAccess(targetUserId, spaceId);
 
-  const existing = await taskModel.findAssignment(taskId, dto.userId);
+  const existing = await taskModel.findAssignment(taskId, targetUserId);
   if (existing) {
     // Allow members to unassign themselves; require admin to unassign others
-    if (dto.userId !== userId) {
+    if (targetUserId !== userId) {
       await requireOrgAdmin(userId, orgId);
     } else {
       await requireNonGuest(userId, orgId);
     }
-    await taskModel.unassignUser(taskId, dto.userId);
+    await taskModel.unassignUser(taskId, targetUserId);
     logAudit({ userId, organizationId: orgId, description: `unassigned a member from "${task.title}"`, taskId });
     publishEvent(`events:project:${task.projectId}`, { type: 'TASK_UPDATED', tags: ['Tasks'], ids: [taskId, `project-${task.projectId}`] }).catch(() => {});
-    return { assigned: false, userId: dto.userId };
+    return { assigned: false, userId: targetUserId };
   }
 
   // Assigning requires admin
   await requireOrgAdmin(userId, orgId);
 
-  const assignment = await taskModel.assignUser(taskId, dto.userId);
+  const assignment = await taskModel.assignUser(taskId, targetUserId);
 
   // Send notification to the assigned user (not to yourself)
-  if (dto.userId !== userId) {
+  if (targetUserId !== userId) {
     const assigner = await prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
@@ -227,18 +253,99 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
     const assignerName = assigner?.name || assigner?.email || 'Someone';
 
     notifyTaskAssigned({
-      assigneeId: dto.userId,
+      assigneeId: targetUserId,
       taskTitle: task.title,
       projectName: task.project.name,
       assignedByName: assignerName,
       taskLink: `/projects/${task.projectId}/tasks/${taskId}`,
     }).catch(() => {}); // fire-and-forget
-    sendAssignmentEmail(dto.userId, task, assignerName).catch(() => {});
+    sendAssignmentEmail(targetUserId, task, assignerName).catch(() => {});
   }
 
   logAudit({ userId, organizationId: orgId, description: `assigned a member to "${task.title}"`, taskId });
   publishEvent(`events:project:${task.projectId}`, { type: 'TASK_UPDATED', tags: ['Tasks'], ids: [taskId, `project-${task.projectId}`] }).catch(() => {});
-  return { assigned: true, userId: dto.userId, user: assignment.user };
+  return { assigned: true, userId: targetUserId, user: assignment.user };
+}
+
+export async function assignUsers(taskId: string, userId: string, userIds: string[]) {
+  const task = await taskModel.findTaskById(taskId);
+  if (!task) throw new Error('Task not found');
+
+  if (task.assignToSpace) {
+    throw new Error('Task is assigned to the whole space');
+  }
+
+  const orgId = getOrgIdFromTask(task);
+  const spaceId = getSpaceIdFromTask(task);
+  await requireSpaceAccess(userId, spaceId);
+  await requireOrgAdmin(userId, orgId);
+
+  const requestedIds = [...new Set(userIds)];
+  if (requestedIds.length === 0) {
+    return { assigned: false, userIds: [], users: [] };
+  }
+
+  const [spaceMemberIds, existingAssignments] = await Promise.all([
+    getSpaceMemberIds(spaceId),
+    prisma.taskAssignment.findMany({
+      where: { taskId, userId: { in: requestedIds } },
+      select: { userId: true },
+    }),
+  ]);
+
+  const allowedIds = new Set(spaceMemberIds);
+  const existingIds = new Set(existingAssignments.map((assignment) => assignment.userId));
+  const assignableIds = requestedIds.filter((id) => allowedIds.has(id) && !existingIds.has(id));
+
+  if (assignableIds.length === 0) {
+    return { assigned: false, userIds: [], users: [] };
+  }
+
+  await prisma.taskAssignment.createMany({
+    data: assignableIds.map((assigneeId) => ({ taskId, userId: assigneeId })),
+    skipDuplicates: true,
+  });
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: assignableIds } },
+    select: { id: true, name: true, email: true },
+  });
+
+  const notifyIds = assignableIds.filter((assigneeId) => assigneeId !== userId);
+  if (notifyIds.length > 0) {
+    const assigner = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    const assignerName = assigner?.name || assigner?.email || 'Someone';
+
+    notifyTaskAssignedToMany({
+      assigneeIds: notifyIds,
+      taskTitle: task.title,
+      projectName: task.project.name,
+      assignedByName: assignerName,
+      taskLink: `/projects/${task.projectId}/tasks/${taskId}`,
+      spaceName: task.project.space.name,
+    }).catch(() => {});
+
+    for (const assigneeId of notifyIds) {
+      sendAssignmentEmail(assigneeId, task, assignerName).catch(() => {});
+    }
+  }
+
+  logAudit({
+    userId,
+    organizationId: orgId,
+    description: `assigned ${assignableIds.length} member${assignableIds.length === 1 ? '' : 's'} to "${task.title}"`,
+    taskId,
+  });
+  publishEvent(`events:project:${task.projectId}`, {
+    type: 'TASK_UPDATED',
+    tags: ['Tasks'],
+    ids: [taskId, `project-${task.projectId}`],
+  }).catch(() => {});
+
+  return { assigned: true, userIds: assignableIds, users };
 }
 
 export async function updateTask(taskId: string, userId: string, dto: UpdateTaskDTO) {
@@ -246,7 +353,9 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
   if (!task) throw new Error('Task not found');
 
   const orgId = getOrgIdFromTask(task);
+  const spaceId = getSpaceIdFromTask(task);
   await requireNonGuest(userId, orgId);
+  await requireSpaceAccess(userId, spaceId);
 
   // Only admins can reject tasks
   if (dto.status === 'REJECTED') {
@@ -296,17 +405,18 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
       select: { name: true, email: true },
     });
     const updaterName = updater?.name || updater?.email || 'Someone';
-    const orgMemberIds = (await getOrganizationMemberIds(orgId)).filter((id) => id !== userId);
+    const spaceMemberIds = (await getSpaceMemberIds(spaceId)).filter((id) => id !== userId);
 
-    if (orgMemberIds.length > 0) {
+    if (spaceMemberIds.length > 0) {
       notifyTaskAssignedToMany({
-        assigneeIds: orgMemberIds,
+        assigneeIds: spaceMemberIds,
         taskTitle: task.title,
         projectName: task.project.name,
         assignedByName: updaterName,
         taskLink: `/projects/${task.projectId}/tasks/${taskId}`,
         spaceName: task.project.space.name,
       }).catch(() => {});
+      emailSpaceAssignmentFanout(spaceId, task, updaterName, userId);
     }
   } else if (notifyIds.length > 0) {
     const updater = await prisma.user.findUnique({
@@ -345,7 +455,7 @@ export async function sendOverdueReminders() {
 
   for (const task of overdueTasks) {
     const recipients = task.assignToSpace
-      ? task.project.space.organization.memberships.map((membership) => membership.user)
+      ? task.project.space.members.map((member) => member.user)
       : task.assignments.map((assignment) => assignment.user);
 
     const dedupedRecipients = recipients.filter(

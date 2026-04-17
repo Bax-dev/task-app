@@ -12,6 +12,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAcceptInvitationMutation, useGetInvitationByTokenQuery } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -57,10 +58,31 @@ export default function AcceptInvitePage({
     }
   }, [isLoggedIn, invitation, token, acceptInvitation, router]);
 
+  // New user (no account yet) → send straight to signup with invite context.
+  useEffect(() => {
+    if (authLoading || isLoading) return;
+    if (isLoggedIn) return;
+    if (!invitation) return;
+    if (invitation.status !== 'PENDING') return;
+    if (new Date(invitation.expiresAt) < new Date()) return;
+    if (invitation.userExists !== false) return;
+
+    const params = new URLSearchParams({
+      redirect: `/invite/${token}`,
+      email: invitation.email,
+      invitedTo: invitation.organization?.name || '',
+      inviteRole: invitation.role || 'Member',
+    });
+    router.replace(`/signup?${params.toString()}`);
+  }, [authLoading, isLoading, isLoggedIn, invitation, token, router]);
+
   if (isLoading || authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen px-4 py-10">
+        <div className="mx-auto max-w-lg space-y-4">
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-64 rounded-2xl" />
+        </div>
       </div>
     );
   }
@@ -80,6 +102,18 @@ export default function AcceptInvitePage({
   const isExpired = new Date(invitation.expiresAt) < new Date();
   const isAccepted = invitation.status === 'ACCEPTED';
   const inviteUrl = `/invite/${token}`;
+
+  // New user path is handled by the redirect effect above; show a skeleton while it runs.
+  if (!isLoggedIn && !isExpired && !isAccepted && invitation.userExists === false) {
+    return (
+      <div className="min-h-screen px-4 py-10">
+        <div className="mx-auto max-w-lg space-y-4">
+          <Skeleton className="h-16 rounded-2xl" />
+          <Skeleton className="h-64 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   if (isExpired || isAccepted) {
     return (

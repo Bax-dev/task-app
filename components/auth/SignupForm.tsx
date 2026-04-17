@@ -1,14 +1,22 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { useAcceptInvitationMutation, useRegisterMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, Sparkles, UserPlus } from 'lucide-react';
 
 interface FieldErrors {
   firstName?: string;
@@ -22,11 +30,17 @@ export default function SignupForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect');
   const prefillEmail = searchParams.get('email') || '';
+  const invitedTo = searchParams.get('invitedTo') || '';
+  const inviteRole = searchParams.get('inviteRole') || '';
   const inviteToken = useMemo(() => {
     if (!redirect) return null;
     const match = redirect.match(/^\/invite\/([^/?#]+)/);
     return match?.[1] ?? null;
   }, [redirect]);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  useEffect(() => {
+    if (inviteToken && invitedTo) setInviteDialogOpen(true);
+  }, [inviteToken, invitedTo]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState(prefillEmail);
@@ -137,9 +151,54 @@ export default function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full" noValidate>
-      {inviteToken && (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-          Create your account and we&apos;ll take you straight back to the invite to finish joining.
+      {inviteToken && invitedTo && (
+        <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                <Sparkles className="h-7 w-7 text-primary" />
+              </div>
+              <DialogTitle className="text-center text-xl">
+                You&apos;re invited to {invitedTo}
+              </DialogTitle>
+              <DialogDescription className="text-center">
+                Create your account to join <span className="font-semibold text-foreground">{invitedTo}</span>
+                {inviteRole ? <> as a <span className="font-semibold text-foreground">{inviteRole.toLowerCase()}</span></> : null}.
+                We&apos;ll add you to the organization automatically once you&apos;re signed up.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-primary" />
+                <span className="font-medium text-foreground">{prefillEmail}</span>
+              </div>
+              <p className="mt-2 text-xs">This invitation was sent to this email. Use it to sign up.</p>
+            </div>
+            <DialogFooter className="sm:justify-center">
+              <Button className="w-full gap-2" onClick={() => setInviteDialogOpen(false)}>
+                <UserPlus className="h-4 w-4" />
+                Continue to sign up
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {inviteToken && invitedTo && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                Joining {invitedTo}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Finish creating your account to accept the invitation.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -187,9 +246,15 @@ export default function SignupForm() {
           value={email}
           onChange={(e) => { setEmail(e.target.value); if (touched.email) validateField('email'); }}
           onBlur={() => handleBlur('email')}
-          disabled={isLoading}
-          className={`placeholder:opacity-50 ${fieldErrorClass('email')}`}
+          disabled={isLoading || !!inviteToken}
+          readOnly={!!inviteToken}
+          className={`placeholder:opacity-50 ${fieldErrorClass('email')} ${inviteToken ? 'bg-muted/60 cursor-not-allowed' : ''}`}
         />
+        {inviteToken && (
+          <p className="text-xs text-muted-foreground">
+            Locked to the address the invitation was sent to.
+          </p>
+        )}
         {touched.email && errors.email && (
           <p className="text-xs text-red-500">{errors.email}</p>
         )}

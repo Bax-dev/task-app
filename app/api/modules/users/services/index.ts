@@ -1,5 +1,5 @@
 import * as userModel from '../models';
-import { UpdateUserDTO, AddMemberDTO } from '../types';
+import { UpdateUserDTO, AddMemberDTO, UpdatePreferencesDTO } from '../types';
 import { logAudit } from '@/lib/audit';
 
 export async function getUserProfile(userId: string) {
@@ -12,6 +12,16 @@ export async function updateUserProfile(userId: string, dto: UpdateUserDTO) {
   const user = await userModel.findUserById(userId);
   if (!user) throw new Error('User not found');
   return userModel.updateUser(userId, dto);
+}
+
+export async function getUserPreferences(userId: string) {
+  return userModel.findUserPreferences(userId);
+}
+
+export async function updateUserPreferences(userId: string, dto: UpdatePreferencesDTO) {
+  const current = (await userModel.findUserPreferences(userId)) as Record<string, any> | null;
+  const merged = { ...(current || {}), ...dto };
+  return userModel.updateUserPreferences(userId, merged);
 }
 
 export async function getOrganizationMembers(organizationId: string) {

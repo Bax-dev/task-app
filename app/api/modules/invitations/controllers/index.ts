@@ -63,6 +63,7 @@ export async function handleGetInvitation(request: NextRequest, token: string) {
       role: invitation.role,
       status: invitation.status,
       expiresAt: invitation.expiresAt,
+      userExists: invitation.userExists,
     });
   } catch (error: any) {
     if (error.message === 'Invitation not found') return errorResponse(error.message, 404);

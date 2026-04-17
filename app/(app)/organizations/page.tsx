@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, Users, Loader2, Trash2, Building2, Search } from 'lucide-react';
+import { Plus, Users, Trash2, Building2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ViewToggle } from '@/components/ui/view-toggle';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setView, selectView } from '@/store/slices/viewSlice';
@@ -42,8 +43,9 @@ export default function OrganizationsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
