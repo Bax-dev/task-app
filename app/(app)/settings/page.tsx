@@ -26,6 +26,8 @@ import {
   Monitor,
   MailWarning,
   Settings2,
+  Plus,
+  X,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
@@ -38,8 +40,11 @@ import {
   toggleModuleCard,
   resetModuleCards,
   selectThemeColorId,
+  selectCustomThemeColors,
   selectDueSoonEnabled,
   setThemeColor,
+  addCustomThemeColor,
+  removeCustomThemeColor,
   setDueSoonEnabled,
   THEME_COLORS,
 } from '@/store/slices/preferencesSlice';
@@ -73,9 +78,13 @@ export default function SettingsPage() {
   const dispatch = useAppDispatch();
   const moduleCards = useAppSelector(selectModuleCards);
   const themeColorId = useAppSelector(selectThemeColorId);
+  const customThemeColors = useAppSelector(selectCustomThemeColors);
   const dueSoonEnabled = useAppSelector(selectDueSoonEnabled);
   const [editingCard, setEditingCard] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [customHex, setCustomHex] = useState('#3b82f6');
+  const [customLabel, setCustomLabel] = useState('');
+  const [customFormOpen, setCustomFormOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -322,6 +331,121 @@ export default function SettingsPage() {
               </button>
             );
           })}
+        </div>
+
+        {/* Custom saved colors + add */}
+        <div className="mt-5 pt-4 border-t border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Custom colors</p>
+              <p className="text-xs text-muted-foreground">Save your own hex codes for reuse</p>
+            </div>
+            <Button
+              size="sm"
+              variant={customFormOpen ? 'ghost' : 'outline'}
+              className="h-8 gap-1.5"
+              onClick={() => setCustomFormOpen((v) => !v)}
+            >
+              {customFormOpen ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              {customFormOpen ? 'Close' : 'Add'}
+            </Button>
+          </div>
+
+          {customFormOpen && (
+            <div className="flex flex-wrap items-end gap-2 mb-3 p-3 rounded-lg border border-border bg-muted/30">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Pick</Label>
+                <input
+                  type="color"
+                  value={customHex}
+                  onChange={(e) => setCustomHex(e.target.value)}
+                  className="h-9 w-12 rounded border border-border cursor-pointer p-0.5 bg-background"
+                />
+              </div>
+              <div className="space-y-1 flex-1 min-w-[120px]">
+                <Label className="text-[11px] text-muted-foreground">Hex</Label>
+                <Input
+                  value={customHex}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '' || v.startsWith('#')) setCustomHex(v);
+                    else setCustomHex('#' + v.replace(/^#/, ''));
+                  }}
+                  placeholder="#3b82f6"
+                  className="h-9 font-mono text-xs"
+                  maxLength={7}
+                />
+              </div>
+              <div className="space-y-1 flex-1 min-w-[120px]">
+                <Label className="text-[11px] text-muted-foreground">Name (optional)</Label>
+                <Input
+                  value={customLabel}
+                  onChange={(e) => setCustomLabel(e.target.value)}
+                  placeholder="e.g. Brand"
+                  className="h-9 text-xs"
+                  maxLength={30}
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!/^#[0-9a-fA-F]{6}$/.test(customHex)) {
+                    toast.error('Enter a valid hex code like #3b82f6');
+                    return;
+                  }
+                  dispatch(addCustomThemeColor({ hex: customHex, label: customLabel }));
+                  toast.success('Color saved');
+                  setCustomLabel('');
+                  setCustomFormOpen(false);
+                }}
+                className="h-9"
+              >
+                Save
+              </Button>
+            </div>
+          )}
+
+          {customThemeColors.length > 0 ? (
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
+              {customThemeColors.map((color) => {
+                const isActive = themeColorId === color.id;
+                return (
+                  <div key={color.id} className="relative group">
+                    <button
+                      onClick={() => dispatch(setThemeColor(color.id))}
+                      className="flex flex-col items-center gap-1.5 w-full"
+                    >
+                      <div
+                        className={`w-10 h-10 rounded-full border-2 transition-all flex items-center justify-center ${
+                          isActive ? 'border-foreground scale-110 shadow-md' : 'border-transparent hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: color.primary }}
+                      >
+                        {isActive && <Check className="w-4 h-4 text-white" />}
+                      </div>
+                      <span className={`text-[10px] truncate w-full text-center ${isActive ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                        {color.label}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        dispatch(removeCustomThemeColor(color.id));
+                        toast.success('Color removed');
+                      }}
+                      className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border rounded-full p-0.5 text-muted-foreground hover:text-destructive"
+                      title="Remove"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            !customFormOpen && (
+              <p className="text-xs text-muted-foreground">No saved custom colors yet.</p>
+            )
+          )}
         </div>
       </div>
 

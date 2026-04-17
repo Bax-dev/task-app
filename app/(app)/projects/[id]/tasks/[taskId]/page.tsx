@@ -5,7 +5,29 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Loader2, Trash2, X, AlertTriangle, Pencil, Check, Circle, Square, Triangle, Star, Zap, Bug, Bookmark, Flag, Target, Layers, Tags, Users, AtSign } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  ArrowLeft,
+  Trash2,
+  X,
+  AlertTriangle,
+  Pencil,
+  Check,
+  Circle,
+  Square,
+  Triangle,
+  Star,
+  Zap,
+  Bug,
+  Bookmark,
+  Flag,
+  Target,
+  Layers,
+  Tags,
+  Users,
+  AtSign,
+  Calendar,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Select,
@@ -15,15 +37,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { useGetTaskQuery, useGetProjectQuery, useGetOrgMembersQuery, useGetOrgIssueTypesQuery, useUpdateTaskMutation, useDeleteTaskMutation, useToggleAssignmentMutation } from '@/store/api';
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  circle: Circle, square: Square, triangle: Triangle, star: Star,
-  zap: Zap, bug: Bug, bookmark: Bookmark, flag: Flag, target: Target, layers: Layers,
-};
+import {
+  useBulkAssignTaskMembersMutation,
+  useDeleteTaskMutation,
+  useGetOrgIssueTypesQuery,
+  useGetOrgMembersQuery,
+  useGetProjectQuery,
+  useGetSpaceMembersQuery,
+  useGetTaskQuery,
+  useToggleAssignmentMutation,
+  useUpdateTaskMutation,
+} from '@/store/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +75,26 @@ import SubtaskList from '@/components/tasks/SubtaskList';
 import TaskLabelPicker from '@/components/tasks/TaskLabelPicker';
 import type { Member } from '@/types/organization';
 
+const ICON_MAP: Record<string, LucideIcon> = {
+  circle: Circle, square: Square, triangle: Triangle, star: Star,
+  zap: Zap, bug: Bug, bookmark: Bookmark, flag: Flag, target: Target, layers: Layers,
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  TODO: 'bg-blue-500',
+  IN_PROGRESS: 'bg-amber-500',
+  DONE: 'bg-green-500',
+  CANCELLED: 'bg-zinc-400',
+  REJECTED: 'bg-red-500',
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  LOW: 'text-blue-600',
+  MEDIUM: 'text-muted-foreground',
+  HIGH: 'text-orange-600',
+  URGENT: 'text-red-600',
+};
+
 export default function TaskDetailPage({
   params,
 }: {
@@ -73,13 +119,13 @@ export default function TaskDetailPage({
   const assignDropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: task, isLoading } = useGetTaskQuery(taskId);
-
   const { data: project } = useGetProjectQuery(projectId);
 
   const orgId = project?.space?.organizationId || project?.space?.organization?.id;
 
   const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
   const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId!, { skip: !orgId });
+  const { data: rawSpaceMembers = [] } = useGetSpaceMembersQuery(task?.project?.spaceId!, { skip: !task?.project?.spaceId });
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isAdmin = currentUserRole === 'ADMIN';
@@ -88,44 +134,32 @@ export default function TaskDetailPage({
   const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
   const [toggleAssignment, { isLoading: isAssigning }] = useToggleAssignmentMutation();
-
-  const handleStatusChange = async (value: string) => {
-    if (value === 'REJECTED') {
-      setRejectionReason('');
-      setRejectionDialogOpen(true);
-    } else {
-      try {
-        await updateTask({ id: taskId, status: value }).unwrap();
-        toast.success('Task updated');
-      } catch (error: any) {
-        toast.error(error?.data?.message || error?.message || 'Failed to update');
-      }
-    }
-  };
-
-  const handleRejectionSubmit = async () => {
-    if (!rejectionReason.trim()) {
-      toast.error('Please provide a rejection reason');
-      return;
-    }
-    try {
-      await updateTask({ id: taskId, status: 'REJECTED', rejectionReason: rejectionReason.trim() }).unwrap();
-      setRejectionDialogOpen(false);
-      setRejectionReason('');
-      toast.success('Task updated');
-    } catch (error: any) {
-      toast.error(error?.data?.message || error?.message || 'Failed to update');
-    }
-  };
+  const [bulkAssignTaskMembers, { isLoading: isBulkAssigning }] = useBulkAssignTaskMembersMutation();
 
   const assignedIds = useMemo(
     () => new Set(task?.assignments?.map((a: any) => a.user.id) || []),
     [task?.assignments]
   );
 
+  const memberRoleMap = useMemo(
+    () => new Map(members.map((member: Member) => [member.id, member.role])),
+    [members]
+  );
+
+  const spaceMembers = useMemo(
+    () =>
+      rawSpaceMembers.map((member: any) => ({
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        role: memberRoleMap.get(member.user.id) || 'MEMBER',
+      })),
+    [memberRoleMap, rawSpaceMembers]
+  );
+
   const unassignedMembers = useMemo(
-    () => members.filter((m: any) => !assignedIds.has(m.id)),
-    [members, assignedIds]
+    () => spaceMembers.filter((m: Member) => !assignedIds.has(m.id)),
+    [spaceMembers, assignedIds]
   );
 
   const filteredUnassignedMembers = useMemo(() => {
@@ -139,143 +173,169 @@ export default function TaskDetailPage({
     });
   }, [assignSearch, unassignedMembers]);
 
+  const assignSearchValue = assignSearch.trim().toLowerCase();
+  const assignmentOptions = useMemo(() => {
+    const options: Array<{ id: 'space' | 'all'; label: string }> = [];
+    const search = assignSearchValue;
+    const matches = (value: string) =>
+      !search || value.toLowerCase().includes(search) || `@${value.toLowerCase()}`.includes(search);
+
+    if (matches('space')) {
+      options.push({ id: 'space', label: `Assign whole space` });
+    }
+    if (unassignedMembers.length > 0 && matches('all')) {
+      options.push({ id: 'all', label: `Assign all members` });
+    }
+    return options;
+  }, [assignSearchValue, unassignedMembers.length]);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (assignDropdownRef.current && !assignDropdownRef.current.contains(event.target as Node)) {
         setShowAssignDropdown(false);
       }
     }
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isAssignActionBusy = isUpdating || isAssigning || isBulkAssigning;
+
+  const updateField = async (patch: Record<string, any>, successMessage?: string) => {
+    try {
+      await updateTask({ id: taskId, ...patch }).unwrap();
+      if (successMessage) toast.success(successMessage);
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
+    }
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    if (newStatus === 'REJECTED' && task?.status !== 'REJECTED') {
+      setRejectionReason(task?.rejectionReason || '');
+      setRejectionDialogOpen(true);
+      return;
+    }
+    updateField({ status: newStatus }, 'Status updated');
+  };
+
+  const handleRejectionSubmit = async () => {
+    if (!rejectionReason.trim()) {
+      toast.error('Provide a rejection reason');
+      return;
+    }
+    try {
+      await updateTask({ id: taskId, status: 'REJECTED', rejectionReason: rejectionReason.trim() }).unwrap();
+      setRejectionDialogOpen(false);
+      setRejectionReason('');
+      toast.success('Task rejected');
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
+    }
+  };
+
+  const ensureIndividualAssignments = async () => {
+    if (!task?.assignToSpace) return;
+    await updateTask({ id: taskId, assignToSpace: false }).unwrap();
+  };
+
+  const resetAssignPicker = () => {
+    setAssignSearch('');
+    setShowAssignDropdown(false);
+  };
+
   const handleAssignMember = async (userId: string) => {
     try {
+      await ensureIndividualAssignments();
       await toggleAssignment({ taskId, userId }).unwrap();
-      setAssignSearch('');
-      setShowAssignDropdown(false);
-      toast.success('Member assigned');
+      resetAssignPicker();
     } catch (error: any) {
-      toast.error(error?.data?.message || error?.message || 'Failed to assign member');
+      toast.error(error?.data?.message || error?.message || 'Failed to assign');
+    }
+  };
+
+  const handleAssignOption = async (optionId: 'space' | 'all') => {
+    try {
+      if (optionId === 'space') {
+        await updateTask({ id: taskId, assignToSpace: true }).unwrap();
+        resetAssignPicker();
+        toast.success('Whole space assigned');
+        return;
+      }
+      if (unassignedMembers.length === 0) return;
+      await ensureIndividualAssignments();
+      await bulkAssignTaskMembers({ taskId, userIds: unassignedMembers.map((m) => m.id) }).unwrap();
+      resetAssignPicker();
+      toast.success(`Assigned ${unassignedMembers.length}`);
+    } catch (error: any) {
+      toast.error(error?.data?.message || error?.message || 'Failed to update');
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TaskDetailSkeleton />;
   }
 
   if (!task) return null;
 
+  const selectedIssueType = task.issueType;
+
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-3xl">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <Link
         href={`/projects/${projectId}`}
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-3"
       >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Project
+        <ArrowLeft className="w-3.5 h-3.5" />
+        {task.project?.name || 'Project'}
       </Link>
 
-      {task.taskNumber && (
-        <span className="inline-block text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded mb-3">
-          TSK-{task.project?.space?.organization?.slug?.toUpperCase() || 'ORG'}-{task.taskNumber}
-        </span>
-      )}
-
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
+      {/* Header bar */}
+      <div className="flex items-start gap-3 mb-5">
+        <span className={`mt-2 h-2.5 w-2.5 rounded-full flex-shrink-0 ${STATUS_COLORS[task.status] || 'bg-slate-400'}`} />
         <div className="flex-1 min-w-0">
-          {editingTitle ? (
-            <div className="flex items-center gap-2">
-              <Input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="text-2xl font-bold"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    if (editTitle.trim() && editTitle.trim() !== task.title) {
-                      updateTask({ id: taskId, title: editTitle.trim() }).unwrap()
-                        .then(() => { toast.success('Title updated'); setEditingTitle(false); })
-                        .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
-                    } else { setEditingTitle(false); }
-                  }
-                  if (e.key === 'Escape') setEditingTitle(false);
-                }}
-              />
-              <Button size="sm" onClick={() => {
-                if (editTitle.trim() && editTitle.trim() !== task.title) {
-                  updateTask({ id: taskId, title: editTitle.trim() }).unwrap()
-                    .then(() => { toast.success('Title updated'); setEditingTitle(false); })
-                    .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
-                } else { setEditingTitle(false); }
-              }} disabled={isUpdating}>
-                <Check className="w-4 h-4 mr-1" /> Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditingTitle(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <div className="group flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{task.title}</h1>
-              {!isGuest && (
-                <button onClick={() => { setEditTitle(task.title); setEditingTitle(true); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+          {task.taskNumber && (
+            <span className="inline-block text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded mb-1.5">
+              {task.project?.space?.organization?.slug?.toUpperCase() || 'ORG'}-{task.taskNumber}
+            </span>
           )}
-
-          {editingDesc ? (
-            <div className="mt-2 space-y-2">
-              <Textarea
-                value={editDesc}
-                onChange={(e) => setEditDesc(e.target.value)}
-                rows={3}
-                autoFocus
-                placeholder="Add a description..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setEditingDesc(false);
-                }}
-              />
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => {
-                  updateTask({ id: taskId, description: editDesc.trim() || null }).unwrap()
-                    .then(() => { toast.success('Description updated'); setEditingDesc(false); })
-                    .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
-                }}>Save</Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditingDesc(false)}>Cancel</Button>
-              </div>
-            </div>
+          {editingTitle ? (
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="text-xl sm:text-2xl font-semibold h-auto py-1 border-0 shadow-none focus-visible:ring-1 px-2 -mx-2"
+              autoFocus
+              onBlur={() => {
+                if (editTitle.trim() && editTitle.trim() !== task.title) {
+                  updateField({ title: editTitle.trim() }, 'Title updated');
+                }
+                setEditingTitle(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') setEditingTitle(false);
+              }}
+            />
           ) : (
-            <div className="group flex items-start gap-2 mt-2">
-              <p className="text-muted-foreground">{task.description || (isGuest ? '' : 'No description')}</p>
-              {!isGuest && (
-                <button onClick={() => { setEditDesc(task.description || ''); setEditingDesc(true); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground mt-0.5">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            <h1
+              className={`text-xl sm:text-2xl font-semibold tracking-tight text-foreground ${!isGuest ? 'cursor-text hover:bg-secondary/30 rounded px-2 -mx-2' : ''}`}
+              onClick={() => { if (!isGuest) { setEditTitle(task.title); setEditingTitle(true); } }}
+            >
+              {task.title}
+            </h1>
           )}
         </div>
         {!isGuest && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                <Trash2 className="w-5 h-5" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0">
+                <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                <AlertDialogTitle>Delete task?</AlertDialogTitle>
+                <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -289,7 +349,7 @@ export default function TaskDetailPage({
                       toast.error(error?.data?.message || error?.message || 'Failed to delete');
                     }
                   }}
-                  className="bg-muted-foreground text-background hover:bg-muted-foreground/90"
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   Delete
                 </AlertDialogAction>
@@ -299,362 +359,382 @@ export default function TaskDetailPage({
         )}
       </div>
 
-      {/* Rejection Reason Banner */}
       {task.rejectionReason && (
-        <div className="flex items-start gap-3 p-4 mb-6 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
-          <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold text-sm">Task Rejected</p>
-            <p className="text-sm mt-1">{task.rejectionReason}</p>
+        <div className="flex items-start gap-2.5 p-3 mb-5 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold">Rejected</p>
+            <p className="mt-0.5">{task.rejectionReason}</p>
           </div>
         </div>
       )}
 
-      {/* Status & Priority */}
-      {!isGuest && (
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select value={task.status} onValueChange={handleStatusChange}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TODO">To Do</SelectItem>
-                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                <SelectItem value="DONE">Done</SelectItem>
-                <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                {isAdmin && <SelectItem value="REJECTED">Rejected</SelectItem>}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Priority</Label>
-            <Select value={task.priority} onValueChange={async (value) => {
-              try {
-                await updateTask({ id: taskId, priority: value }).unwrap();
-                toast.success('Task updated');
-              } catch (error: any) {
-                toast.error(error?.data?.message || error?.message || 'Failed to update');
-              }
-            }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="LOW">Low</SelectItem>
-                <SelectItem value="MEDIUM">Medium</SelectItem>
-                <SelectItem value="HIGH">High</SelectItem>
-                <SelectItem value="URGENT">Urgent</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
+      <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+        {/* Main content */}
+        <div className="space-y-5 min-w-0">
+          {/* Description */}
+          <section>
+            <Label className="text-xs text-muted-foreground">Description</Label>
+            {editingDesc ? (
+              <div className="mt-1.5 space-y-2">
+                <Textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={4}
+                  autoFocus
+                  placeholder="Add description…"
+                  onKeyDown={(e) => { if (e.key === 'Escape') setEditingDesc(false); }}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={() => {
+                    updateField({ description: editDesc.trim() || null }, 'Description updated');
+                    setEditingDesc(false);
+                  }}>Save</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingDesc(false)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isGuest}
+                onClick={() => { setEditDesc(task.description || ''); setEditingDesc(true); }}
+                className={`mt-1.5 w-full text-left rounded-lg border border-transparent p-3 min-h-[60px] text-sm ${
+                  task.description ? 'text-foreground' : 'text-muted-foreground italic'
+                } ${!isGuest ? 'hover:border-border hover:bg-secondary/20' : ''}`}
+              >
+                {task.description || 'Add description…'}
+              </button>
+            )}
+          </section>
 
-      {/* Read-only status/priority for guests */}
-      {isGuest && (
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <p className="text-sm font-medium px-3 py-2 rounded-md border border-input bg-muted/50">{task.status}</p>
-          </div>
-          <div className="space-y-2">
-            <Label>Priority</Label>
-            <p className="text-sm font-medium px-3 py-2 rounded-md border border-input bg-muted/50">{task.priority}</p>
-          </div>
-        </div>
-      )}
+          {/* Subtasks */}
+          <section className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Subtasks</h3>
+            <SubtaskList taskId={taskId} taskTitle={task?.title} taskDescription={task?.description || undefined} readOnly={isGuest} />
+          </section>
 
-      {/* Issue Type */}
-      {!isGuest && issueTypes.length > 0 && (
-        <div className="mb-8">
-          <div className="space-y-2">
-            <Label>Issue Type</Label>
-            <Select
-              value={task.issueTypeId || ''}
-              onValueChange={async (value) => {
-                try {
-                  await updateTask({ id: taskId, issueTypeId: value || null }).unwrap();
-                  toast.success('Issue type updated');
-                } catch (error: any) {
-                  toast.error(error?.data?.message || error?.message || 'Failed to update');
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select issue type">
-                  {task.issueType ? (() => {
-                    const Icon = ICON_MAP[task.issueType.icon] || Circle;
-                    return (
-                      <span className="flex items-center gap-2">
-                        <Icon className="w-3.5 h-3.5" style={{ color: task.issueType.color }} />
-                        {task.issueType.name}
-                      </span>
-                    );
-                  })() : undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {issueTypes.map((it: any) => {
-                  const Icon = ICON_MAP[it.icon] || Circle;
+          {/* Attachments */}
+          {!isGuest && (
+            <section className="rounded-xl border border-border bg-card p-4">
+              <h3 className="text-sm font-semibold text-foreground mb-3">Attachments</h3>
+              <FileUpload taskId={taskId} attachments={task.attachments || []} />
+            </section>
+          )}
+        </div>
+
+        {/* Right sidebar */}
+        <aside className="space-y-1 lg:border-l lg:border-border lg:pl-5">
+          {/* Status */}
+          <SideField label="Status">
+            {isGuest ? (
+              <span className="text-sm">{task.status}</span>
+            ) : (
+              <Select value={task.status} onValueChange={handleStatusChange}>
+                <SelectTrigger className="h-8 border-0 shadow-none bg-transparent hover:bg-secondary/50 px-2">
+                  <span className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${STATUS_COLORS[task.status]}`} />
+                    <SelectValue />
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TODO">To Do</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="DONE">Done</SelectItem>
+                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  {isAdmin && <SelectItem value="REJECTED">Rejected</SelectItem>}
+                </SelectContent>
+              </Select>
+            )}
+          </SideField>
+
+          {/* Priority */}
+          <SideField label="Priority">
+            {isGuest ? (
+              <span className={`text-sm font-medium ${PRIORITY_COLORS[task.priority] || ''}`}>{task.priority}</span>
+            ) : (
+              <Select value={task.priority} onValueChange={(v) => updateField({ priority: v }, 'Priority updated')}>
+                <SelectTrigger className="h-8 border-0 shadow-none bg-transparent hover:bg-secondary/50 px-2">
+                  <span className={`flex items-center gap-2 ${PRIORITY_COLORS[task.priority] || ''}`}>
+                    <Flag className="w-3 h-3" />
+                    <SelectValue />
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LOW">Low</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HIGH">High</SelectItem>
+                  <SelectItem value="URGENT">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </SideField>
+
+          {/* Issue type */}
+          {issueTypes.length > 0 && (
+            <SideField label="Type">
+              {isGuest ? (
+                selectedIssueType ? (
+                  <span className="flex items-center gap-1.5 text-sm">
+                    {(() => { const Icon = ICON_MAP[selectedIssueType.icon] || Circle; return <Icon className="w-3 h-3" style={{ color: selectedIssueType.color }} />; })()}
+                    {selectedIssueType.name}
+                  </span>
+                ) : <span className="text-sm text-muted-foreground">—</span>
+              ) : (
+                <Select
+                  value={task.issueTypeId || ''}
+                  onValueChange={(v) => updateField({ issueTypeId: v || null }, 'Type updated')}
+                >
+                  <SelectTrigger className="h-8 border-0 shadow-none bg-transparent hover:bg-secondary/50 px-2">
+                    <SelectValue placeholder="—">
+                      {selectedIssueType ? (() => {
+                        const Icon = ICON_MAP[selectedIssueType.icon] || Circle;
+                        return (
+                          <span className="flex items-center gap-2">
+                            <Icon className="w-3 h-3" style={{ color: selectedIssueType.color }} />
+                            {selectedIssueType.name}
+                          </span>
+                        );
+                      })() : undefined}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {issueTypes.map((it: any) => {
+                      const Icon = ICON_MAP[it.icon] || Circle;
+                      return (
+                        <SelectItem key={it.id} value={it.id}>
+                          <span className="flex items-center gap-2">
+                            <Icon className="w-3 h-3" style={{ color: it.color }} />
+                            {it.name}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </SideField>
+          )}
+
+          {/* Due date */}
+          <SideField label="Due">
+            {editingDueDate && !isGuest ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  type="date"
+                  value={editDueDate}
+                  onChange={(e) => setEditDueDate(e.target.value)}
+                  className="h-7 text-xs"
+                  autoFocus
+                  onBlur={() => {
+                    updateField({ dueDate: editDueDate ? new Date(editDueDate).toISOString() : null }, 'Due date updated');
+                    setEditingDueDate(false);
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isGuest}
+                onClick={() => {
+                  setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
+                  setEditingDueDate(true);
+                }}
+                className={`flex items-center gap-1.5 text-sm rounded px-2 py-1 -mx-2 ${!isGuest ? 'hover:bg-secondary/50' : ''}`}
+              >
+                <Calendar className="w-3 h-3 text-muted-foreground" />
+                {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : <span className="text-muted-foreground">Not set</span>}
+              </button>
+            )}
+          </SideField>
+
+          {/* Assignees */}
+          <SideField label={`Assignees${task.assignments?.length ? ` · ${task.assignments.length}` : ''}`}>
+            {task.assignToSpace ? (
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs">
+                <Users className="w-3 h-3" />
+                Whole space
+                {isAdmin && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await updateTask({ id: taskId, assignToSpace: false }).unwrap();
+                      } catch (error: any) {
+                        toast.error(error?.data?.message || 'Failed');
+                      }
+                    }}
+                    disabled={isAssignActionBusy}
+                    className="hover:text-foreground"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ) : task.assignments && task.assignments.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {task.assignments.map((a: any) => {
+                  const canUnassign = isAdmin || a.user.id === currentUser?.id;
                   return (
-                    <SelectItem key={it.id} value={it.id}>
-                      <span className="flex items-center gap-2">
-                        <Icon className="w-3.5 h-3.5" style={{ color: it.color }} />
-                        {it.name}
-                      </span>
-                    </SelectItem>
+                    <div key={a.user.id} className="group inline-flex items-center gap-1 rounded-md bg-secondary/50 pl-0.5 pr-1.5 py-0.5 text-xs">
+                      <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center">
+                        <span className="text-[9px] font-semibold text-primary">
+                          {(a.user.name?.[0] || a.user.email[0]).toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="truncate max-w-[90px]">{a.user.name?.split(' ')[0] || a.user.email.split('@')[0]}</span>
+                      {canUnassign && (
+                        <button
+                          onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
+                          disabled={isAssigning}
+                          className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">Unassigned</span>
+            )}
 
-      {/* Read-only issue type for guests */}
-      {isGuest && task.issueType && (
-        <div className="mb-8">
-          <div className="space-y-2">
-            <Label>Issue Type</Label>
-            <p className="text-sm font-medium px-3 py-2 rounded-md border border-input bg-muted/50 flex items-center gap-2">
-              {(() => { const Icon = ICON_MAP[task.issueType.icon] || Circle; return <Icon className="w-3.5 h-3.5" style={{ color: task.issueType.color }} />; })()}
-              {task.issueType.name}
-            </p>
-          </div>
-        </div>
-      )}
+            {isAdmin && (
+              <div ref={assignDropdownRef} className="relative mt-1.5">
+                <div className="relative">
+                  <AtSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                  <Input
+                    ref={assignInputRef}
+                    value={assignSearch}
+                    onChange={(e) => {
+                      setAssignSearch(e.target.value);
+                      setShowAssignDropdown(true);
+                    }}
+                    onFocus={() => setShowAssignDropdown(true)}
+                    placeholder="Add member, @all, @space"
+                    className="pl-7 h-7 text-xs"
+                    disabled={isAssignActionBusy}
+                  />
+                </div>
+                {showAssignDropdown && (
+                  <div className="absolute z-20 left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-56 overflow-auto">
+                    {assignmentOptions.length > 0 || filteredUnassignedMembers.length > 0 ? (
+                      <>
+                        {assignmentOptions.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => handleAssignOption(option.id)}
+                            disabled={isAssignActionBusy}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-secondary/50 transition-colors text-left text-xs"
+                          >
+                            <Users className="w-3 h-3 text-primary" />
+                            <span className="text-foreground">{option.label}</span>
+                          </button>
+                        ))}
+                        {filteredUnassignedMembers.map((member: Member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => handleAssignMember(member.id)}
+                            disabled={isAssignActionBusy}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-secondary/50 transition-colors text-left text-xs"
+                          >
+                            <span className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center text-[9px] font-semibold text-primary flex-shrink-0">
+                              {(member.name?.[0] || member.email[0]).toUpperCase()}
+                            </span>
+                            <span className="truncate">{member.name || member.email}</span>
+                          </button>
+                        ))}
+                      </>
+                    ) : (
+                      <p className="px-2.5 py-2 text-xs text-muted-foreground">No matches</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </SideField>
 
-      {/* Rejection Reason Dialog */}
+          {/* Labels */}
+          {orgId && (
+            <SideField label="Labels" icon={<Tags className="w-3 h-3" />}>
+              <TaskLabelPicker
+                taskId={taskId}
+                orgId={orgId}
+                taskLabels={(task as any).taskLabels || []}
+                readOnly={isGuest}
+              />
+            </SideField>
+          )}
+
+          <div className="pt-3 mt-2 border-t border-border space-y-1.5 text-xs text-muted-foreground">
+            <div className="flex justify-between gap-2">
+              <span>Created by</span>
+              <span className="text-foreground truncate">{task.createdBy?.name || task.createdBy?.email || '—'}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span>Created</span>
+              <span className="text-foreground">{new Date(task.createdAt).toLocaleDateString()}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span>Project</span>
+              <Link href={`/projects/${projectId}`} className="text-primary hover:underline truncate">
+                {task.project?.name || '—'}
+              </Link>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* Rejection dialog */}
       <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reject Task</DialogTitle>
-            <DialogDescription>Please provide a reason for rejecting this task.</DialogDescription>
+            <DialogTitle>Reject task</DialogTitle>
+            <DialogDescription>Provide a reason.</DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Textarea
-              placeholder="Enter rejection reason..."
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              rows={4}
-            />
-          </div>
+          <Textarea
+            placeholder="Rejection reason…"
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            rows={4}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              onClick={handleRejectionSubmit}
-              disabled={isUpdating || !rejectionReason.trim()}
-            >
-              Reject Task
+            <Button variant="destructive" onClick={handleRejectionSubmit} disabled={isUpdating || !rejectionReason.trim()}>
+              Reject
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
 
-      {/* Assignees */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
-        <h3 className="font-semibold text-foreground mb-4">Assigned Members</h3>
-
-        {!isGuest && (
-          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 mb-4">
-            <div>
-              <Label className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" />
-                Assign to whole space
-              </Label>
-              <p className="text-xs text-muted-foreground mt-1">
-                Everyone in {task.project?.space?.name || 'this space'} will be notified. Turning this on removes member assignees.
-              </p>
-            </div>
-            <Switch
-              checked={Boolean(task.assignToSpace)}
-              disabled={isUpdating || !isAdmin}
-              onCheckedChange={async (checked) => {
-                try {
-                  await updateTask({ id: taskId, assignToSpace: checked }).unwrap();
-                  toast.success(checked ? 'Task assigned to whole space' : 'Whole-space assignment removed');
-                } catch (error: any) {
-                  toast.error(error?.data?.message || error?.message || 'Failed to update assignment');
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {task.assignToSpace ? (
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm mb-4">
-            <Users className="w-4 h-4" />
-            <span className="font-medium">Whole {task.project?.space?.name || 'space'} assigned</span>
-          </div>
-        ) : task.assignments && task.assignments.length > 0 ? (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {task.assignments.map((a: any) => {
-              const canUnassign = isAdmin || a.user.id === currentUser?.id;
-              return (
-                <div
-                  key={a.user.id}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm"
-                >
-                  <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-xs font-bold">
-                      {(a.user.name?.[0] || a.user.email[0]).toUpperCase()}
-                    </span>
-                  </div>
-                  <span className="font-medium">{a.user.name || a.user.email}</span>
-                  {canUnassign && (
-                    <button
-                      onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
-                      disabled={isAssigning}
-                      className="hover:text-foreground transition-colors"
-                      title={a.user.id === currentUser?.id ? 'Unassign yourself' : 'Unassign'}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground mb-4">No one assigned yet</p>
-        )}
-
-        {/* Admin-only: assign from searchable options */}
-        {isAdmin && !task.assignToSpace && unassignedMembers.length > 0 && (
-          <div className="space-y-2" ref={assignDropdownRef}>
-            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" />
-              Assign member one by one
-            </Label>
-            <div className="relative">
-              <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
-                ref={assignInputRef}
-                value={assignSearch}
-                onChange={(e) => {
-                  setAssignSearch(e.target.value);
-                  setShowAssignDropdown(true);
-                }}
-                onFocus={() => setShowAssignDropdown(true)}
-                placeholder="Search by name or email"
-                className="pl-8"
-                disabled={isAssigning}
-              />
-            </div>
-            {showAssignDropdown && (
-              <div className="mt-1 bg-card border border-border rounded-lg shadow-lg max-h-56 overflow-auto">
-                {filteredUnassignedMembers.length > 0 ? (
-                  filteredUnassignedMembers.map((member: Member) => (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => handleAssignMember(member.id)}
-                      disabled={isAssigning}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-secondary/50 transition-colors text-left disabled:opacity-60"
-                    >
-                      <span className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
-                        {(member.name?.[0] || member.email[0]).toUpperCase()}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{member.name || 'No name'}</p>
-                        <p className="text-xs text-muted-foreground truncate">{member.email}</p>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground ml-auto capitalize">{member.role.toLowerCase()}</span>
-                    </button>
-                  ))
-                ) : (
-                  <p className="px-3 py-3 text-sm text-muted-foreground text-center">
-                    No available members match this search
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+function SideField({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="py-1.5">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+        {icon}
+        <span>{label}</span>
       </div>
+      <div>{children}</div>
+    </div>
+  );
+}
 
-      {/* Labels */}
-      {orgId && (
-        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
-          <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Tags className="w-4 h-4" />
-            Labels
-          </h3>
-          <TaskLabelPicker
-            taskId={taskId}
-            orgId={orgId}
-            taskLabels={(task as any).taskLabels || []}
-            readOnly={isGuest}
-          />
+function TaskDetailSkeleton() {
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <Skeleton className="h-4 w-24 mb-3" />
+      <Skeleton className="h-8 w-2/3 mb-5" />
+      <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+        <div className="space-y-4">
+          <Skeleton className="h-20 w-full rounded-lg" />
+          <Skeleton className="h-40 w-full rounded-xl" />
         </div>
-      )}
-
-      {/* Subtasks / Checklist */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
-        <h3 className="font-semibold text-foreground mb-4">Subtasks</h3>
-        <SubtaskList taskId={taskId} taskTitle={task?.title} taskDescription={task?.description || undefined} readOnly={isGuest} />
-      </div>
-
-      {/* Attachments */}
-      {!isGuest && (
-        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
-          <h3 className="font-semibold text-foreground mb-4">Attachments</h3>
-          <FileUpload taskId={taskId} attachments={task.attachments || []} />
-        </div>
-      )}
-
-      {/* Details */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Created by</span>
-          <span className="text-sm font-medium">{task.createdBy?.name || task.createdBy?.email || '-'}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Due Date</span>
-          {editingDueDate ? (
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                value={editDueDate}
-                onChange={(e) => setEditDueDate(e.target.value)}
-                className="h-8 w-auto text-sm"
-              />
-              <Button size="sm" className="h-7 text-xs" onClick={() => {
-                updateTask({ id: taskId, dueDate: editDueDate ? new Date(editDueDate).toISOString() : null }).unwrap()
-                  .then(() => { toast.success('Due date updated'); setEditingDueDate(false); })
-                  .catch((err: any) => toast.error(err?.data?.message || 'Failed to update'));
-              }} disabled={isUpdating}>
-                <Check className="w-3 h-3 mr-1" /> Save
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingDueDate(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <div className="group flex items-center gap-2">
-              <span className="text-sm font-medium">
-                {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'Not set'}
-              </span>
-              {!isGuest && (
-                <button onClick={() => {
-                  setEditDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '');
-                  setEditingDueDate(true);
-                }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
-                  <Pencil className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Created</span>
-          <span className="text-sm font-medium">{new Date(task.createdAt).toLocaleDateString()}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Project</span>
-          <Link href={`/projects/${projectId}`} className="text-sm font-medium text-primary hover:underline">
-            {task.project?.name || '-'}
-          </Link>
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
       </div>
     </div>

@@ -99,3 +99,10 @@ export async function findEnabledSchedules() {
     where: { enabled: true },
   });
 }
+
+export async function markReminderSent(scheduleId: string, sentAt: Date) {
+  return prisma.dailyReportSchedule.update({
+    where: { id: scheduleId },
+    data: { lastReminderSentAt: sentAt },
+  });
+}

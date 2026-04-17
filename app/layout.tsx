@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono, Raleway } from 'next/font/google';
+import { Inter, JetBrains_Mono, Raleway, Space_Grotesk, Fraunces } from 'next/font/google';
 import { Toaster } from 'sonner';
 import StoreProvider from '@/store/provider';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -8,6 +8,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 const raleway = Raleway({ subsets: ['latin'], variable: '--font-raleway' });
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', weight: ['400', '500', '600', '700'] });
+const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-serif', weight: ['400', '500', '600', '700'], style: ['normal', 'italic'] });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -95,7 +97,7 @@ export default function RootLayout({
       <head>
         <link rel="canonical" href={APP_URL} />
       </head>
-      <body className={`${inter.className} ${jetbrainsMono.variable} ${raleway.variable} antialiased`}>
+      <body className={`${inter.className} ${jetbrainsMono.variable} ${raleway.variable} ${spaceGrotesk.variable} ${fraunces.variable} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <StoreProvider>
             {children}

@@ -11,8 +11,9 @@ export interface ModuleCard {
 export interface ThemeColor {
   id: string;
   label: string;
-  primary: string;
-  primaryDark: string;
+  primary: string;       // oklch(...) or #hex
+  primaryDark: string;   // oklch(...) or #hex
+  custom?: boolean;
 }
 
 export const THEME_COLORS: ThemeColor[] = [
@@ -35,20 +36,33 @@ const DEFAULT_MODULE_CARDS: ModuleCard[] = [
   { id: 'activity', name: 'Activity', href: '/activity-logs', icon: 'Activity', visible: false },
 ];
 
-function sanitizeThemeColorId(themeColorId?: string) {
-  const validIds = new Set(THEME_COLORS.map((theme) => theme.id));
+function sanitizeThemeColorId(themeColorId: string | undefined, customColors: ThemeColor[]) {
+  const validIds = new Set([
+    ...THEME_COLORS.map((theme) => theme.id),
+    ...customColors.map((theme) => theme.id),
+  ]);
   return themeColorId && validIds.has(themeColorId) ? themeColorId : 'silver';
+}
+
+function isValidHex(value: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
 interface PreferencesState {
   moduleCards: ModuleCard[];
   themeColorId: string;
+  customThemeColors: ThemeColor[];
   dueSoonEnabled: boolean;
 }
 
 function loadFromStorage(): PreferencesState {
   if (typeof window === 'undefined') {
-    return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver', dueSoonEnabled: true };
+    return {
+      moduleCards: DEFAULT_MODULE_CARDS,
+      themeColorId: 'silver',
+      customThemeColors: [],
+      dueSoonEnabled: true,
+    };
   }
   try {
     const saved = localStorage.getItem('taskflow-preferences');
@@ -59,14 +73,25 @@ function loadFromStorage(): PreferencesState {
         ...(parsed.moduleCards || []),
         ...DEFAULT_MODULE_CARDS.filter((d) => !savedIds.has(d.id)),
       ];
+      const customThemeColors: ThemeColor[] = Array.isArray(parsed.customThemeColors)
+        ? parsed.customThemeColors.filter(
+            (c: any) => c && typeof c.id === 'string' && typeof c.primary === 'string',
+          )
+        : [];
       return {
         moduleCards: merged,
-        themeColorId: sanitizeThemeColorId(parsed.themeColorId),
+        themeColorId: sanitizeThemeColorId(parsed.themeColorId, customThemeColors),
+        customThemeColors,
         dueSoonEnabled: parsed.dueSoonEnabled ?? true,
       };
     }
   } catch {}
-  return { moduleCards: DEFAULT_MODULE_CARDS, themeColorId: 'silver', dueSoonEnabled: true };
+  return {
+    moduleCards: DEFAULT_MODULE_CARDS,
+    themeColorId: 'silver',
+    customThemeColors: [],
+    dueSoonEnabled: true,
+  };
 }
 
 function saveToStorage(state: PreferencesState) {
@@ -105,11 +130,57 @@ const preferencesSlice = createSlice({
       saveToStorage(state);
     },
     setThemeColor: (state, action: PayloadAction<string>) => {
-      state.themeColorId = sanitizeThemeColorId(action.payload);
+      state.themeColorId = sanitizeThemeColorId(action.payload, state.customThemeColors);
+      saveToStorage(state);
+    },
+    addCustomThemeColor: (state, action: PayloadAction<{ hex: string; label?: string }>) => {
+      const { hex, label } = action.payload;
+      if (!isValidHex(hex)) return;
+      // Dedup by hex (case-insensitive)
+      const normalized = hex.toLowerCase();
+      if (state.customThemeColors.some((c) => c.primary.toLowerCase() === normalized)) return;
+      const id = `custom-${normalized.slice(1)}`;
+      const color: ThemeColor = {
+        id,
+        label: label?.trim() || hex.toUpperCase(),
+        primary: normalized,
+        primaryDark: normalized,
+        custom: true,
+      };
+      state.customThemeColors.push(color);
+      state.themeColorId = id;
+      saveToStorage(state);
+    },
+    removeCustomThemeColor: (state, action: PayloadAction<string>) => {
+      state.customThemeColors = state.customThemeColors.filter((c) => c.id !== action.payload);
+      if (state.themeColorId === action.payload) {
+        state.themeColorId = 'silver';
+      }
       saveToStorage(state);
     },
     setDueSoonEnabled: (state, action: PayloadAction<boolean>) => {
       state.dueSoonEnabled = action.payload;
+      saveToStorage(state);
+    },
+    hydratePreferences: (state, action: PayloadAction<Partial<PreferencesState>>) => {
+      if (action.payload.customThemeColors !== undefined) {
+        state.customThemeColors = action.payload.customThemeColors;
+      }
+      if (action.payload.themeColorId !== undefined) {
+        state.themeColorId = action.payload.themeColorId;
+      }
+      if (action.payload.moduleCards !== undefined) {
+        // Merge: keep server order but backfill any defaults that are missing
+        const serverIds = new Set(action.payload.moduleCards.map((c) => c.id));
+        state.moduleCards = [
+          ...action.payload.moduleCards,
+          ...DEFAULT_MODULE_CARDS.filter((d) => !serverIds.has(d.id)),
+        ];
+      }
+      if (action.payload.dueSoonEnabled !== undefined) {
+        state.dueSoonEnabled = action.payload.dueSoonEnabled;
+      }
+      state.themeColorId = sanitizeThemeColorId(state.themeColorId, state.customThemeColors);
       saveToStorage(state);
     },
   },
@@ -121,9 +192,11 @@ export const {
   reorderModuleCards,
   resetModuleCards,
   setThemeColor,
+  addCustomThemeColor,
+  removeCustomThemeColor,
   setDueSoonEnabled,
-} =
-  preferencesSlice.actions;
+  hydratePreferences,
+} = preferencesSlice.actions;
 
 export const selectModuleCards = (state: { preferences: PreferencesState }) =>
   state.preferences.moduleCards;
@@ -134,7 +207,22 @@ export const selectVisibleModuleCards = (state: { preferences: PreferencesState 
 export const selectThemeColorId = (state: { preferences: PreferencesState }) =>
   state.preferences.themeColorId;
 
+export const selectCustomThemeColors = (state: { preferences: PreferencesState }) =>
+  state.preferences.customThemeColors;
+
+export const selectAllThemeColors = (state: { preferences: PreferencesState }) => [
+  ...THEME_COLORS,
+  ...state.preferences.customThemeColors,
+];
+
 export const selectDueSoonEnabled = (state: { preferences: PreferencesState }) =>
   state.preferences.dueSoonEnabled;
+
+export const selectSyncablePreferences = (state: { preferences: PreferencesState }) => ({
+  themeColorId: state.preferences.themeColorId,
+  customThemeColors: state.preferences.customThemeColors,
+  moduleCards: state.preferences.moduleCards,
+  dueSoonEnabled: state.preferences.dueSoonEnabled,
+});
 
 export default preferencesSlice.reducer;

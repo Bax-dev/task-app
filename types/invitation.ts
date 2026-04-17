@@ -8,6 +8,7 @@ export interface Invitation {
   expiresAt: string;
   createdAt: string;
   organization?: { id: string; name: string; slug: string };
+  userExists?: boolean;
 }
 
 export interface CreateInvitationDTO {

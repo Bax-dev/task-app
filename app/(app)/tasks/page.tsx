@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/accordion';
 import {
   AlertCircle,
+  AtSign,
   Bug,
   Bookmark,
   CalendarClock,
@@ -51,7 +52,6 @@ import {
   Star,
   Target,
   Triangle,
-  Users,
   X,
   XCircle,
   Zap,
@@ -73,7 +73,6 @@ import {
 } from '@/store/api';
 import AiTaskSuggestion from '@/components/ai/AiTaskSuggestion';
 import type { Member } from '@/types/organization';
-import PageHeader from '@/components/layout/PageHeader';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   circle: Circle,
@@ -176,7 +175,6 @@ export default function TasksPage() {
   const dueSoonEnabled = useAppSelector(selectDueSoonEnabled);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const prefs = useMemo(() => loadTaskPrefs(), []);
   const [sortMode, setSortMode] = useState<SortMode>(
     dueSoonEnabled ? 'due-soon' : 'recently-updated'
   );
@@ -230,56 +228,28 @@ export default function TasksPage() {
   );
 
   const groupedTasks = useMemo(() => {
-    const groups = {
-      TODO: sortedTasks.filter((task: any) => task.status === 'TODO'),
-      IN_PROGRESS: sortedTasks.filter((task: any) => task.status === 'IN_PROGRESS'),
-      DONE: sortedTasks.filter((task: any) => task.status === 'DONE'),
-      REJECTED: sortedTasks.filter((task: any) => task.status === 'REJECTED'),
-      CANCELLED: sortedTasks.filter((task: any) => task.status === 'CANCELLED'),
-    };
-
+    const groups: Record<string, any[]> = { TODO: [], IN_PROGRESS: [], DONE: [], REJECTED: [], CANCELLED: [] };
+    for (const task of sortedTasks as any[]) {
+      const key = groups[task.status] ? task.status : 'TODO';
+      groups[key].push(task);
+    }
     return [
-      {
-        key: 'TODO',
-        label: 'To Do',
-        tasks: groups.TODO,
-        dot: 'bg-blue-500',
-        icon: Circle,
-        description: 'Not started yet',
-      },
-      {
-        key: 'IN_PROGRESS',
-        label: 'In Progress',
-        tasks: groups.IN_PROGRESS,
-        dot: 'bg-amber-500',
-        icon: AlertCircle,
-        description: 'Work actively moving',
-      },
-      {
-        key: 'DONE',
-        label: 'Done',
-        tasks: groups.DONE,
-        dot: 'bg-green-500',
-        icon: CheckCircle,
-        description: 'Recently completed',
-      },
-      {
-        key: 'REJECTED',
-        label: 'Rejected',
-        tasks: groups.REJECTED,
-        dot: 'bg-red-500',
-        icon: XCircle,
-        description: 'Needs rework or review',
-      },
-      {
-        key: 'CANCELLED',
-        label: 'Cancelled',
-        tasks: groups.CANCELLED,
-        dot: 'bg-slate-400',
-        icon: XCircle,
-        description: 'No longer active',
-      },
+      { key: 'TODO', label: 'To Do', tasks: groups.TODO, dot: 'bg-blue-500', icon: Circle },
+      { key: 'IN_PROGRESS', label: 'In Progress', tasks: groups.IN_PROGRESS, dot: 'bg-amber-500', icon: AlertCircle },
+      { key: 'DONE', label: 'Done', tasks: groups.DONE, dot: 'bg-green-500', icon: CheckCircle },
+      { key: 'REJECTED', label: 'Rejected', tasks: groups.REJECTED, dot: 'bg-red-500', icon: XCircle },
+      { key: 'CANCELLED', label: 'Cancelled', tasks: groups.CANCELLED, dot: 'bg-slate-400', icon: XCircle },
     ];
+  }, [sortedTasks]);
+
+  const focusStats = useMemo(() => {
+    let dueSoon = 0, urgent = 0;
+    for (const task of sortedTasks as any[]) {
+      if (task.status === 'DONE') continue;
+      if (task.dueDate) dueSoon++;
+      if (task.priority === 'URGENT') urgent++;
+    }
+    return { dueSoon, urgent };
   }, [sortedTasks]);
 
   const visibleSections = statusFilter === 'ALL'
@@ -288,7 +258,6 @@ export default function TasksPage() {
   const populatedSections = visibleSections.filter((section) => section.tasks.length > 0);
   const visibleTaskIds = populatedSections.flatMap((section) => section.tasks.map((task: any) => task.id));
   const allVisibleSelected = visibleTaskIds.length > 0 && visibleTaskIds.every((taskId) => selectedTaskIds.has(taskId));
-  const selectedTasks = tasks.filter((task: any) => selectedTaskIds.has(task.id));
 
   const activeFilterCount =
     (statusFilter !== 'ALL' ? 1 : 0) +
@@ -397,213 +366,161 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8">
-      <div className="flex flex-col gap-6 mb-8">
-        <PageHeader
-          eyebrow={
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1 text-xs text-muted-foreground">
-              <CheckCircle className="h-3.5 w-3.5 text-primary" />
-              Your work across all projects
+    <div className="p-4 sm:p-6">
+      <div className="flex flex-col gap-4 mb-5">
+        {/* Compact header */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+              <CheckCircle className="h-4 w-4" />
             </div>
-          }
-          title="My Tasks"
-          description="Create, prioritize, and move work fast."
-          meta={[
-            { label: 'tasks', value: tasks.length },
-            { label: 'selected', value: selectedTaskIds.size },
-          ]}
-          actions={
-            <>
-              <ViewToggle
-                view={view}
-                onViewChange={(mode) => dispatch(setView({ page: 'tasks', mode }))}
-              />
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    New Task
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Create a Task</DialogTitle>
-                  </DialogHeader>
-                  <CreateTaskForm projects={projects} onCreated={() => setOpen(false)} />
-                </DialogContent>
-              </Dialog>
-            </>
-          }
-        />
-
-        {projects.length > 0 && <QuickTaskAdd projects={projects} onOpenFullForm={() => setOpen(true)} />}
-
-        <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
-          <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-            <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search tasks, projects, or issue types"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="pl-9"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Select value={sortMode} onValueChange={(value: SortMode) => setSortMode(value)}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dueSoonEnabled && <SelectItem value="due-soon">Due Soon</SelectItem>}
-                    <SelectItem value="urgent-first">Urgent First</SelectItem>
-                    <SelectItem value="recently-updated">Recently Updated</SelectItem>
-                    <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {activeFilterCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5">
-                    <X className="h-3.5 w-3.5" />
-                    Clear all
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 mt-4">
-              {[
-                { key: 'ALL', label: 'All', count: sortedTasks.length },
-                { key: 'TODO', label: 'To Do', dot: 'bg-blue-500', count: groupedTasks[0].tasks.length },
-                {
-                  key: 'IN_PROGRESS',
-                  label: 'In Progress',
-                  dot: 'bg-amber-500',
-                  count: groupedTasks[1].tasks.length,
-                },
-                { key: 'DONE', label: 'Done', dot: 'bg-green-500', count: groupedTasks[2].tasks.length },
-                { key: 'REJECTED', label: 'Rejected', dot: 'bg-red-500', count: groupedTasks[3].tasks.length },
-                {
-                  key: 'CANCELLED',
-                  label: 'Cancelled',
-                  dot: 'bg-slate-400',
-                  count: groupedTasks[4].tasks.length,
-                },
-              ].map((filter) => (
-                <button
-                  key={filter.key}
-                  onClick={() => setStatusFilter(filter.key)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                    statusFilter === filter.key
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-background text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {filter.dot && <span className={`h-2 w-2 rounded-full ${filter.dot}`} />}
-                  {filter.label}
-                  <span className="text-xs opacity-70">{filter.count}</span>
-                </button>
-              ))}
-            </div>
-
-            {allAssignees.length > 0 && (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">People</span>
-                {allAssignees.map((user) => {
-                  const isSelected = selectedAssignees.has(user.id);
-                  return (
-                    <button
-                      key={user.id}
-                      onClick={() =>
-                        setSelectedAssignees((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(user.id)) next.delete(user.id);
-                          else next.add(user.id);
-                          return next;
-                        })
-                      }
-                      className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-background text-muted-foreground hover:text-foreground'
-                      }`}
-                      title={user.name || user.email}
-                    >
-                      <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
-                          isSelected
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-primary/15 text-primary'
-                        }`}
-                      >
-                        {(user.name?.[0] || user.email[0]).toUpperCase()}
-                      </span>
-                      <span className="max-w-[90px] truncate">
-                        {user.name || user.email.split('@')[0]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">My Tasks</h1>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {tasks.length}{selectedTaskIds.size > 0 ? ` · ${selectedTaskIds.size} selected` : ''}
+            </span>
           </div>
-
-          <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <CalendarClock className="h-4 w-4 text-primary" />
-              Focus Summary
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              {dueSoonEnabled && (
-                <SummaryCard
-                  label="Due soon"
-                  value={sortedTasks.filter((task: any) => task.dueDate && task.status !== 'DONE').length}
-                  tone="amber"
-                />
-              )}
-              <SummaryCard
-                label="Urgent"
-                value={sortedTasks.filter((task: any) => task.priority === 'URGENT' && task.status !== 'DONE').length}
-                tone="red"
-              />
-              <SummaryCard
-                label="In progress"
-                value={groupedTasks[1].tasks.length}
-                tone="blue"
-              />
-              <SummaryCard
-                label="Completed"
-                value={groupedTasks[2].tasks.length}
-                tone="green"
-              />
-            </div>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Sorting is currently set to{' '}
-              <span className="font-medium text-foreground">
-                {sortMode === 'due-soon'
-                  ? 'Due Soon'
-                  : sortMode === 'urgent-first'
-                    ? 'Urgent First'
-                    : sortMode === 'recently-updated'
-                      ? 'Recently Updated'
-                    : 'Alphabetical'}
-              </span>
-              {dueSoonEnabled
-                ? ', so the most relevant work stays near the top.'
-                : ', with due-date prioritization turned off.'}
-            </p>
+          <div className="flex items-center gap-2">
+            <ViewToggle
+              view={view}
+              onViewChange={(mode) => dispatch(setView({ page: 'tasks', mode }))}
+            />
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5 h-8">
+                  <Plus className="w-3.5 h-3.5" />
+                  New Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto p-5">
+                <DialogHeader className="mb-1">
+                  <DialogTitle className="text-base">Create a task</DialogTitle>
+                </DialogHeader>
+                <CreateTaskForm projects={projects} onCreated={() => setOpen(false)} />
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
-        {visibleTaskIds.length > 0 && (
-          <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex items-center gap-2 text-sm text-foreground">
+        {projects.length > 0 && <QuickTaskAdd projects={projects} onOpenFullForm={() => setOpen(true)} />}
+
+        {/* Filter bar with inline focus counts */}
+        <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search tasks, projects, issue types"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {focusStats.urgent > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-600">
+                  <Zap className="h-3 w-3" />
+                  {focusStats.urgent} urgent
+                </span>
+              )}
+              {dueSoonEnabled && focusStats.dueSoon > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600">
+                  <CalendarClock className="h-3 w-3" />
+                  {focusStats.dueSoon} dated
+                </span>
+              )}
+              <Select value={sortMode} onValueChange={(value: SortMode) => setSortMode(value)}>
+                <SelectTrigger className="w-[160px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {dueSoonEnabled && <SelectItem value="due-soon">Due Soon</SelectItem>}
+                  <SelectItem value="urgent-first">Urgent First</SelectItem>
+                  <SelectItem value="recently-updated">Recently Updated</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                </SelectContent>
+              </Select>
+              {activeFilterCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1">
+                  <X className="h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { key: 'ALL', label: 'All', count: sortedTasks.length },
+              { key: 'TODO', label: 'To Do', dot: 'bg-blue-500', count: groupedTasks[0].tasks.length },
+              { key: 'IN_PROGRESS', label: 'In Progress', dot: 'bg-amber-500', count: groupedTasks[1].tasks.length },
+              { key: 'DONE', label: 'Done', dot: 'bg-green-500', count: groupedTasks[2].tasks.length },
+              { key: 'REJECTED', label: 'Rejected', dot: 'bg-red-500', count: groupedTasks[3].tasks.length },
+              { key: 'CANCELLED', label: 'Cancelled', dot: 'bg-slate-400', count: groupedTasks[4].tasks.length },
+            ].map((filter) => (
+              <button
+                key={filter.key}
+                onClick={() => setStatusFilter(filter.key)}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter === filter.key
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                {filter.dot && <span className={`h-1.5 w-1.5 rounded-full ${filter.dot}`} />}
+                {filter.label}
+                <span className="tabular-nums opacity-70">{filter.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {allAssignees.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border">
+              <span className="text-xs text-muted-foreground pr-1">People</span>
+              {allAssignees.map((user) => {
+                const isSelected = selectedAssignees.has(user.id);
+                return (
+                  <button
+                    key={user.id}
+                    onClick={() =>
+                      setSelectedAssignees((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(user.id)) next.delete(user.id);
+                        else next.add(user.id);
+                        return next;
+                      })
+                    }
+                    className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs transition-colors ${
+                      isSelected
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    }`}
+                    title={user.name || user.email}
+                  >
+                    <span
+                      className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold ${
+                        isSelected ? 'bg-primary text-primary-foreground' : 'bg-primary/15 text-primary'
+                      }`}
+                    >
+                      {(user.name?.[0] || user.email[0]).toUpperCase()}
+                    </span>
+                    <span className="max-w-[90px] truncate">
+                      {user.name || user.email.split('@')[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {visibleTaskIds.length > 0 && selectedTaskIds.size > 0 && (
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border-border"
+                  className="h-3.5 w-3.5 rounded border-border"
                   checked={allVisibleSelected}
                   onChange={() =>
                     setSelectedTaskIds((prev) => {
@@ -617,31 +534,15 @@ export default function TasksPage() {
                     })
                   }
                 />
-                Select visible tasks
+                {selectedTaskIds.size} selected
               </label>
-              <span className="text-sm text-muted-foreground">
-                {selectedTaskIds.size > 0
-                  ? `${selectedTaskIds.size} selected`
-                  : `${visibleTaskIds.length} visible`}
-              </span>
             </div>
-
-            {selectedTaskIds.size > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate('TODO')}>
-                  Mark To Do
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate('IN_PROGRESS')}>
-                  Start
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => handleBulkStatusUpdate('DONE')}>
-                  Mark Done
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedTaskIds(new Set())}>
-                  Clear selection
-                </Button>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-1">
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkStatusUpdate('TODO')}>To Do</Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkStatusUpdate('IN_PROGRESS')}>Start</Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkStatusUpdate('DONE')}>Done</Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedTaskIds(new Set())}>Clear</Button>
+            </div>
           </div>
         )}
       </div>
@@ -685,30 +586,6 @@ export default function TasksPage() {
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: 'red' | 'amber' | 'blue' | 'green';
-}) {
-  const toneClasses: Record<string, string> = {
-    red: 'bg-red-500/10 text-red-700 dark:text-red-300',
-    amber: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    blue: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
-    green: 'bg-green-500/10 text-green-700 dark:text-green-300',
-  };
-
-  return (
-    <div className={`rounded-xl p-3 ${toneClasses[tone]}`}>
-      <div className="text-xs font-medium opacity-80">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-    </div>
-  );
-}
-
 function TasksPageSkeleton() {
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6">
@@ -728,20 +605,17 @@ function TasksPageSkeleton() {
 
 function TasksEmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <Empty className="border border-border bg-card rounded-2xl">
+    <Empty className="border border-border bg-card rounded-xl">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <CheckCircle className="h-5 w-5" />
         </EmptyMedia>
         <EmptyTitle>No tasks yet</EmptyTitle>
-        <EmptyDescription>
-          Start with a quick task, then add assignees and details only when they are needed.
-        </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button onClick={onCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Create your first task
+        <Button size="sm" onClick={onCreate} className="gap-1.5">
+          <Plus className="h-3.5 w-3.5" />
+          Create task
         </Button>
       </EmptyContent>
     </Empty>
@@ -756,22 +630,17 @@ function FilteredEmptyState({
   onCreate: () => void;
 }) {
   return (
-    <Empty className="border border-border bg-card rounded-2xl">
+    <Empty className="border border-border bg-card rounded-xl">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Search className="h-5 w-5" />
         </EmptyMedia>
-        <EmptyTitle>No tasks match these filters</EmptyTitle>
-        <EmptyDescription>
-          Try clearing filters, switching the status tab, or creating a new task for this workflow.
-        </EmptyDescription>
+        <EmptyTitle>No matches</EmptyTitle>
       </EmptyHeader>
       <EmptyContent className="sm:flex-row sm:justify-center">
-        <Button variant="outline" onClick={onClear}>
-          Clear filters
-        </Button>
-        <Button onClick={onCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
+        <Button size="sm" variant="outline" onClick={onClear}>Clear filters</Button>
+        <Button size="sm" onClick={onCreate} className="gap-1.5">
+          <Plus className="h-3.5 w-3.5" />
           New task
         </Button>
       </EmptyContent>
@@ -798,24 +667,16 @@ function TaskSection({
 
   return (
     <section>
-      <div className="flex items-center gap-3 mb-4">
-        <div className={`h-3 w-3 rounded-full ${section.dot}`} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-foreground">{section.label}</h2>
-            <Badge variant="outline">{section.tasks.length}</Badge>
-          </div>
-          <p className="text-sm text-muted-foreground">{section.description}</p>
-        </div>
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`h-2 w-2 rounded-full ${section.dot}`} />
+        <h2 className="text-sm font-semibold text-foreground">{section.label}</h2>
+        <span className="text-xs text-muted-foreground tabular-nums">{section.tasks.length}</span>
       </div>
 
       {section.tasks.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border bg-card/50 p-6 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2 font-medium text-foreground">
-            <Icon className="h-4 w-4" />
-            Nothing in {section.label.toLowerCase()} right now
-          </div>
-          <p className="mt-1">Tasks will show up here automatically as their status changes.</p>
+        <div className="rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground flex items-center gap-2">
+          <Icon className="h-3.5 w-3.5" />
+          Empty
         </div>
       ) : view === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1117,51 +978,39 @@ function QuickTaskAdd({
   }
 
   return (
-    <form onSubmit={handleQuickCreate} className="rounded-2xl border border-border bg-card overflow-hidden">
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3 px-4 py-4">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Plus className="h-4 w-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-foreground">Quick add</p>
-            <p className="text-xs text-muted-foreground">
-              Start with a title. Add the rest only if you need it.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex-1">
-          <Input
-            ref={inputRef}
-            value={quickTitle}
-            onChange={(event) => {
-              setQuickTitle(event.target.value);
-              if (!isExpanded && event.target.value) setIsExpanded(true);
-            }}
-            onFocus={() => setIsExpanded(true)}
-            placeholder="What needs to happen next?"
-            disabled={isQuickCreating}
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
+    <form onSubmit={handleQuickCreate} className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <Plus className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <Input
+          ref={inputRef}
+          value={quickTitle}
+          onChange={(event) => {
+            setQuickTitle(event.target.value);
+            if (!isExpanded && event.target.value) setIsExpanded(true);
+          }}
+          onFocus={() => setIsExpanded(true)}
+          placeholder="Add a task"
+          disabled={isQuickCreating}
+          className="h-8 border-0 shadow-none focus-visible:ring-0 px-0 text-sm"
+        />
+        <div className="flex items-center gap-1 flex-shrink-0">
           <Button
             type="button"
+            size="sm"
             variant="ghost"
             onClick={() => setIsExpanded((value) => !value)}
-            className="hidden sm:inline-flex"
+            className="hidden sm:inline-flex h-7 text-xs"
           >
-            {isExpanded ? 'Hide options' : 'More options'}
+            {isExpanded ? 'Hide' : 'Options'}
           </Button>
-          <Button type="submit" disabled={isQuickCreating || !quickTitle.trim() || !quickProjectId}>
-            {isQuickCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add task'}
+          <Button type="submit" size="sm" className="h-7 text-xs" disabled={isQuickCreating || !quickTitle.trim() || !quickProjectId}>
+            {isQuickCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
           </Button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="grid gap-3 border-t border-border bg-secondary/20 px-4 py-4 md:grid-cols-[1fr_1fr_160px_auto]">
+        <div className="grid gap-2 border-t border-border bg-secondary/20 px-3 py-2.5 md:grid-cols-[1fr_1fr_140px_auto]">
           <Select
             value={quickSpaceId || '__all__'}
             onValueChange={(value) => setQuickSpaceId(value === '__all__' ? '' : value)}
@@ -1222,7 +1071,7 @@ function CreateTaskForm({
 }) {
   const spaceOptions = useMemo(() => getTaskSpaceOptions(projects), [projects]);
   const prefs = useMemo(() => loadTaskPrefs(), []);
-  const [spaceId, setSpaceId] = useState(prefs.createSpaceId || '');
+  const [spaceId, setSpaceId] = useState(prefs.createSpaceId || spaceOptions[0]?.id || '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState(prefs.createProjectId || '');
@@ -1238,8 +1087,8 @@ function CreateTaskForm({
 
   const [createTask, { isLoading }] = useCreateTaskMutation();
 
-  const filteredProjects = useMemo(
-    () => projects.filter((project: any) => !spaceId || project.spaceId === spaceId),
+  const spaceProjects = useMemo(
+    () => projects.filter((project: any) => project.spaceId === spaceId),
     [projects, spaceId]
   );
 
@@ -1249,11 +1098,12 @@ function CreateTaskForm({
   const { data: members = [] } = useGetOrgMembersQuery(orgId, { skip: !orgId });
   const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId, { skip: !orgId });
 
+  // When space changes, auto-pick first project in that space.
   useEffect(() => {
-    if (!filteredProjects.some((project: any) => project.id === projectId)) {
-      setProjectId(filteredProjects[0]?.id || '');
+    if (!spaceProjects.some((project: any) => project.id === projectId)) {
+      setProjectId(spaceProjects[0]?.id || '');
     }
-  }, [filteredProjects, projectId]);
+  }, [spaceProjects, projectId]);
 
   useEffect(() => {
     saveTaskPrefs({ createSpaceId: spaceId, createProjectId: projectId });
@@ -1271,7 +1121,6 @@ function CreateTaskForm({
         setShowDropdown(false);
       }
     }
-
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
@@ -1288,7 +1137,6 @@ function CreateTaskForm({
 
   function handleAssignInput(value: string) {
     setAssignSearch(value);
-
     if (value.toLowerCase() === '@all') {
       const assignedIds = new Set(assignedUsers.map((user) => user.id));
       const newMembers = members.filter((member: Member) => !assignedIds.has(member.id));
@@ -1297,13 +1145,11 @@ function CreateTaskForm({
       setShowDropdown(false);
       return;
     }
-
     setShowDropdown(value.length > 0);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-
     try {
       await createTask({
         title,
@@ -1327,132 +1173,200 @@ function CreateTaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 mt-2">
-      <div className="rounded-xl border border-border bg-secondary/20 p-4">
-        <h3 className="text-sm font-medium text-foreground">Start simple</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          A title and project are enough to create the task. Everything else is optional.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Space</Label>
-          <Select
-            value={spaceId || '__all__'}
-            onValueChange={(value) => setSpaceId(value === '__all__' ? '' : value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All spaces" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">All spaces</SelectItem>
-              {spaceOptions.map((space) => (
-                <SelectItem key={space.id} value={space.id}>
-                  {space.name} {space.organizationName ? `(${space.organizationName})` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Project</Label>
-          <Select value={projectId} onValueChange={setProjectId} required>
-            <SelectTrigger>
-              <SelectValue placeholder="Select project" />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredProjects.map((project: any) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {projectId && (
-        <AiTaskSuggestion
-          projectId={projectId}
-          onApply={(suggestion) => {
-            setTitle(suggestion.title);
-            setDescription(suggestion.description);
-            if (['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(suggestion.priority)) {
-              setPriority(suggestion.priority);
-            }
-          }}
-        />
-      )}
-
-      <div className="space-y-2">
-        <Label>Title</Label>
+    <form onSubmit={handleSubmit} className="space-y-3 mt-1">
+      {/* Title */}
+      <div className="space-y-1.5">
         <Input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="What should happen?"
           required
           disabled={isLoading}
+          autoFocus
+          className="text-base font-medium"
         />
       </div>
 
-      <Accordion type="multiple" defaultValue={['details']}>
-        <AccordionItem value="details">
-          <AccordionTrigger>Details</AccordionTrigger>
-          <AccordionContent className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label>Description</Label>
+      {/* Space selector + project chips (if >1 project in space) */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+        <Label className="text-xs font-medium text-muted-foreground shrink-0">Space</Label>
+        <Select value={spaceId} onValueChange={setSpaceId}>
+          <SelectTrigger className="h-8 w-auto min-w-[160px] border-0 bg-transparent shadow-none focus:ring-0">
+            <SelectValue placeholder="Pick a space" />
+          </SelectTrigger>
+          <SelectContent>
+            {spaceOptions.map((space) => (
+              <SelectItem key={space.id} value={space.id}>
+                {space.name}{space.organizationName ? ` · ${space.organizationName}` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {spaceProjects.length > 1 && (
+          <>
+            <span className="text-xs text-muted-foreground">/</span>
+            <div className="flex flex-wrap gap-1">
+              {spaceProjects.map((project: any) => {
+                const active = project.id === projectId;
+                return (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => setProjectId(project.id)}
+                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                      active
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:bg-accent'
+                    }`}
+                  >
+                    {project.name}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {spaceProjects.length === 1 && (
+          <>
+            <span className="text-xs text-muted-foreground">/</span>
+            <span className="text-xs font-medium text-foreground">{spaceProjects[0].name}</span>
+          </>
+        )}
+        {spaceId && spaceProjects.length === 0 && (
+          <span className="text-xs text-destructive">No projects in this space</span>
+        )}
+      </div>
+
+      {/* Assign @-search, always visible once project exists */}
+      {projectId && !assignToSpace && (
+        <div ref={dropdownRef} className="relative space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {assignedUsers.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() =>
+                  setAssignedUsers((prev) => prev.filter((member) => member.id !== user.id))
+                }
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/50 px-2.5 py-0.5 text-xs"
+              >
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[9px] font-semibold text-primary">
+                  {(user.name?.[0] || user.email[0]).toUpperCase()}
+                </span>
+                {user.name || user.email}
+                <X className="h-3 w-3 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={assignSearch}
+              onChange={(event) => handleAssignInput(event.target.value)}
+              onFocus={() => setShowDropdown(assignSearch.length > 0)}
+              placeholder="Assign… type @ name, or @all for everyone"
+              className="pl-8 h-9"
+            />
+          </div>
+          {showDropdown && filteredMembers.length > 0 && (
+            <div className="absolute z-20 left-0 right-0 max-h-52 overflow-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+              {filteredMembers.map((member: Member) => (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => {
+                    setAssignedUsers((prev) => [...prev, member]);
+                    setAssignSearch('');
+                    setShowDropdown(false);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-accent"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+                    {(member.name?.[0] || member.email[0]).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-foreground">
+                      {member.name || member.email}
+                    </span>
+                    {member.name && (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {member.email}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Inline meta row */}
+      {projectId && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={priority} onValueChange={setPriority}>
+            <SelectTrigger className="h-8 w-auto min-w-[110px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="LOW">Low</SelectItem>
+              <SelectItem value="MEDIUM">Medium</SelectItem>
+              <SelectItem value="HIGH">High</SelectItem>
+              <SelectItem value="URGENT">Urgent</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TODO">To Do</SelectItem>
+              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+            className="h-8 w-auto text-xs"
+            placeholder="Due"
+          />
+          <label className="inline-flex items-center gap-2 text-xs text-muted-foreground ml-auto cursor-pointer">
+            <Switch checked={assignToSpace} onCheckedChange={setAssignToSpace} />
+            Whole space
+          </label>
+        </div>
+      )}
+
+      {/* Collapsible Description + Issue Type */}
+      {projectId && (
+        <Accordion type="multiple">
+          <AccordionItem value="more" className="border-b-0">
+            <AccordionTrigger className="py-2 text-xs text-muted-foreground hover:no-underline">
+              Description, issue type, and more
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3 pt-1">
+              <AiTaskSuggestion
+                projectId={projectId}
+                onApply={(suggestion) => {
+                  setTitle(suggestion.title);
+                  setDescription(suggestion.description);
+                  if (['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(suggestion.priority)) {
+                    setPriority(suggestion.priority);
+                  }
+                }}
+              />
               <Textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Add context, acceptance criteria, or links"
-                rows={4}
+                rows={3}
                 disabled={isLoading}
               />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="LOW">Low</SelectItem>
-                    <SelectItem value="MEDIUM">Medium</SelectItem>
-                    <SelectItem value="HIGH">High</SelectItem>
-                    <SelectItem value="URGENT">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TODO">To Do</SelectItem>
-                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Due date</Label>
-                <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-              </div>
-            </div>
-
-            {projectId && issueTypes.length > 0 && (
-              <div className="space-y-2">
-                <Label>Issue type</Label>
+              {issueTypes.length > 0 && (
                 <Select value={issueTypeId} onValueChange={setIssueTypeId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Optional" />
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Issue type (optional)" />
                   </SelectTrigger>
                   <SelectContent>
                     {issueTypes.map((issueType: any) => {
@@ -1468,103 +1382,21 @@ function CreateTaskForm({
                     })}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
-          </AccordionContent>
-        </AccordionItem>
-
-        {projectId && (
-          <AccordionItem value="assignment">
-            <AccordionTrigger>Assignment</AccordionTrigger>
-            <AccordionContent className="space-y-4 pt-2">
-              <div className="flex items-center justify-between rounded-xl border border-border p-4">
-                <div className="pr-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    <Users className="h-4 w-4" />
-                    Assign to whole space
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Notify everyone in the space instead of picking people one by one.
-                  </p>
-                </div>
-                <Switch checked={assignToSpace} onCheckedChange={setAssignToSpace} />
-              </div>
-
-              {!assignToSpace && (
-                <div className="space-y-3">
-                  <Label>Assignees</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {assignedUsers.map((user) => (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() =>
-                          setAssignedUsers((prev) => prev.filter((member) => member.id !== user.id))
-                        }
-                        className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/50 px-3 py-1 text-sm"
-                      >
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
-                          {(user.name?.[0] || user.email[0]).toUpperCase()}
-                        </span>
-                        {user.name || user.email}
-                        <X className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    ))}
-                  </div>
-
-                  <div ref={dropdownRef} className="relative">
-                    <Input
-                      value={assignSearch}
-                      onChange={(event) => handleAssignInput(event.target.value)}
-                      placeholder="Type a name or @all"
-                    />
-                    {showDropdown && filteredMembers.length > 0 && (
-                      <div className="absolute z-10 mt-2 max-h-52 w-full overflow-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
-                        {filteredMembers.map((member: Member) => (
-                          <button
-                            key={member.id}
-                            type="button"
-                            onClick={() => {
-                              setAssignedUsers((prev) => [...prev, member]);
-                              setAssignSearch('');
-                              setShowDropdown(false);
-                            }}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-accent"
-                          >
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                              {(member.name?.[0] || member.email[0]).toUpperCase()}
-                            </span>
-                            <span className="min-w-0">
-                              <span className="block truncate text-sm text-foreground">
-                                {member.name || member.email}
-                              </span>
-                              {member.name && (
-                                <span className="block truncate text-xs text-muted-foreground">
-                                  {member.email}
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
               )}
             </AccordionContent>
           </AccordionItem>
-        )}
-      </Accordion>
+        </Accordion>
+      )}
 
-      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" onClick={onCreated} disabled={isLoading}>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <Button type="button" variant="ghost" size="sm" onClick={onCreated} disabled={isLoading}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isLoading || !title.trim() || !projectId}>
+        <Button type="submit" size="sm" disabled={isLoading || !title.trim() || !projectId}>
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating...
+              Creating…
             </>
           ) : (
             'Create task'

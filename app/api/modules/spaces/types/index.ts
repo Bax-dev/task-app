@@ -15,5 +15,10 @@ export const updateSpaceSchema = z.object({
   icon: z.string().max(50).optional(),
 });
 
+export const addSpaceMemberSchema = z.object({
+  userId: z.string().uuid('Invalid user ID'),
+});
+
 export type CreateSpaceDTO = z.infer<typeof createSpaceSchema>;
 export type UpdateSpaceDTO = z.infer<typeof updateSpaceSchema>;
+export type AddSpaceMemberDTO = z.infer<typeof addSpaceMemberSchema>;

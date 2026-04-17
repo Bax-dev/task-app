@@ -5,6 +5,8 @@ import { buildDailyReportReminderEmail, sendEmail } from '@/lib/email';
 import * as dailyReportModel from '../models';
 import type { CreateDailyReportDTO, UpdateDailyReportScheduleDTO } from '../types';
 
+const REMINDER_WINDOW_MINUTES = 5;
+
 function normalizeReportDate(reportDate?: string) {
   const date = reportDate ? new Date(`${reportDate}T00:00:00.000Z`) : new Date();
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -38,8 +40,18 @@ function getDateParts(now: Date, timeZone: string) {
   return {
     weekday: weekdayMap[part('weekday')],
     time: `${part('hour')}:${part('minute')}`,
+    totalMinutes: Number(part('hour')) * 60 + Number(part('minute')),
     isoDate: `${part('year')}-${part('month')}-${part('day')}`,
   };
+}
+
+function parseTimeToMinutes(time: string) {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function getDailyReportSchedule(organizationId: string, userId: string) {
@@ -142,36 +154,40 @@ export async function sendDailyReportReminders(now = new Date()) {
     const local = getDateParts(now, schedule.timezone);
     if (!local.weekday) continue;
     if (!schedule.weekdays.includes(local.weekday)) continue;
-    if (schedule.time !== local.time) continue;
 
-    const reportDate = normalizeReportDate(local.isoDate);
-    const [members, reports] = await Promise.all([
-      dailyReportModel.findNonGuestMembers(schedule.organizationId),
-      dailyReportModel.findReportsByOrganizationAndDate(schedule.organizationId, reportDate),
-    ]);
+    const scheduledMinutes = parseTimeToMinutes(schedule.time);
+    const minuteDelta = local.totalMinutes - scheduledMinutes;
+    if (minuteDelta < 0 || minuteDelta > REMINDER_WINDOW_MINUTES) continue;
 
-    const submittedIds = new Set(reports.map((report) => report.createdById));
-    const pendingMembers = members.filter((member) => !submittedIds.has(member.user.id));
-    if (pendingMembers.length === 0) continue;
+    if (schedule.lastReminderSentAt) {
+      const lastSentLocal = getDateParts(schedule.lastReminderSentAt, schedule.timezone);
+      if (lastSentLocal.isoDate === local.isoDate) continue;
+    }
+
+    const members = await dailyReportModel.findNonGuestMembers(schedule.organizationId);
+    if (members.length === 0) {
+      await dailyReportModel.markReminderSent(schedule.id, now);
+      continue;
+    }
 
     await notifyDailyReportReminder({
-      userIds: pendingMembers.map((member) => member.user.id),
+      userIds: members.map((member) => member.user.id),
       organizationId: schedule.organizationId,
       reportDate: local.isoDate,
     });
 
-    await Promise.all(
-      pendingMembers.map(async (member) => {
-        const email = buildDailyReportReminderEmail({
-          recipientName: member.user.name || member.user.email,
-          reportDate: local.isoDate,
-          link: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/daily-reports?organizationId=${schedule.organizationId}`,
-        });
-        await sendEmail({ to: member.user.email, subject: email.subject, html: email.html }).catch(() => {});
-      })
-    );
+    for (const member of members) {
+      const email = buildDailyReportReminderEmail({
+        recipientName: member.user.name || member.user.email,
+        reportDate: local.isoDate,
+        link: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/daily-reports?organizationId=${schedule.organizationId}`,
+      });
+      await sendEmail({ to: member.user.email, subject: email.subject, html: email.html }).catch(() => {});
+      await delay(250);
+    }
 
-    remindersSent += pendingMembers.length;
+    await dailyReportModel.markReminderSent(schedule.id, now);
+    remindersSent += members.length;
   }
 
   return { schedulesChecked, remindersSent };

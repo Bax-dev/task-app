@@ -1,15 +1,33 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Navbar from '@/components/layout/Navbar';
 import CommandPalette from '@/components/CommandPalette';
 import AiAssistantPanel from '@/components/ai/AiAssistantPanel';
 
+const COLLAPSED_KEY = 'taskflow:sidebar-collapsed';
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(COLLAPSED_KEY);
+      if (stored === '1') setCollapsed(true);
+    } catch {}
+  }, []);
+
+  const toggleCollapse = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { window.localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -29,13 +47,19 @@ export default function AppShell({ children }: { children: ReactNode }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          onClose={() => setSidebarOpen(false)}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapse}
+        />
       </div>
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
           onMenuToggle={() => setSidebarOpen(true)}
+          onDesktopToggle={toggleCollapse}
+          sidebarCollapsed={collapsed}
           onSearchClick={() => setCommandPaletteOpen(true)}
           onAiClick={() => setAiPanelOpen(true)}
         />

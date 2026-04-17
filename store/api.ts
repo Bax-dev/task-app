@@ -27,6 +27,14 @@ import type {
   DailyReportsOverview,
   Weekday,
 } from '@/types/daily-report';
+import type { ThemeColor, ModuleCard } from '@/store/slices/preferencesSlice';
+
+export type UserPreferencesPayload = {
+  themeColorId?: string;
+  customThemeColors?: ThemeColor[];
+  moduleCards?: ModuleCard[];
+  dueSoonEnabled?: boolean;
+};
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: '/api',
@@ -144,6 +152,8 @@ export const apiSlice = createApi({
     'Subtasks',
     'DailyReports',
     'DailyReportSchedule',
+    'SpaceMembers',
+    'Preferences',
   ],
   endpoints: (builder) => ({
     // ─── Auth ───
@@ -181,6 +191,14 @@ export const apiSlice = createApi({
     updateProfile: builder.mutation<User, { name?: string; email?: string; avatar?: string | null }>({
       query: (body) => ({ url: '/users/profile', method: 'PATCH', body }),
       invalidatesTags: ['Auth'],
+    }),
+    getPreferences: builder.query<UserPreferencesPayload | null, void>({
+      query: () => '/users/preferences',
+      providesTags: ['Preferences'],
+    }),
+    updatePreferences: builder.mutation<UserPreferencesPayload, UserPreferencesPayload>({
+      query: (body) => ({ url: '/users/preferences', method: 'PATCH', body }),
+      invalidatesTags: ['Preferences'],
     }),
 
     // ─── Organizations ───
@@ -245,6 +263,60 @@ export const apiSlice = createApi({
     deleteSpace: builder.mutation<void, string>({
       query: (id) => ({ url: `/spaces/${id}`, method: 'DELETE' }),
       invalidatesTags: ['Spaces'],
+    }),
+
+    getSpaceMembers: builder.query<
+      Array<{ id: string; user: { id: string; name: string | null; email: string; avatar: string | null } }>,
+      string
+    >({
+      query: (spaceId) => `/spaces/${spaceId}/members`,
+      providesTags: (_, __, spaceId) => [{ type: 'SpaceMembers', id: spaceId }],
+    }),
+    addSpaceMember: builder.mutation<
+      unknown,
+      { spaceId: string; userId: string; user?: { id: string; name: string | null; email: string; avatar: string | null } }
+    >({
+      query: ({ spaceId, userId }) => ({
+        url: `/spaces/${spaceId}/members`,
+        method: 'POST',
+        body: { userId },
+      }),
+      async onQueryStarted({ spaceId, userId, user }, { dispatch, queryFulfilled }) {
+        if (!user) return;
+        const patch = dispatch(
+          apiSlice.util.updateQueryData('getSpaceMembers', spaceId, (draft) => {
+            if (!draft.some((m) => m.user.id === userId)) {
+              draft.push({ id: `optimistic-${userId}`, user });
+            }
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_, __, { spaceId }) => [{ type: 'SpaceMembers', id: spaceId }],
+    }),
+    removeSpaceMember: builder.mutation<unknown, { spaceId: string; userId: string }>({
+      query: ({ spaceId, userId }) => ({
+        url: `/spaces/${spaceId}/members/${userId}`,
+        method: 'DELETE',
+      }),
+      async onQueryStarted({ spaceId, userId }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          apiSlice.util.updateQueryData('getSpaceMembers', spaceId, (draft) => {
+            const idx = draft.findIndex((m) => m.user.id === userId);
+            if (idx >= 0) draft.splice(idx, 1);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_, __, { spaceId }) => [{ type: 'SpaceMembers', id: spaceId }],
     }),
 
     // ─── Projects ───
@@ -383,6 +455,61 @@ export const apiSlice = createApi({
     }),
     toggleAssignment: builder.mutation<any, { taskId: string; userId: string }>({
       query: ({ taskId, userId }) => ({ url: `/tasks/${taskId}/assign`, method: 'POST', body: { userId } }),
+      async onQueryStarted({ taskId, userId }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          apiSlice.util.updateQueryData('getTask', taskId, (draft) => {
+            draft.assignments = draft.assignments || [];
+            const existingIndex = draft.assignments.findIndex((assignment) => assignment.user.id === userId);
+
+            if (existingIndex >= 0) {
+              draft.assignments.splice(existingIndex, 1);
+              return;
+            }
+
+            draft.assignments.push({
+              user: { id: userId, name: 'Assigning...', email: '' },
+            });
+          })
+        );
+
+        try {
+          const { data } = await queryFulfilled;
+          if (!data?.assigned || !data?.user) return;
+
+          dispatch(
+            apiSlice.util.updateQueryData('getTask', taskId, (draft) => {
+              draft.assignments = draft.assignments || [];
+              const assignment = draft.assignments.find((item) => item.user.id === userId);
+              if (assignment) assignment.user = data.user;
+            })
+          );
+        } catch {
+          patch.undo();
+        }
+      },
+      invalidatesTags: (_, __, { taskId }) => [{ type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: taskId }],
+    }),
+    bulkAssignTaskMembers: builder.mutation<any, { taskId: string; userIds: string[] }>({
+      query: ({ taskId, userIds }) => ({ url: `/tasks/${taskId}/assign`, method: 'POST', body: { userIds } }),
+      async onQueryStarted({ taskId }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          if (!data?.users?.length) return;
+
+          dispatch(
+            apiSlice.util.updateQueryData('getTask', taskId, (draft) => {
+              draft.assignments = draft.assignments || [];
+              const seenIds = new Set(draft.assignments.map((assignment) => assignment.user.id));
+
+              for (const user of data.users) {
+                if (seenIds.has(user.id)) continue;
+                draft.assignments.push({ user });
+                seenIds.add(user.id);
+              }
+            })
+          );
+        } catch {}
+      },
       invalidatesTags: (_, __, { taskId }) => [{ type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: taskId }],
     }),
     sendOverdueReminders: builder.mutation<{ tasksChecked: number; remindersSent: number }, void>({
@@ -897,6 +1024,8 @@ export const {
   useResendOtpMutation,
   useResetPasswordMutation,
   useUpdateProfileMutation,
+  useGetPreferencesQuery,
+  useUpdatePreferencesMutation,
   // Organizations
   useGetOrganizationsQuery,
   useGetOrganizationQuery,
@@ -913,6 +1042,9 @@ export const {
   useCreateSpaceMutation,
   useUpdateSpaceMutation,
   useDeleteSpaceMutation,
+  useGetSpaceMembersQuery,
+  useAddSpaceMemberMutation,
+  useRemoveSpaceMemberMutation,
   // Projects
   useGetProjectsQuery,
   useGetProjectQuery,
@@ -928,6 +1060,7 @@ export const {
   useUpdateTaskMutation,
   useDeleteTaskMutation,
   useToggleAssignmentMutation,
+  useBulkAssignTaskMembersMutation,
   useSendOverdueRemindersMutation,
   // Notifications
   useGetNotificationsQuery,

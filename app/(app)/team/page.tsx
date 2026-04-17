@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Users, Loader2, Mail, Trash2, Search, Shield, RefreshCw, XCircle, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -140,8 +141,9 @@ export default function TeamPage() {
 
   if (orgsLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="p-4 sm:p-6 md:p-8 space-y-6">
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
@@ -183,8 +185,10 @@ export default function TeamPage() {
           <p className="text-sm text-muted-foreground">Select an organization to view members</p>
         </div>
       ) : membersLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="space-y-3">
+          <Skeleton className="h-16 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
         </div>
       ) : (
         <>

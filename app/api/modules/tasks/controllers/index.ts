@@ -115,7 +115,9 @@ export async function handleToggleAssignment(request: NextRequest, taskId: strin
     const validation = validateBody(assignTaskSchema, body);
     if (!validation.success) return errorResponse(validation.error);
 
-    const result = await taskService.toggleAssignment(taskId, session.userId, validation.data);
+    const result = validation.data.userIds
+      ? await taskService.assignUsers(taskId, session.userId, validation.data.userIds)
+      : await taskService.toggleAssignment(taskId, session.userId, validation.data);
     return successResponse(result);
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();

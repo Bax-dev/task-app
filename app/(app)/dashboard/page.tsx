@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Plus,
   FolderOpen,
   Users,
   Zap,
-  Loader2,
   CheckSquare,
   CalendarDays,
   FileText,
@@ -19,11 +19,17 @@ import {
   Pencil,
   Check,
   X,
-  Clock,
   Layers,
   GripVertical,
+  Loader2,
 } from 'lucide-react';
-import { useGetOrganizationsQuery, useGetUserTasksQuery, useGetProjectsQuery, useGetMeQuery, useCreateSpaceMutation } from '@/store/api';
+import {
+  useGetOrganizationsQuery,
+  useGetUserTasksQuery,
+  useGetProjectsQuery,
+  useGetMeQuery,
+  useCreateSpaceMutation,
+} from '@/store/api';
 import AiSummary from '@/components/ai/AiSummary';
 import { Label } from '@/components/ui/label';
 import {
@@ -40,7 +46,12 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { selectVisibleModuleCards, renameModuleCard, reorderModuleCards, type ModuleCard } from '@/store/slices/preferencesSlice';
+import {
+  selectVisibleModuleCards,
+  renameModuleCard,
+  reorderModuleCards,
+  type ModuleCard,
+} from '@/store/slices/preferencesSlice';
 import type { LucideIcon } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -50,9 +61,14 @@ const ICON_MAP: Record<string, LucideIcon> = {
   BarChart3,
   Star,
   Users,
-  Activity,
+  // Activity,
   FolderOpen,
 };
+
+const SPACE_COLORS = [
+  '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
+  '#db2777', '#9333ea', '#0891b2', '#65a30d', '#ea580c',
+];
 
 interface DraggableCardProps {
   card: { id: string; name: string; href: string; icon: string };
@@ -65,7 +81,16 @@ interface DraggableCardProps {
   onDrop: (e: React.DragEvent) => void;
 }
 
-function DraggableModuleCard({ card, index, dragIndex, overIndex, onDragStart, onDragOver, onDragEnd, onDrop }: DraggableCardProps) {
+function DraggableModuleCard({
+  card,
+  index,
+  dragIndex,
+  overIndex,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onDrop,
+}: DraggableCardProps) {
   const dispatch = useAppDispatch();
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(card.name);
@@ -98,9 +123,9 @@ function DraggableModuleCard({ card, index, dragIndex, overIndex, onDragStart, o
 
   if (editing) {
     return (
-      <div className="bg-card border-2 border-primary/30 rounded-lg p-3 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Icon className="w-4 h-4 text-primary" />
+      <div className="bg-card border border-primary/40 rounded-lg p-2.5 flex items-center gap-2.5">
+        <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <Icon className="w-3.5 h-3.5 text-primary" />
         </div>
         <input
           ref={inputRef}
@@ -126,7 +151,7 @@ function DraggableModuleCard({ card, index, dragIndex, overIndex, onDragStart, o
 
   return (
     <div
-      className={`group relative transition-all duration-200 ${isDragging ? 'opacity-40 scale-95' : ''} ${isOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg' : ''}`}
+      className={`group relative transition-all duration-150 ${isDragging ? 'opacity-40 scale-95' : ''} ${isOver ? 'ring-2 ring-primary ring-offset-1 ring-offset-background rounded-lg' : ''}`}
       draggable
       onDragStart={() => onDragStart(index)}
       onDragOver={(e) => onDragOver(e, index)}
@@ -134,19 +159,19 @@ function DraggableModuleCard({ card, index, dragIndex, overIndex, onDragStart, o
       onDrop={onDrop}
     >
       <Link href={card.href}>
-        <div className="bg-card border border-border rounded-lg p-3 flex items-center gap-3 hover:border-primary/30 hover:shadow-sm transition-all">
-          <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <Icon className="w-4 h-4 text-primary" />
+        <div className="bg-card border border-border rounded-lg p-2.5 flex items-center gap-2.5 hover:border-primary/40 hover:bg-secondary/30 transition-colors">
+          <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-3.5 h-3.5 text-primary" />
           </div>
           <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate flex-1">
             {card.name}
           </span>
-          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 cursor-grab" />
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 cursor-grab" />
         </div>
       </Link>
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(true); }}
-        className="absolute top-1.5 right-7 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground"
+        className="absolute top-1 right-7 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground"
         title="Rename"
       >
         <Pencil className="w-3 h-3" />
@@ -155,11 +180,6 @@ function DraggableModuleCard({ card, index, dragIndex, overIndex, onDragStart, o
   );
 }
 
-const SPACE_COLORS = [
-  '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
-  '#db2777', '#9333ea', '#0891b2', '#65a30d', '#ea580c',
-];
-
 export default function DashboardPage() {
   const { data: user } = useGetMeQuery();
   const { data: organizations = [], isLoading: orgsLoading } = useGetOrganizationsQuery();
@@ -167,6 +187,7 @@ export default function DashboardPage() {
   const { data: projects = [], error: projectsError } = useGetProjectsQuery();
   const allModuleCards = useAppSelector(selectVisibleModuleCards);
   const dispatch = useAppDispatch();
+
   const [localCards, setLocalCards] = useState<ModuleCard[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -175,15 +196,11 @@ export default function DashboardPage() {
     setLocalCards(allModuleCards);
   }, [allModuleCards]);
 
-  const handleDragStart = useCallback((index: number) => {
-    setDragIndex(index);
-  }, []);
-
+  const handleDragStart = useCallback((index: number) => setDragIndex(index), []);
   const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     setOverIndex(index);
   }, []);
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     if (dragIndex === null || overIndex === null || dragIndex === overIndex) {
@@ -199,7 +216,6 @@ export default function DashboardPage() {
     setDragIndex(null);
     setOverIndex(null);
   }, [dragIndex, overIndex, localCards, dispatch]);
-
   const handleDragEnd = useCallback(() => {
     setDragIndex(null);
     setOverIndex(null);
@@ -216,7 +232,7 @@ export default function DashboardPage() {
     if (!spaceName.trim() || !spaceOrgId) return;
     try {
       await createSpace({ name: spaceName.trim(), color: spaceColor, organizationId: spaceOrgId }).unwrap();
-      toast.success('Space created!');
+      toast.success('Space created');
       setSpaceDialogOpen(false);
       setSpaceName('');
       setSpaceColor('#7c3aed');
@@ -226,390 +242,487 @@ export default function DashboardPage() {
     }
   };
 
-  if (orgsLoading || tasksLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const threeDays = now + 3 * 24 * 60 * 60 * 1000;
+    let done = 0, inProgress = 0, todo = 0, cancelled = 0, dueSoon = 0, overdue = 0;
+    for (const t of tasks as any[]) {
+      if (t.status === 'DONE') done++;
+      else if (t.status === 'IN_PROGRESS') inProgress++;
+      else if (t.status === 'CANCELLED') cancelled++;
+      else todo++;
+      if (t.dueDate && t.status !== 'DONE' && t.status !== 'CANCELLED') {
+        const due = new Date(t.dueDate).getTime();
+        if (due < now) overdue++;
+        else if (due <= threeDays) dueSoon++;
+      }
+    }
+    const totalMembers = (organizations as any[]).reduce((s, o) => s + (o._count?.memberships || 0), 0);
+    const totalSpaces = (organizations as any[]).reduce((s, o) => s + (o._count?.spaces || 0), 0);
+    const completion = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
+    return { done, inProgress, todo, cancelled, dueSoon, overdue, totalMembers, totalSpaces, completion };
+  }, [tasks, organizations]);
+
+  const isLoading = orgsLoading || tasksLoading;
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
   }
 
-  const recentTasks = tasks.slice(0, 5);
-  const inProgressCount = tasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
-  const doneCount = tasks.filter((t: any) => t.status === 'DONE').length;
-  const todoCount = tasks.filter((t: any) => t.status === 'TODO').length;
-
-  // Tasks due soon (next 3 days)
-  const now = new Date();
-  const threeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-  const dueSoonCount = tasks.filter((t: any) => {
-    if (!t.dueDate || t.status === 'DONE' || t.status === 'CANCELLED') return false;
-    const due = new Date(t.dueDate);
-    return due >= now && due <= threeDays;
-  }).length;
-
-  const greeting = getGreeting();
+  const recentTasks = (tasks as any[]).slice(0, 5);
+  const recentProjects = (projects as any[]).slice(0, 4);
   const firstName = user?.name?.split(' ')[0] || '';
+  const nowTs = Date.now();
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-            {greeting}{firstName ? `, ${firstName}` : ''}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {getContextualSubtitle(inProgressCount, dueSoonCount, todoCount)}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {organizations.length > 0 && projects.length > 0 && (
-            <Link href={`/projects/${projects[0]?.id}/tasks/new`}>
-              <Button variant="outline" size="sm" className="gap-1.5">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="space-y-5">
+        {/* Compact header */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+              {getGreeting()}{firstName ? `, ${firstName}` : ''}
+            </h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {organizations.length > 0 && projects.length > 0 && (
+              <Link href={`/projects/${projects[0]?.id}/tasks/new`}>
+                <Button size="sm" className="gap-1.5 h-8">
+                  <Plus className="w-3.5 h-3.5" />
+                  New Task
+                </Button>
+              </Link>
+            )}
+            {organizations.length > 0 && (
+              <Dialog open={spaceDialogOpen} onOpenChange={setSpaceDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                    <Layers className="w-3.5 h-3.5" />
+                    New Space
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden">
+                  <form onSubmit={handleCreateSpace}>
+                    <input
+                      value={spaceName}
+                      onChange={(e) => setSpaceName(e.target.value)}
+                      placeholder="Space name"
+                      className="w-full border-0 bg-transparent text-lg font-semibold h-auto py-4 px-5 placeholder:text-muted-foreground/50 focus:outline-none"
+                      required
+                      autoFocus
+                    />
+                    <div className="border-t border-border" />
+                    <div className="px-5 py-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Organization</Label>
+                        <Select value={spaceOrgId} onValueChange={setSpaceOrgId}>
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select organization" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(organizations as any[]).map((org) => (
+                              <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium text-muted-foreground">Color</Label>
+                        <div className="flex gap-2 flex-wrap">
+                          {SPACE_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setSpaceColor(c)}
+                              className={`w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 ${spaceColor === c ? 'border-foreground scale-110' : 'border-transparent'}`}
+                              style={{ backgroundColor: c }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="border-t border-border px-5 py-3 flex justify-end">
+                      <Button type="submit" disabled={isCreatingSpace || !spaceName.trim() || !spaceOrgId} size="sm" className="gap-1.5">
+                        {isCreatingSpace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                        {isCreatingSpace ? 'Creating' : 'Create'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+            <Link href="/organizations/new">
+              <Button variant="outline" size="sm" className="gap-1.5 h-8">
                 <Plus className="w-3.5 h-3.5" />
-                New Task
+                New Org
               </Button>
             </Link>
-          )}
-          {organizations.length > 0 && (
-            <Dialog open={spaceDialogOpen} onOpenChange={setSpaceDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Layers className="w-3.5 h-3.5" />
-                  New Space
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[550px] p-0 gap-0 overflow-hidden">
-                <form onSubmit={handleCreateSpace}>
-                  <div className="px-5 pt-5 pb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">Space</span>
-                    </div>
-                  </div>
-                  <input
-                    value={spaceName}
-                    onChange={(e) => setSpaceName(e.target.value)}
-                    placeholder="Space Name"
-                    className="w-full border-0 bg-transparent text-lg font-semibold h-auto py-2 px-5 placeholder:text-muted-foreground/50 focus:outline-none"
-                    required
-                    autoFocus
-                  />
-                  <div className="border-t border-border" />
-                  <div className="px-5 py-3 space-y-3">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground">Organization</Label>
-                      <Select value={spaceOrgId} onValueChange={setSpaceOrgId}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Select organization" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {organizations.map((org: any) => (
-                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground">Color</Label>
-                      <div className="flex gap-2 flex-wrap">
-                        {SPACE_COLORS.map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => setSpaceColor(c)}
-                            className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${spaceColor === c ? 'border-foreground scale-110 ring-2 ring-offset-2 ring-offset-background ring-primary' : 'border-transparent'}`}
-                            style={{ backgroundColor: c }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="border-t border-border" />
-                  <div className="px-5 py-3 flex items-center justify-end">
-                    <Button type="submit" disabled={isCreatingSpace || !spaceName.trim() || !spaceOrgId} size="sm" className="gap-1.5 px-5">
-                      {isCreatingSpace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                      {isCreatingSpace ? 'Creating...' : 'Create Space'}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          )}
-          <Link href="/organizations/new">
-            <Button size="sm" className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" />
-              New Org
-            </Button>
-          </Link>
-        </div>
-      </div>
+          </div>
+        </header>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <Link href="/organizations">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <Users className="w-4.5 h-4.5 text-primary" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{organizations.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Organizations</p>
-          </div>
-        </Link>
-        <Link href="/projects">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-blue-500/30 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                <FolderOpen className="w-4.5 h-4.5 text-blue-500" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">
-              {projectsError ? <span className="text-destructive text-sm">--</span> : projects.length}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Projects</p>
-          </div>
-        </Link>
-        <Link href="/tasks">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-amber-500/30 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-                <Zap className="w-4.5 h-4.5 text-amber-500" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{inProgressCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">In Progress</p>
-          </div>
-        </Link>
-        <Link href="/tasks">
-          <div className="bg-card border border-border rounded-lg p-4 hover:border-green-500/30 hover:shadow-md transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                <CheckSquare className="w-4.5 h-4.5 text-green-500" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{doneCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Completed</p>
-          </div>
-        </Link>
-      </div>
+        {/* KPI strip */}
+        <section className="grid gap-3 grid-cols-2 md:grid-cols-4">
+          <StatCard
+            label="Organizations"
+            value={organizations.length}
+            meta={`${stats.totalSpaces} spaces`}
+            icon={<Users className="w-4 h-4" />}
+            href="/organizations"
+            tone="sky"
+          />
+          <StatCard
+            label="Projects"
+            value={projectsError ? '—' : projects.length}
+            meta={projectsError ? 'Unavailable' : `${tasks.length} tasks`}
+            icon={<FolderOpen className="w-4 h-4" />}
+            href="/projects"
+            tone="blue"
+          />
+          <StatCard
+            label="In Progress"
+            value={stats.inProgress}
+            meta={stats.dueSoon > 0 ? `${stats.dueSoon} due soon` : '—'}
+            icon={<Zap className="w-4 h-4" />}
+            href="/tasks"
+            tone="amber"
+          />
+          <StatCard
+            label="Completed"
+            value={stats.done}
+            meta={tasks.length > 0 ? `${stats.completion}% rate` : '—'}
+            icon={<CheckSquare className="w-4 h-4" />}
+            href="/tasks"
+            tone="emerald"
+          />
+        </section>
 
-      {/* Progress overview bar */}
-      {tasks.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-foreground">Task Progress</h3>
-            <span className="text-xs text-muted-foreground">
-              {doneCount}/{tasks.length} completed
-            </span>
-          </div>
-          <div className="flex h-2 rounded-full overflow-hidden bg-muted gap-0.5">
-            {doneCount > 0 && (
-              <div className="bg-green-500 rounded-full transition-all duration-500" style={{ width: `${(doneCount / tasks.length) * 100}%` }} />
-            )}
-            {inProgressCount > 0 && (
-              <div className="bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${(inProgressCount / tasks.length) * 100}%` }} />
-            )}
-            {todoCount > 0 && (
-              <div className="bg-slate-400 rounded-full transition-all duration-500" style={{ width: `${(todoCount / tasks.length) * 100}%` }} />
-            )}
-          </div>
-          <div className="flex items-center gap-4 mt-2">
-            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-green-500" /> Done ({doneCount})
-            </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-amber-500" /> In Progress ({inProgressCount})
-            </span>
-            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <span className="w-2 h-2 rounded-full bg-slate-400" /> To Do ({todoCount})
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* AI Daily Summary */}
-      {organizations.length > 0 && (
-        <div className="mb-6">
-          <AiSummary organizationId={organizations[0].id} type="daily" />
-        </div>
-      )}
-
-      {/* Module Cards - Drag & Drop */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Quick Actions</h2>
-          <span className="text-[10px] text-muted-foreground/60">Drag to reorder</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {localCards.map((card, i) => (
-            <DraggableModuleCard
-              key={card.id}
-              card={card}
-              index={i}
-              dragIndex={dragIndex}
-              overIndex={overIndex}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              onDrop={handleDrop}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Due Soon Alert */}
-      {dueSoonCount > 0 && (
-        <Link href="/calendar">
-          <div className="mb-6 bg-amber-500/5 border border-amber-200 dark:border-amber-900 rounded-lg p-3 flex items-center gap-3 hover:bg-amber-500/10 transition-colors">
-            <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <p className="text-sm text-foreground">
-              <span className="font-semibold">{dueSoonCount} task{dueSoonCount > 1 ? 's' : ''}</span>
-              {' '}due in the next 3 days
-            </p>
-            <ArrowRight className="w-4 h-4 text-amber-600 ml-auto flex-shrink-0" />
-          </div>
-        </Link>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Tasks */}
-        <div className="lg:col-span-2">
-          {recentTasks.length > 0 ? (
-            <div>
+        {/* Progress + deadlines */}
+        {tasks.length > 0 && (
+          <section className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-foreground">Recent Tasks</h2>
-                <Link href="/tasks" className="text-xs text-primary hover:underline flex items-center gap-1">
-                  View all <ArrowRight className="w-3 h-3" />
-                </Link>
+                <span className="text-sm font-medium text-foreground">Progress</span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {stats.done}/{tasks.length} · {stats.completion}%
+                </span>
               </div>
-              <div className="bg-card border border-border rounded-lg divide-y divide-border">
-                {recentTasks.map((task: any) => (
-                  <Link key={task.id} href={`/projects/${task.projectId}/tasks/${task.id}`}>
-                    <div className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/30 transition-colors">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                        task.status === 'DONE' ? 'bg-green-500' :
-                        task.status === 'IN_PROGRESS' ? 'bg-amber-500' :
-                        'bg-slate-400'
-                      }`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
-                        <p className="text-xs text-muted-foreground">{task.project?.name || '-'}</p>
+              <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+                {stats.done > 0 && <div className="bg-green-500" style={{ width: `${(stats.done / tasks.length) * 100}%` }} />}
+                {stats.inProgress > 0 && <div className="bg-amber-500" style={{ width: `${(stats.inProgress / tasks.length) * 100}%` }} />}
+                {stats.todo > 0 && <div className="bg-slate-400" style={{ width: `${(stats.todo / tasks.length) * 100}%` }} />}
+                {stats.cancelled > 0 && <div className="bg-zinc-300" style={{ width: `${(stats.cancelled / tasks.length) * 100}%` }} />}
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
+                <LegendItem dotClass="bg-green-500" label="Done" value={stats.done} />
+                <LegendItem dotClass="bg-amber-500" label="In progress" value={stats.inProgress} />
+                <LegendItem dotClass="bg-slate-400" label="To do" value={stats.todo} />
+                <LegendItem dotClass="bg-zinc-300" label="Cancelled" value={stats.cancelled} />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-foreground">Deadlines</span>
+              </div>
+              <div className="space-y-2">
+                <DeadlineRow href="/calendar" tone={stats.dueSoon > 0 ? 'amber' : 'slate'} label="Due in 3 days" value={stats.dueSoon} />
+                <DeadlineRow href="/tasks" tone={stats.overdue > 0 ? 'red' : 'slate'} label="Overdue" value={stats.overdue} />
+                <DeadlineRow href="/team" tone="slate" label="Members" value={stats.totalMembers} />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Module quick actions */}
+        {organizations.length > 0 && localCards.length > 0 && (
+          <section className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">Quick actions</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+              {localCards.map((card, i) => (
+                <DraggableModuleCard
+                  key={card.id}
+                  card={card}
+                  index={i}
+                  dragIndex={dragIndex}
+                  overIndex={overIndex}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDragEnd={handleDragEnd}
+                  onDrop={handleDrop}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {organizations.length > 0 && (
+          <section>
+            <AiSummary organizationId={organizations[0].id} type="daily" />
+          </section>
+        )}
+
+        {/* Lists */}
+        {organizations.length === 0 ? (
+          <EmptyWorkspaceState />
+        ) : (
+          <section className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card p-4 lg:col-span-1">
+              <SectionHeader title="Recent tasks" href="/tasks" />
+              {recentTasks.length > 0 ? (
+                <div className="mt-3 space-y-1">
+                  {recentTasks.map((task: any) => (
+                    <Link key={task.id} href={`/projects/${task.projectId}/tasks/${task.id}`}>
+                      <div className="group flex items-start gap-2.5 rounded-lg px-2.5 py-2 hover:bg-secondary/40 transition-colors">
+                        <span className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${statusDot(task.status)}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                              {task.title}
+                            </p>
+                            {task.priority && task.priority !== 'MEDIUM' && (
+                              <span className={`rounded px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${priorityClass(task.priority)}`}>
+                                {task.priority}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground truncate">
+                            <span className="truncate">{task.project?.name || 'Untitled'}</span>
+                            {task.dueDate && (
+                              <span className={new Date(task.dueDate).getTime() < nowTs && task.status !== 'DONE' ? 'font-medium text-red-500' : ''}>
+                                · {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      {task.dueDate && (
-                        <span className={`text-[10px] flex-shrink-0 ${
-                          new Date(task.dueDate) < now && task.status !== 'DONE'
-                            ? 'text-red-500 font-medium'
-                            : 'text-muted-foreground'
-                        }`}>
-                          {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </span>
-                      )}
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-medium flex-shrink-0 ${
-                        task.priority === 'URGENT' ? 'bg-red-500/10 text-red-600' :
-                        task.priority === 'HIGH' ? 'bg-orange-500/10 text-orange-600' :
-                        task.priority === 'LOW' ? 'bg-blue-500/10 text-blue-600' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {task.priority}
-                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <EmptyInline icon={<CheckSquare className="w-8 h-8" />} title="No tasks yet">
+                  {projects.length > 0 ? (
+                    <Link href={`/projects/${projects[0]?.id}/tasks/new`}>
+                      <Button size="sm" variant="outline" className="gap-1.5">
+                        <Plus className="w-3.5 h-3.5" />
+                        Create task
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link href="/projects">
+                      <Button size="sm" variant="outline" className="gap-1.5">
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        Open projects
+                      </Button>
+                    </Link>
+                  )}
+                </EmptyInline>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <SectionHeader title="Projects" href="/projects" />
+              {recentProjects.length > 0 ? (
+                <div className="mt-3 space-y-1">
+                  {recentProjects.map((project: any) => (
+                    <Link key={project.id} href={`/projects/${project.id}`}>
+                      <div className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 hover:bg-secondary/40 transition-colors">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                            {project.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {project.space?.name || 'Space'} · {project._count?.tasks || 0} tasks
+                          </p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 px-2 py-4 text-xs text-muted-foreground">No projects yet.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <SectionHeader title="Organizations" href="/organizations" />
+              <div className="mt-3 space-y-1">
+                {(organizations as any[]).slice(0, 5).map((org) => (
+                  <Link key={org.id} href={`/organizations/${org.id}`}>
+                    <div className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 hover:bg-secondary/40 transition-colors">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                          {org.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {org._count?.spaces || 0} spaces · {org._count?.memberships || 0} members
+                        </p>
+                      </div>
                     </div>
                   </Link>
                 ))}
               </div>
             </div>
-          ) : organizations.length === 0 ? (
-            <div className="bg-card border border-border rounded-lg p-8">
-              <div className="text-center max-w-sm mx-auto">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <FolderOpen className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-base font-semibold text-foreground mb-2">Welcome to TaskFlow</h3>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Get started by creating your first organization. Then add spaces, projects, and tasks to stay organized.
-                </p>
-                <div className="space-y-2">
-                  <Link href="/organizations/new" className="block">
-                    <Button className="w-full gap-2">
-                      <Plus className="w-4 h-4" />
-                      Create Organization
-                    </Button>
-                  </Link>
-                </div>
-                <div className="mt-6 text-left space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">How it works</p>
-                  <div className="flex items-start gap-3">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                    <p className="text-sm text-muted-foreground">Create an <span className="text-foreground font-medium">Organization</span> for your team</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                    <p className="text-sm text-muted-foreground">Add <span className="text-foreground font-medium">Spaces</span> to group related work</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-                    <p className="text-sm text-muted-foreground">Create <span className="text-foreground font-medium">Projects</span> and add <span className="text-foreground font-medium">Tasks</span></p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-card border border-border rounded-lg text-center py-10">
-              <CheckSquare className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <h3 className="text-base font-semibold text-foreground mb-1">No tasks yet</h3>
-              <p className="text-sm text-muted-foreground mb-4">Create a project first, then add tasks to it</p>
-              {projects.length > 0 ? (
-                <Link href={`/projects/${projects[0]?.id}/tasks/new`}>
-                  <Button size="sm" className="gap-1.5">
-                    <Plus className="w-3.5 h-3.5" />
-                    Create Task
-                  </Button>
-                </Link>
-              ) : (
-                <Link href="/projects">
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <FolderOpen className="w-3.5 h-3.5" />
-                    Go to Projects
-                  </Button>
-                </Link>
-              )}
-            </div>
-          )}
-        </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Organizations sidebar */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-foreground">Organizations</h2>
-            <Link href="/organizations" className="text-xs text-primary hover:underline flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
-            </Link>
+function StatCard({
+  label,
+  value,
+  meta,
+  icon,
+  href,
+  tone = 'sky',
+}: {
+  label: string;
+  value: string | number;
+  meta: string;
+  icon: React.ReactNode;
+  href: string;
+  tone?: 'sky' | 'blue' | 'amber' | 'emerald';
+}) {
+  const tones = {
+    sky: 'bg-sky-500/10 text-sky-600 group-hover:border-sky-500/40',
+    blue: 'bg-blue-500/10 text-blue-600 group-hover:border-blue-500/40',
+    amber: 'bg-amber-500/10 text-amber-600 group-hover:border-amber-500/40',
+    emerald: 'bg-emerald-500/10 text-emerald-600 group-hover:border-emerald-500/40',
+  };
+  const borderTones = {
+    sky: 'hover:border-sky-500/40',
+    blue: 'hover:border-blue-500/40',
+    amber: 'hover:border-amber-500/40',
+    emerald: 'hover:border-emerald-500/40',
+  };
+  return (
+    <Link href={href} className="group">
+      <div className={`rounded-xl border border-border bg-card p-3.5 transition-colors h-full ${borderTones[tone]}`}>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+          <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${tones[tone]}`}>
+            {icon}
           </div>
-          {organizations.length > 0 ? (
-            <div className="space-y-2">
-              {organizations.slice(0, 5).map((org: any) => (
-                <Link key={org.id} href={`/organizations/${org.id}`} className="group block">
-                  <div className="bg-card border border-border rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-                    <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {org.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {org._count?.spaces || 0} spaces &middot; {org._count?.memberships || 0} members
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-card border border-border rounded-lg p-4 text-center">
-              <p className="text-sm text-muted-foreground">No organizations yet</p>
-            </div>
-          )}
+        </div>
+        <p className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground truncate">{meta}</p>
+      </div>
+    </Link>
+  );
+}
+
+function LegendItem({ dotClass, label, value }: { dotClass: string; label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+      <span className="text-muted-foreground truncate">{label}</span>
+      <span className="ml-auto font-medium tabular-nums text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function DeadlineRow({ href, tone, label, value }: { href: string; tone: 'amber' | 'red' | 'slate'; label: string; value: number }) {
+  const tones = {
+    amber: 'text-amber-600',
+    red: 'text-red-600',
+    slate: 'text-foreground',
+  };
+  return (
+    <Link href={href}>
+      <div className="flex items-center justify-between rounded-lg px-2.5 py-2 hover:bg-secondary/40 transition-colors">
+        <span className="text-sm text-foreground">{label}</span>
+        <span className={`text-base font-semibold tabular-nums ${tones[tone]}`}>{value}</span>
+      </div>
+    </Link>
+  );
+}
+
+function SectionHeader({ title, href }: { title: string; href: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm font-medium text-foreground">{title}</span>
+      <Link href={href} className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
+        View all
+        <ArrowRight className="w-3 h-3" />
+      </Link>
+    </div>
+  );
+}
+
+function EmptyInline({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-3 rounded-lg border border-dashed border-border px-4 py-6 text-center">
+      <div className="mx-auto mb-2 text-muted-foreground">{icon}</div>
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function EmptyWorkspaceState() {
+  return (
+    <div className="rounded-xl border border-border bg-card p-8 text-center">
+      <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+        <FolderOpen className="h-5 w-5 text-primary" />
+      </div>
+      <h3 className="text-lg font-semibold tracking-tight text-foreground">Build your workspace</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Start with an organization to unlock spaces and projects.</p>
+      <div className="mt-4">
+        <Link href="/organizations/new">
+          <Button size="sm" className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" />
+            Create organization
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-7 w-48" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        </div>
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-32 rounded-xl" />
+        </div>
+        <Skeleton className="h-32 rounded-xl" />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       </div>
     </div>
   );
+}
+
+function statusDot(status: string) {
+  if (status === 'DONE') return 'bg-green-500';
+  if (status === 'IN_PROGRESS') return 'bg-amber-500';
+  if (status === 'CANCELLED') return 'bg-zinc-400';
+  return 'bg-slate-400';
+}
+
+function priorityClass(priority: string) {
+  if (priority === 'URGENT') return 'bg-red-500/10 text-red-600';
+  if (priority === 'HIGH') return 'bg-orange-500/10 text-orange-600';
+  if (priority === 'LOW') return 'bg-blue-500/10 text-blue-600';
+  return 'bg-muted text-muted-foreground';
 }
 
 function getGreeting(): string {
@@ -617,17 +730,4 @@ function getGreeting(): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function getContextualSubtitle(inProgress: number, dueSoon: number, todo: number): string {
-  if (inProgress > 0 && dueSoon > 0) {
-    return `${inProgress} task${inProgress > 1 ? 's' : ''} in progress, ${dueSoon} due soon`;
-  }
-  if (inProgress > 0) {
-    return `You have ${inProgress} task${inProgress > 1 ? 's' : ''} in progress`;
-  }
-  if (todo > 0) {
-    return `${todo} task${todo > 1 ? 's' : ''} waiting for you`;
-  }
-  return 'Your workspace at a glance';
 }
