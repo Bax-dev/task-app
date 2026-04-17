@@ -45,7 +45,6 @@ import {
   useGetOrgIssueTypesQuery,
   useGetOrgMembersQuery,
   useGetProjectQuery,
-  useGetSpaceMembersQuery,
   useGetTaskQuery,
   useToggleAssignmentMutation,
   useUpdateTaskMutation,
@@ -125,11 +124,12 @@ export default function TaskDetailPage({
 
   const { data: members = [] } = useGetOrgMembersQuery(orgId!, { skip: !orgId });
   const { data: issueTypes = [] } = useGetOrgIssueTypesQuery(orgId!, { skip: !orgId });
-  const { data: rawSpaceMembers = [] } = useGetSpaceMembersQuery(task?.project?.spaceId!, { skip: !task?.project?.spaceId });
 
   const currentUserRole = members.find((m: any) => m.id === currentUser?.id)?.role;
   const isAdmin = currentUserRole === 'ADMIN';
   const isGuest = currentUserRole === 'GUEST';
+  const isCreator = !!currentUser?.id && task?.createdById === currentUser.id;
+  const canAssign = isAdmin || isCreator;
 
   const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
@@ -141,25 +141,9 @@ export default function TaskDetailPage({
     [task?.assignments]
   );
 
-  const memberRoleMap = useMemo(
-    () => new Map(members.map((member: Member) => [member.id, member.role])),
-    [members]
-  );
-
-  const spaceMembers = useMemo(
-    () =>
-      rawSpaceMembers.map((member: any) => ({
-        id: member.user.id,
-        name: member.user.name,
-        email: member.user.email,
-        role: memberRoleMap.get(member.user.id) || 'MEMBER',
-      })),
-    [memberRoleMap, rawSpaceMembers]
-  );
-
   const unassignedMembers = useMemo(
-    () => spaceMembers.filter((m: Member) => !assignedIds.has(m.id)),
-    [spaceMembers, assignedIds]
+    () => members.filter((m: Member) => !assignedIds.has(m.id)),
+    [members, assignedIds]
   );
 
   const filteredUnassignedMembers = useMemo(() => {
@@ -553,7 +537,7 @@ export default function TaskDetailPage({
               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs">
                 <Users className="w-3 h-3" />
                 Whole space
-                {isAdmin && (
+                {canAssign && (
                   <button
                     onClick={async () => {
                       try {
@@ -572,7 +556,7 @@ export default function TaskDetailPage({
             ) : task.assignments && task.assignments.length > 0 ? (
               <div className="flex flex-wrap gap-1">
                 {task.assignments.map((a: any) => {
-                  const canUnassign = isAdmin || a.user.id === currentUser?.id;
+                  const canUnassign = canAssign || a.user.id === currentUser?.id;
                   return (
                     <div key={a.user.id} className="group inline-flex items-center gap-1 rounded-md bg-secondary/50 pl-0.5 pr-1.5 py-0.5 text-xs">
                       <div className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center">
@@ -598,7 +582,7 @@ export default function TaskDetailPage({
               <span className="text-sm text-muted-foreground">Unassigned</span>
             )}
 
-            {isAdmin && (
+            {canAssign && (
               <div ref={assignDropdownRef} className="relative mt-1.5">
                 <div className="relative">
                   <AtSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />

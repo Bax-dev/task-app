@@ -225,10 +225,12 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
   await requireSpaceAccess(userId, spaceId);
   await requireSpaceAccess(targetUserId, spaceId);
 
+  const isCreator = task.createdById === userId;
+
   const existing = await taskModel.findAssignment(taskId, targetUserId);
   if (existing) {
-    // Allow members to unassign themselves; require admin to unassign others
-    if (targetUserId !== userId) {
+    // Allow members to unassign themselves; admins and the task creator can unassign others
+    if (targetUserId !== userId && !isCreator) {
       await requireOrgAdmin(userId, orgId);
     } else {
       await requireNonGuest(userId, orgId);
@@ -239,8 +241,12 @@ export async function toggleAssignment(taskId: string, userId: string, dto: Assi
     return { assigned: false, userId: targetUserId };
   }
 
-  // Assigning requires admin
-  await requireOrgAdmin(userId, orgId);
+  // Assigning is allowed for admins and the task creator
+  if (!isCreator) {
+    await requireOrgAdmin(userId, orgId);
+  } else {
+    await requireNonGuest(userId, orgId);
+  }
 
   const assignment = await taskModel.assignUser(taskId, targetUserId);
 
@@ -278,22 +284,35 @@ export async function assignUsers(taskId: string, userId: string, userIds: strin
   const orgId = getOrgIdFromTask(task);
   const spaceId = getSpaceIdFromTask(task);
   await requireSpaceAccess(userId, spaceId);
-  await requireOrgAdmin(userId, orgId);
+  if (task.createdById !== userId) {
+    await requireOrgAdmin(userId, orgId);
+  } else {
+    await requireNonGuest(userId, orgId);
+  }
 
   const requestedIds = [...new Set(userIds)];
   if (requestedIds.length === 0) {
     return { assigned: false, userIds: [], users: [] };
   }
 
-  const [spaceMemberIds, existingAssignments] = await Promise.all([
-    getSpaceMemberIds(spaceId),
+  const [accessChecks, existingAssignments] = await Promise.all([
+    Promise.all(
+      requestedIds.map(async (id) => {
+        try {
+          await requireSpaceAccess(id, spaceId);
+          return id;
+        } catch {
+          return null;
+        }
+      }),
+    ),
     prisma.taskAssignment.findMany({
       where: { taskId, userId: { in: requestedIds } },
       select: { userId: true },
     }),
   ]);
 
-  const allowedIds = new Set(spaceMemberIds);
+  const allowedIds = new Set(accessChecks.filter((id): id is string => id !== null));
   const existingIds = new Set(existingAssignments.map((assignment) => assignment.userId));
   const assignableIds = requestedIds.filter((id) => allowedIds.has(id) && !existingIds.has(id));
 
