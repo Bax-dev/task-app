@@ -144,15 +144,67 @@ jobs:
           printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
 
-      - name: Upload and extract build on EC2
+      - name: Pre-flight on EC2 (clean leftovers, ensure paths)
         run: |
-          scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 build-output.tar.gz ec2-user@${{ secrets.EC2_HOST }}:/home/ec2-user/build-output.tar.gz
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} "cd ~/task-app && rm -rf .next && tar -xzf /home/ec2-user/build-output.tar.gz && rm /home/ec2-user/build-output.tar.gz"
+          set -euo pipefail
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+            set -e
+            echo "==> Disk usage:"
+            df -h /
+            echo "==> Removing any leftover deploy artifacts..."
+            sudo rm -rf /home/ec2-user/build-output.tar.gz /home/ec2-user/build-output.tar.gz.* /home/ec2-user/nginx-taskflow.conf /home/ec2-user/nginx-taskflow.conf.* 2>/dev/null || true
+            mkdir -p ~/task-app
+          '
+
+      - name: Upload and extract build on EC2
+        env:
+          REMOTE_TMP: /home/ec2-user/build-output.tar.gz.${{ github.run_id }}
+          REMOTE_FINAL: /home/ec2-user/build-output.tar.gz
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 build-output.tar.gz ec2-user@${{ secrets.EC2_HOST }}:"$REMOTE_TMP"
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} "
+            set -e
+            mv '$REMOTE_TMP' '$REMOTE_FINAL'
+            mkdir -p ~/task-app
+            cd ~/task-app
+            rm -rf .next
+            tar -xzf '$REMOTE_FINAL'
+            rm -f '$REMOTE_FINAL'
+          "
 
       - name: Sync Nginx config
+        env:
+          REMOTE_TMP: /home/ec2-user/nginx-taskflow.conf.${{ github.run_id }}
+          REMOTE_FINAL: /home/ec2-user/nginx-taskflow.conf
         run: |
-          scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 deploy/nginx-taskflow.conf ec2-user@${{ secrets.EC2_HOST }}:/home/ec2-user/nginx-taskflow.conf
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} "sudo cp /home/ec2-user/nginx-taskflow.conf /etc/nginx/conf.d/taskflow.conf && rm /home/ec2-user/nginx-taskflow.conf && sudo nginx -t && sudo systemctl reload nginx"
+          set -euo pipefail
+          scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 deploy/nginx-taskflow.conf ec2-user@${{ secrets.EC2_HOST }}:"$REMOTE_TMP"
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} "
+            set -e
+            mv '$REMOTE_TMP' '$REMOTE_FINAL'
+            sudo cp '$REMOTE_FINAL' /etc/nginx/conf.d/taskflow.conf
+            rm -f '$REMOTE_FINAL'
+            sudo nginx -t
+            sudo systemctl reload nginx
+          "
+
+      - name: EC2 diagnostics (on failure)
+        if: failure()
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+            echo "==> df -h /"
+            df -h /
+            echo "==> ls -la /home/ec2-user/"
+            ls -la /home/ec2-user/ | head -50
+            echo "==> ls -la ~/task-app (head)"
+            ls -la ~/task-app 2>/dev/null | head -30 || echo "(no ~/task-app)"
+            echo "==> nginx status (last 20 lines)"
+            sudo systemctl status nginx --no-pager -n 20 || true
+            echo "==> pm2 status"
+            pm2 status 2>/dev/null || true
+          ' || true
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
