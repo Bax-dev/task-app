@@ -5,6 +5,13 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      cleanup_disk:
+        description: "Free disk space on EC2 before deploy (vacuums journal, prunes PM2 logs, npm cache, yum cache)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   install:
@@ -111,11 +118,11 @@ jobs:
         run: npm run build
 
       - name: Package build artifact
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         run: tar -czf build-output.tar.gz .next
 
       - name: Upload build artifact
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v4
         with:
           name: build-output
@@ -126,7 +133,7 @@ jobs:
     name: Deploy to EC2
     runs-on: ubuntu-latest
     needs: [build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - uses: actions/checkout@v4
@@ -154,6 +161,43 @@ jobs:
             echo "==> Removing any leftover deploy artifacts..."
             sudo rm -rf /home/ec2-user/build-output.tar.gz /home/ec2-user/build-output.tar.gz.* /home/ec2-user/nginx-taskflow.conf /home/ec2-user/nginx-taskflow.conf.* 2>/dev/null || true
             mkdir -p ~/task-app
+          '
+
+      - name: Free disk space on EC2 (opt-in)
+        if: github.event_name == 'workflow_dispatch' && inputs.cleanup_disk
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+            set -e
+            echo "==> df -h / BEFORE cleanup"
+            df -h /
+            echo "==> Top consumers in /home/ec2-user (depth 2):"
+            sudo du -h --max-depth=2 /home/ec2-user 2>/dev/null | sort -rh | head -20 || true
+
+            echo "==> Vacuuming systemd journal to last 2 days..."
+            sudo journalctl --vacuum-time=2d || true
+
+            echo "==> Truncating PM2 log files (preserves processes)..."
+            if [ -d ~/.pm2/logs ]; then
+              # truncate rather than delete so PM2 keeps writing to the same fds
+              find ~/.pm2/logs -type f -name "*.log" -exec truncate -s 0 {} \;
+            fi
+            pm2 flush 2>/dev/null || true
+
+            echo "==> Pruning npm cache entries older than 14 days..."
+            if [ -d ~/.npm/_cacache ]; then
+              find ~/.npm/_cacache -type f -atime +14 -delete 2>/dev/null || true
+            fi
+
+            echo "==> Cleaning yum metadata + cached packages..."
+            sudo yum clean all 2>/dev/null || true
+            sudo rm -rf /var/cache/yum/* 2>/dev/null || true
+
+            echo "==> Removing /tmp files older than 7 days..."
+            sudo find /tmp -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+
+            echo "==> df -h / AFTER cleanup"
+            df -h /
           '
 
       - name: Upload and extract build on EC2
