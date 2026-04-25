@@ -53,6 +53,7 @@ jobs:
         with:
           path: node_modules
           key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -78,6 +79,7 @@ jobs:
         with:
           path: node_modules
           key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -110,6 +112,7 @@ jobs:
         with:
           path: node_modules
           key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -134,6 +137,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
@@ -150,11 +156,23 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
+          printf 'Host ec2-deploy\n  HostName %s\n  User ec2-user\n  IdentityFile ~/.ssh/ec2_key\n  StrictHostKeyChecking no\n  ConnectTimeout 60\n  ServerAliveInterval 30\n  ServerAliveCountMax 5\n  ControlMaster auto\n  ControlPath ~/.ssh/ctl-%%C\n  ControlPersist 15m\n' "${{ secrets.EC2_HOST }}" >> ~/.ssh/config
+
+      - name: Open persistent SSH connection
+        run: |
+          for attempt in 1 2 3; do
+            echo "==> SSH connect attempt $attempt/3..."
+            if ssh -fN ec2-deploy; then
+              echo "==> Connected"
+              break
+            fi
+            [ "$attempt" -lt 3 ] && sleep 15 || { echo "ERROR: could not connect after 3 attempts"; exit 1; }
+          done
 
       - name: Pre-flight on EC2 (clean leftovers, ensure paths)
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+          ssh ec2-deploy '
             set -e
             echo "==> Disk usage:"
             df -h /
@@ -166,7 +184,7 @@ jobs:
       - name: Auto-reclaim disk if tight (>=85% used)
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+          ssh ec2-deploy '
             USED_PCT=$(df --output=pcent / | tail -1 | tr -dc "0-9")
             echo "==> Root filesystem at ${USED_PCT}% used"
             if [ "${USED_PCT:-0}" -lt 85 ]; then
@@ -195,7 +213,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.cleanup_disk
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+          ssh ec2-deploy '
             set -e
             echo "==> df -h / BEFORE cleanup"
             df -h /
@@ -234,7 +252,7 @@ jobs:
           # Stream the tarball over SSH and extract on the remote with no
           # intermediate file. Extract into a staging dir then rename, so the
           # running .next is never half-replaced if extraction fails.
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+          ssh ec2-deploy '
             set -e
             mkdir -p ~/task-app
             cd ~/task-app
@@ -258,7 +276,7 @@ jobs:
           # Pipe the file through ssh|sudo tee — no intermediate file lands
           # in /home/ec2-user. tee writes atomically enough for nginx config
           # (nginx -t validates before reload).
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} \
+          ssh ec2-deploy \
             "sudo tee /etc/nginx/conf.d/taskflow.conf >/dev/null && sudo nginx -t && sudo systemctl reload nginx" \
             < deploy/nginx-taskflow.conf
 
@@ -266,7 +284,7 @@ jobs:
         if: failure()
         continue-on-error: true
         run: |
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+          ssh ec2-deploy '
             echo "==> df -h /"
             df -h /
             echo "==> ls -la /home/ec2-user/"
@@ -279,8 +297,7 @@ jobs:
             pm2 status 2>/dev/null || true
           ' || true
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Deploy application on EC2
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -297,14 +314,14 @@ jobs:
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
           TASKFLOW_CRON_SECRET: ${{ secrets.TASKFLOW_CRON_SECRET }}
           GH_PAT: ${{ secrets.GH_PAT }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: true
-          command_timeout: 10m
-          envs: DATABASE_URL,JWT_SECRET,REDIS_URL,RESEND_API_KEY,EMAIL_FROM,AWS_REGION,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_S3_BUCKET,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_GOOGLE_CLIENT_ID,TASKFLOW_CRON_SECRET,GH_PAT
-          script: |
+        run: |
+          set -euo pipefail
+          # ${VAR@Q} shell-quotes each secret so special characters are safe across the wire.
+          # The quoted heredoc (<<'ENDSSH') is passed literally to the remote bash,
+          # which sees all $VARs as environment variables set by the prefix above.
+          ssh ec2-deploy \
+            "DATABASE_URL=${DATABASE_URL@Q} JWT_SECRET=${JWT_SECRET@Q} REDIS_URL=${REDIS_URL@Q} RESEND_API_KEY=${RESEND_API_KEY@Q} EMAIL_FROM=${EMAIL_FROM@Q} AWS_REGION=${AWS_REGION@Q} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID@Q} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY@Q} AWS_S3_BUCKET=${AWS_S3_BUCKET@Q} GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID@Q} GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET@Q} NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL@Q} NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID@Q} TASKFLOW_CRON_SECRET=${TASKFLOW_CRON_SECRET@Q} GH_PAT=${GH_PAT@Q} bash -se" << 'ENDSSH'
+            set -e
             REPO_URL="https://${GH_PAT}@github.com/Bax-dev/task-app.git"
 
             if [ ! -d ~/task-app ]; then
@@ -322,14 +339,19 @@ jobs:
             git pull origin main
 
             echo "==> Writing .env file..."
-            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nEMAIL_FROM="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nGOOGLE_CLIENT_ID="%s"\nGOOGLE_CLIENT_SECRET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNEXT_PUBLIC_GOOGLE_CLIENT_ID="%s"\nTASKFLOW_CRON_SECRET="%s"\nNODE_ENV="production"\n' "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${EMAIL_FROM}" "${REDIS_URL}" "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" "${GOOGLE_CLIENT_ID}" "${GOOGLE_CLIENT_SECRET}" "${NEXT_PUBLIC_APP_URL}" "${NEXT_PUBLIC_GOOGLE_CLIENT_ID}" "${TASKFLOW_CRON_SECRET}" > .env
+            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nEMAIL_FROM="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nGOOGLE_CLIENT_ID="%s"\nGOOGLE_CLIENT_SECRET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNEXT_PUBLIC_GOOGLE_CLIENT_ID="%s"\nTASKFLOW_CRON_SECRET="%s"\nNODE_ENV="production"\n' \
+              "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${EMAIL_FROM}" "${REDIS_URL}" \
+              "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" \
+              "${GOOGLE_CLIENT_ID}" "${GOOGLE_CLIENT_SECRET}" "${NEXT_PUBLIC_APP_URL}" \
+              "${NEXT_PUBLIC_GOOGLE_CLIENT_ID}" "${TASKFLOW_CRON_SECRET}" > .env
 
             echo "==> Configuring AWS credentials for Bedrock..."
             mkdir -p ~/.aws
-            printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\nregion = %s\n' "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_REGION}" > ~/.aws/credentials
+            printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\nregion = %s\n' \
+              "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_REGION}" > ~/.aws/credentials
             printf '[default]\nregion = %s\noutput = json\n' "${AWS_REGION}" > ~/.aws/config
 
-            if [ -z "$DATABASE_URL" ]; then
+            if [ -z "${DATABASE_URL:-}" ]; then
               echo "ERROR: DATABASE_URL is not set."
               exit 1
             fi
@@ -346,13 +368,13 @@ jobs:
             echo "==> Restarting application..."
             pm2 delete taskflow 2>/dev/null || true
             pm2 start ecosystem.config.js
-
-            echo "==> Saving PM2 process list..."
             pm2 save
 
             echo "==> Setting up reminder cron job..."
             sudo yum install -y cronie 2>/dev/null || true
             sudo systemctl enable crond --now 2>/dev/null || true
-            (crontab -l 2>/dev/null | grep -v 'daily-reports/reminders'; echo "* * * * * curl -s -X POST ${NEXT_PUBLIC_APP_URL}/api/daily-reports/reminders -H 'x-taskflow-cron-secret: ${TASKFLOW_CRON_SECRET}' >> /var/log/reminder-cron.log 2>&1") | crontab -
+            (crontab -l 2>/dev/null | grep -v 'daily-reports/reminders'; \
+             echo "* * * * * curl -s -X POST ${NEXT_PUBLIC_APP_URL}/api/daily-reports/reminders -H 'x-taskflow-cron-secret: ${TASKFLOW_CRON_SECRET}' >> /var/log/reminder-cron.log 2>&1") | crontab -
 
             echo "==> Deploy complete!"
+          ENDSSH
