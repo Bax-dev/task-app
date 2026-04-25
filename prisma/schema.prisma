@@ -285,6 +285,7 @@ model Task {
   priority        TaskPriority @default(MEDIUM)
   assignToSpace   Boolean      @default(false)
   dueDate         DateTime?
+  lastOverdueReminderAt DateTime?
   rejectionReason String?
   projectId       String       @db.Uuid
   createdById     String       @db.Uuid

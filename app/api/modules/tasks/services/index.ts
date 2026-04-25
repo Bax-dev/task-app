@@ -499,6 +499,8 @@ export async function sendOverdueReminders() {
       await sendOverdueEmail(recipient, task, scopeLabel ?? undefined);
       remindersSent += 1;
     }
+
+    await taskModel.markOverdueReminderSent(task.id);
   }
 
   return {

@@ -21,7 +21,6 @@ export async function register() {
       console.error('[cron] sendDailyReportReminders failed:', err?.message || err);
     }
     try {
-      // Overdue reminders are idempotent per-task-per-day; cheap to call every minute.
       await sendOverdueReminders();
     } catch (err: any) {
       console.error('[cron] sendOverdueReminders failed:', err?.message || err);

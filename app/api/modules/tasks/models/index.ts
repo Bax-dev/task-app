@@ -154,10 +154,19 @@ export async function clearAssignments(taskId: string) {
 }
 
 export async function findOverdueTasks(referenceDate = new Date()) {
+  const startOfToday = new Date(Date.UTC(
+    referenceDate.getUTCFullYear(),
+    referenceDate.getUTCMonth(),
+    referenceDate.getUTCDate(),
+  ));
   return prisma.task.findMany({
     where: {
-      dueDate: { lt: referenceDate },
+      dueDate: { lt: startOfToday },
       status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
+      OR: [
+        { lastOverdueReminderAt: null },
+        { lastOverdueReminderAt: { lt: startOfToday } },
+      ],
     },
     include: {
       ...taskInclude,
@@ -183,5 +192,12 @@ export async function findOverdueTasks(referenceDate = new Date()) {
       },
     },
     orderBy: { dueDate: 'asc' },
+  });
+}
+
+export async function markOverdueReminderSent(taskId: string, sentAt = new Date()) {
+  return prisma.task.update({
+    where: { id: taskId },
+    data: { lastOverdueReminderAt: sentAt },
   });
 }
