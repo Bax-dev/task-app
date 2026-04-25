@@ -2,35 +2,22 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      cleanup_disk:
-        description: "Free disk space on EC2 before deploy (vacuums journal, prunes PM2 logs, npm cache, yum cache)"
-        type: boolean
-        required: false
-        default: false
 
 jobs:
   install:
     name: Install Dependencies
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install dependencies
-        run: npm install --no-package-lock --include=optional
-
-      - name: Cache node_modules
-        uses: actions/cache/save@v4
+      - run: npm install --no-package-lock --include=optional
+      - uses: actions/cache/save@v4
         with:
           path: node_modules
           key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
@@ -39,342 +26,134 @@ jobs:
     name: Lint & Type Check
     runs-on: ubuntu-latest
     needs: install
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Restore node_modules
-        uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v4
         with:
           path: node_modules
           key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
           fail-on-cache-miss: true
-
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Type check
-        run: npx tsc --noEmit
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
 
   test:
     name: Tests
     runs-on: ubuntu-latest
     needs: install
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Restore node_modules
-        uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v4
         with:
           path: node_modules
           key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
           fail-on-cache-miss: true
+      - run: npx prisma generate
+      - run: npm test
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Run tests
-        run: npm test
-
-  build:
-    name: Build
+  build-and-push:
+    name: Build & Push Image
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, test]
-
-    env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    outputs:
+      image: ${{ steps.build.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          node-version: 20
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Restore node_modules
-        uses: actions/cache/restore@v4
-        with:
-          path: node_modules
-          key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
-          fail-on-cache-miss: true
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-
-      - name: Build application
-        run: npm run build
-
-      - name: Package build artifact
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        run: tar -czf build-output.tar.gz .next
-
-      - name: Upload build artifact
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          retention-days: 1
-          path: build-output.tar.gz
+      - name: Build and push
+        id: build
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPO: ${{ secrets.ECR_REPOSITORY }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
+            --build-arg NEXT_PUBLIC_GOOGLE_CLIENT_ID="${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}" \
+            -t $REGISTRY/$REPO:$TAG \
+            -t $REGISTRY/$REPO:latest .
+          docker push $REGISTRY/$REPO:$TAG
+          docker push $REGISTRY/$REPO:latest
+          echo "image=$REGISTRY/$REPO:$TAG" >> $GITHUB_OUTPUT
 
   deploy:
-    name: Deploy to EC2
+    name: Deploy to Fargate
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build-and-push]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     concurrency:
       group: deploy-production
       cancel-in-progress: false
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          sparse-checkout: deploy
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
-          printf 'Host ec2-deploy\n  HostName %s\n  User ec2-user\n  IdentityFile ~/.ssh/ec2_key\n  StrictHostKeyChecking no\n  ConnectTimeout 60\n  ServerAliveInterval 30\n  ServerAliveCountMax 5\n  ControlMaster auto\n  ControlPath ~/.ssh/ctl-%%C\n  ControlPersist 15m\n' "${{ secrets.EC2_HOST }}" >> ~/.ssh/config
-
-      - name: Open persistent SSH connection
-        run: |
-          for attempt in 1 2 3; do
-            echo "==> SSH connect attempt $attempt/3..."
-            if ssh -fN ec2-deploy; then
-              echo "==> Connected"
-              break
-            fi
-            [ "$attempt" -lt 3 ] && sleep 15 || { echo "ERROR: could not connect after 3 attempts"; exit 1; }
-          done
-
-      - name: Pre-flight on EC2 (clean leftovers, ensure paths)
-        run: |
-          set -euo pipefail
-          ssh ec2-deploy '
-            set -e
-            echo "==> Disk usage:"
-            df -h /
-            echo "==> Removing any leftover deploy artifacts..."
-            sudo rm -rf /home/ec2-user/build-output.tar.gz /home/ec2-user/build-output.tar.gz.* /home/ec2-user/nginx-taskflow.conf /home/ec2-user/nginx-taskflow.conf.* 2>/dev/null || true
-            mkdir -p ~/task-app
-          '
-
-      - name: Auto-reclaim disk if tight (>=85% used)
-        run: |
-          set -euo pipefail
-          ssh ec2-deploy '
-            USED_PCT=$(df --output=pcent / | tail -1 | tr -dc "0-9")
-            echo "==> Root filesystem at ${USED_PCT}% used"
-            if [ "${USED_PCT:-0}" -lt 85 ]; then
-              echo "==> Plenty of space; skipping cleanup"
-              exit 0
-            fi
-
-            echo "==> Tight on space; running conservative auto-cleanup"
-            sudo journalctl --vacuum-time=7d || true
-            if [ -d ~/.pm2/logs ]; then
-              find ~/.pm2/logs -type f -name "*.log" -exec truncate -s 0 {} \;
-            fi
-            pm2 flush 2>/dev/null || true
-            if [ -d ~/.npm/_cacache ]; then
-              find ~/.npm/_cacache -type f -atime +30 -delete 2>/dev/null || true
-            fi
-            sudo yum clean all 2>/dev/null || true
-            sudo rm -rf /var/cache/yum/* 2>/dev/null || true
-            sudo find /tmp -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + 2>/dev/null || true
-
-            echo "==> df -h / after auto-reclaim"
-            df -h /
-          '
-
-      - name: Free disk space on EC2 (opt-in)
-        if: github.event_name == 'workflow_dispatch' && inputs.cleanup_disk
-        run: |
-          set -euo pipefail
-          ssh ec2-deploy '
-            set -e
-            echo "==> df -h / BEFORE cleanup"
-            df -h /
-            echo "==> Top consumers in /home/ec2-user (depth 2):"
-            sudo du -h --max-depth=2 /home/ec2-user 2>/dev/null | sort -rh | head -20 || true
-
-            echo "==> Vacuuming systemd journal to last 2 days..."
-            sudo journalctl --vacuum-time=2d || true
-
-            echo "==> Truncating PM2 log files (preserves processes)..."
-            if [ -d ~/.pm2/logs ]; then
-              # truncate rather than delete so PM2 keeps writing to the same fds
-              find ~/.pm2/logs -type f -name "*.log" -exec truncate -s 0 {} \;
-            fi
-            pm2 flush 2>/dev/null || true
-
-            echo "==> Pruning npm cache entries older than 14 days..."
-            if [ -d ~/.npm/_cacache ]; then
-              find ~/.npm/_cacache -type f -atime +14 -delete 2>/dev/null || true
-            fi
-
-            echo "==> Cleaning yum metadata + cached packages..."
-            sudo yum clean all 2>/dev/null || true
-            sudo rm -rf /var/cache/yum/* 2>/dev/null || true
-
-            echo "==> Removing /tmp files older than 7 days..."
-            sudo find /tmp -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + 2>/dev/null || true
-
-            echo "==> df -h / AFTER cleanup"
-            df -h /
-          '
-
-      - name: Stream build to EC2 and atomically swap .next
-        run: |
-          set -euo pipefail
-          # Stream the tarball over SSH and extract on the remote with no
-          # intermediate file. Extract into a staging dir then rename, so the
-          # running .next is never half-replaced if extraction fails.
-          ssh ec2-deploy '
-            set -e
-            mkdir -p ~/task-app
-            cd ~/task-app
-            rm -rf .next.staging .next.old
-            mkdir .next.staging
-            tar -xzf - -C .next.staging
-            # Tarball was created with `tar -czf build-output.tar.gz .next`
-            # so its top entry is `.next/`; promote the inner dir.
-            if [ ! -d .next.staging/.next ]; then
-              echo "ERROR: extracted archive missing top-level .next/"; exit 1
-            fi
-            if [ -d .next ]; then mv .next .next.old; fi
-            mv .next.staging/.next .next
-            rmdir .next.staging
-            rm -rf .next.old
-          ' < build-output.tar.gz
-
-      - name: Stream Nginx config to EC2 and reload
-        run: |
-          set -euo pipefail
-          # Pipe the file through ssh|sudo tee — no intermediate file lands
-          # in /home/ec2-user. tee writes atomically enough for nginx config
-          # (nginx -t validates before reload).
-          ssh ec2-deploy \
-            "sudo tee /etc/nginx/conf.d/taskflow.conf >/dev/null && sudo nginx -t && sudo systemctl reload nginx" \
-            < deploy/nginx-taskflow.conf
-
-      - name: EC2 diagnostics (on failure)
-        if: failure()
-        continue-on-error: true
-        run: |
-          ssh ec2-deploy '
-            echo "==> df -h /"
-            df -h /
-            echo "==> ls -la /home/ec2-user/"
-            ls -la /home/ec2-user/ | head -50
-            echo "==> ls -la ~/task-app (head)"
-            ls -la ~/task-app 2>/dev/null | head -30 || echo "(no ~/task-app)"
-            echo "==> nginx status (last 20 lines)"
-            sudo systemctl status nginx --no-pager -n 20 || true
-            echo "==> pm2 status"
-            pm2 status 2>/dev/null || true
-          ' || true
-
-      - name: Deploy application on EC2
+      - name: Register new task definition
+        id: task-def
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
-          TASKFLOW_CRON_SECRET: ${{ secrets.TASKFLOW_CRON_SECRET }}
-          GH_PAT: ${{ secrets.GH_PAT }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
         run: |
           set -euo pipefail
-          # ${VAR@Q} shell-quotes each secret so special characters are safe across the wire.
-          # The quoted heredoc (<<'ENDSSH') is passed literally to the remote bash,
-          # which sees all $VARs as environment variables set by the prefix above.
-          ssh ec2-deploy \
-            "DATABASE_URL=${DATABASE_URL@Q} JWT_SECRET=${JWT_SECRET@Q} REDIS_URL=${REDIS_URL@Q} RESEND_API_KEY=${RESEND_API_KEY@Q} EMAIL_FROM=${EMAIL_FROM@Q} AWS_REGION=${AWS_REGION@Q} AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID@Q} AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY@Q} AWS_S3_BUCKET=${AWS_S3_BUCKET@Q} GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID@Q} GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET@Q} NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL@Q} NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID@Q} TASKFLOW_CRON_SECRET=${TASKFLOW_CRON_SECRET@Q} GH_PAT=${GH_PAT@Q} bash -se" << 'ENDSSH'
-            set -e
-            REPO_URL="https://${GH_PAT}@github.com/Bax-dev/task-app.git"
+          NEW_DEF=$(aws ecs describe-task-definition \
+            --task-definition "${{ secrets.ECS_TASK_DEFINITION }}" \
+            --query 'taskDefinition' | \
+            jq --arg img "$IMAGE" \
+              'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.placementConstraints,.compatibilities,.registeredAt,.registeredBy) |
+               .containerDefinitions[0].image = $img')
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=$NEW_ARN" >> $GITHUB_OUTPUT
+          echo "Registered: $NEW_ARN"
 
-            if [ ! -d ~/task-app ]; then
-              echo "==> Cloning repository..."
-              git clone "$REPO_URL" ~/task-app
-            fi
+      - name: Run database migrations
+        run: |
+          set -euo pipefail
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --task-definition "${{ steps.task-def.outputs.arn }}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.ECS_SUBNETS }}],securityGroups=[${{ secrets.ECS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"app","command":["node","node_modules/prisma/build/index.js","migrate","deploy"]}]}' \
+            --query "tasks[0].taskArn" --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --tasks "$TASK_ARN"
+          EXIT=$(aws ecs describe-tasks \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --tasks "$TASK_ARN" \
+            --query "tasks[0].containers[0].exitCode" --output text)
+          [ "$EXIT" = "0" ] || { echo "Migration failed (exit $EXIT)"; exit 1; }
+          echo "Migrations complete"
 
-            cd ~/task-app
-
-            echo "==> Configuring git remote with token..."
-            git remote set-url origin "$REPO_URL"
-
-            echo "==> Pulling latest code..."
-            git stash 2>/dev/null || true
-            git pull origin main
-
-            echo "==> Writing .env file..."
-            printf 'DATABASE_URL="%s"\nJWT_SECRET="%s"\nRESEND_API_KEY="%s"\nEMAIL_FROM="%s"\nREDIS_URL="%s"\nAWS_REGION="%s"\nAWS_ACCESS_KEY_ID="%s"\nAWS_SECRET_ACCESS_KEY="%s"\nAWS_S3_BUCKET="%s"\nGOOGLE_CLIENT_ID="%s"\nGOOGLE_CLIENT_SECRET="%s"\nNEXT_PUBLIC_APP_URL="%s"\nNEXT_PUBLIC_GOOGLE_CLIENT_ID="%s"\nTASKFLOW_CRON_SECRET="%s"\nNODE_ENV="production"\n' \
-              "${DATABASE_URL}" "${JWT_SECRET}" "${RESEND_API_KEY}" "${EMAIL_FROM}" "${REDIS_URL}" \
-              "${AWS_REGION}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_S3_BUCKET}" \
-              "${GOOGLE_CLIENT_ID}" "${GOOGLE_CLIENT_SECRET}" "${NEXT_PUBLIC_APP_URL}" \
-              "${NEXT_PUBLIC_GOOGLE_CLIENT_ID}" "${TASKFLOW_CRON_SECRET}" > .env
-
-            echo "==> Configuring AWS credentials for Bedrock..."
-            mkdir -p ~/.aws
-            printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\nregion = %s\n' \
-              "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" "${AWS_REGION}" > ~/.aws/credentials
-            printf '[default]\nregion = %s\noutput = json\n' "${AWS_REGION}" > ~/.aws/config
-
-            if [ -z "${DATABASE_URL:-}" ]; then
-              echo "ERROR: DATABASE_URL is not set."
-              exit 1
-            fi
-
-            echo "==> Installing production dependencies..."
-            npm install --no-package-lock --omit=dev --include=optional
-
-            echo "==> Generating Prisma client..."
-            npx prisma generate
-
-            echo "==> Running database migrations..."
-            npx prisma migrate deploy
-
-            echo "==> Restarting application..."
-            pm2 delete taskflow 2>/dev/null || true
-            pm2 start ecosystem.config.js
-            pm2 save
-
-            echo "==> Setting up reminder cron job..."
-            sudo yum install -y cronie 2>/dev/null || true
-            sudo systemctl enable crond --now 2>/dev/null || true
-            (crontab -l 2>/dev/null | grep -v 'daily-reports/reminders'; \
-             echo "* * * * * curl -s -X POST ${NEXT_PUBLIC_APP_URL}/api/daily-reports/reminders -H 'x-taskflow-cron-secret: ${TASKFLOW_CRON_SECRET}' >> /var/log/reminder-cron.log 2>&1") | crontab -
-
-            echo "==> Deploy complete!"
-          ENDSSH
+      - name: Deploy new image
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_SERVICE }}" \
+            --task-definition "${{ steps.task-def.outputs.arn }}" \
+            --force-new-deployment > /dev/null
+          aws ecs wait services-stable \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_SERVICE }}"
+          echo "Deploy complete"
