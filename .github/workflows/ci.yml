@@ -82,14 +82,20 @@ jobs:
           REPO: ${{ secrets.ECR_REPOSITORY }}
           TAG: ${{ github.sha }}
         run: |
+          set -euo pipefail
+          : "${REGISTRY:?ECR registry was not resolved (amazon-ecr-login output empty)}"
+          : "${REPO:?ECR_REPOSITORY secret is not set}"
+          : "${TAG:?github.sha is empty}"
+          IMAGE="$REGISTRY/$REPO:$TAG"
+          echo "Building $IMAGE"
           docker build \
             --build-arg NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
             --build-arg NEXT_PUBLIC_GOOGLE_CLIENT_ID="${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}" \
-            -t $REGISTRY/$REPO:$TAG \
-            -t $REGISTRY/$REPO:latest .
-          docker push $REGISTRY/$REPO:$TAG
-          docker push $REGISTRY/$REPO:latest
-          echo "image=$REGISTRY/$REPO:$TAG" >> $GITHUB_OUTPUT
+            -t "$IMAGE" \
+            -t "$REGISTRY/$REPO:latest" .
+          docker push "$IMAGE"
+          docker push "$REGISTRY/$REPO:latest"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy to Fargate
@@ -110,50 +116,127 @@ jobs:
         id: task-def
         env:
           IMAGE: ${{ needs.build-and-push.outputs.image }}
+          CONTAINER_NAME: app
+          TASK_FAMILY: ${{ secrets.ECS_TASK_DEFINITION }}
         run: |
           set -euo pipefail
-          NEW_DEF=$(aws ecs describe-task-definition \
-            --task-definition "${{ secrets.ECS_TASK_DEFINITION }}" \
-            --query 'taskDefinition' | \
-            jq --arg img "$IMAGE" \
-              'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.placementConstraints,.compatibilities,.registeredAt,.registeredBy) |
-               .containerDefinitions[0].image = $img')
+          : "${IMAGE:?build-and-push job did not produce an image output}"
+          : "${TASK_FAMILY:?ECS_TASK_DEFINITION secret is not set}"
+          echo "Image: $IMAGE"
+          echo "Family: $TASK_FAMILY"
+          echo "Container: $CONTAINER_NAME"
+
+          CURRENT=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --query 'taskDefinition')
+
+          # Match the target container by name (not index) so adding a sidecar
+          # later won't silently update the wrong container.
+          if ! echo "$CURRENT" | jq -e --arg n "$CONTAINER_NAME" \
+              'any(.containerDefinitions[]; .name == $n)' > /dev/null; then
+            echo "ERROR: container '$CONTAINER_NAME' not found in task definition '$TASK_FAMILY'"
+            echo "$CURRENT" | jq '.containerDefinitions | map(.name)'
+            exit 1
+          fi
+
+          NEW_DEF=$(echo "$CURRENT" | jq \
+            --arg img "$IMAGE" \
+            --arg name "$CONTAINER_NAME" \
+            'del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                 .placementConstraints, .compatibilities, .registeredAt, .registeredBy) |
+             .containerDefinitions |= map(if .name == $name then .image = $img else . end)')
+
+          # Defence in depth: verify the patched JSON before submitting.
+          PATCHED_IMAGE=$(echo "$NEW_DEF" | jq -r --arg n "$CONTAINER_NAME" \
+            '.containerDefinitions[] | select(.name == $n) | .image')
+          if [ -z "$PATCHED_IMAGE" ] || [ "$PATCHED_IMAGE" = "null" ]; then
+            echo "ERROR: patched task definition has empty image for container '$CONTAINER_NAME'"
+            exit 1
+          fi
+          echo "Patched image: $PATCHED_IMAGE"
+
           NEW_ARN=$(aws ecs register-task-definition \
             --cli-input-json "$NEW_DEF" \
             --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "arn=$NEW_ARN" >> $GITHUB_OUTPUT
+          echo "arn=$NEW_ARN" >> "$GITHUB_OUTPUT"
           echo "Registered: $NEW_ARN"
 
       - name: Run database migrations
+        env:
+          CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          TASK_DEF: ${{ steps.task-def.outputs.arn }}
+          CONTAINER_NAME: app
+          SUBNETS: ${{ secrets.ECS_SUBNETS }}
+          SECURITY_GROUPS: ${{ secrets.ECS_SECURITY_GROUPS }}
         run: |
           set -euo pipefail
+          : "${CLUSTER:?ECS_CLUSTER secret is not set}"
+          : "${SUBNETS:?ECS_SUBNETS secret is not set}"
+          : "${SECURITY_GROUPS:?ECS_SECURITY_GROUPS secret is not set}"
+
+          OVERRIDES=$(jq -nc --arg name "$CONTAINER_NAME" \
+            '{containerOverrides:[{name:$name, command:["node","node_modules/prisma/build/index.js","migrate","deploy"]}]}')
+
           TASK_ARN=$(aws ecs run-task \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --task-definition "${{ steps.task-def.outputs.arn }}" \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASK_DEF" \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.ECS_SUBNETS }}],securityGroups=[${{ secrets.ECS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}" \
-            --overrides '{"containerOverrides":[{"name":"app","command":["node","node_modules/prisma/build/index.js","migrate","deploy"]}]}' \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}" \
+            --overrides "$OVERRIDES" \
             --query "tasks[0].taskArn" --output text)
+          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+            echo "ERROR: failed to start migration task"
+            exit 1
+          fi
           echo "Migration task: $TASK_ARN"
-          aws ecs wait tasks-stopped \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --tasks "$TASK_ARN"
-          EXIT=$(aws ecs describe-tasks \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --tasks "$TASK_ARN" \
-            --query "tasks[0].containers[0].exitCode" --output text)
-          [ "$EXIT" = "0" ] || { echo "Migration failed (exit $EXIT)"; exit 1; }
+
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+
+          DESC=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN")
+          EXIT=$(echo "$DESC" | jq -r --arg n "$CONTAINER_NAME" \
+            '.tasks[0].containers[] | select(.name == $n) | .exitCode // empty')
+          STOP_REASON=$(echo "$DESC" | jq -r '.tasks[0].stoppedReason // ""')
+          CONTAINER_REASON=$(echo "$DESC" | jq -r --arg n "$CONTAINER_NAME" \
+            '.tasks[0].containers[] | select(.name == $n) | .reason // ""')
+
+          if [ "${EXIT:-}" != "0" ]; then
+            echo "ERROR: migration container exited with code '${EXIT:-<none>}'"
+            [ -n "$STOP_REASON" ] && echo "Task stoppedReason: $STOP_REASON"
+            [ -n "$CONTAINER_REASON" ] && echo "Container reason: $CONTAINER_REASON"
+            echo "Inspect logs in CloudWatch for task: $TASK_ARN"
+            exit 1
+          fi
           echo "Migrations complete"
 
       - name: Deploy new image
+        env:
+          CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          SERVICE: ${{ secrets.ECS_SERVICE }}
+          TASK_DEF: ${{ steps.task-def.outputs.arn }}
         run: |
           set -euo pipefail
+          : "${CLUSTER:?ECS_CLUSTER secret is not set}"
+          : "${SERVICE:?ECS_SERVICE secret is not set}"
+
           aws ecs update-service \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --service "${{ secrets.ECS_SERVICE }}" \
-            --task-definition "${{ steps.task-def.outputs.arn }}" \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "$TASK_DEF" \
             --force-new-deployment > /dev/null
-          aws ecs wait services-stable \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --services "${{ secrets.ECS_SERVICE }}"
-          echo "Deploy complete"
+
+          if ! aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
+            echo "ERROR: service did not reach a stable state in time"
+            aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+              --query 'services[0].deployments' --output json
+            exit 1
+          fi
+
+          PRIMARY=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].deployments[?status==`PRIMARY`] | [0]' --output json)
+          ROLLOUT=$(echo "$PRIMARY" | jq -r '.rolloutState // "UNKNOWN"')
+          if [ "$ROLLOUT" != "COMPLETED" ]; then
+            echo "ERROR: primary deployment rolloutState=$ROLLOUT"
+            echo "$PRIMARY"
+            exit 1
+          fi
+          echo "Deploy complete (rolloutState=$ROLLOUT)"
