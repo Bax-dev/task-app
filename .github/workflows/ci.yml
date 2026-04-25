@@ -163,6 +163,34 @@ jobs:
             mkdir -p ~/task-app
           '
 
+      - name: Auto-reclaim disk if tight (>=85% used)
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
+            USED_PCT=$(df --output=pcent / | tail -1 | tr -dc "0-9")
+            echo "==> Root filesystem at ${USED_PCT}% used"
+            if [ "${USED_PCT:-0}" -lt 85 ]; then
+              echo "==> Plenty of space; skipping cleanup"
+              exit 0
+            fi
+
+            echo "==> Tight on space; running conservative auto-cleanup"
+            sudo journalctl --vacuum-time=7d || true
+            if [ -d ~/.pm2/logs ]; then
+              find ~/.pm2/logs -type f -name "*.log" -exec truncate -s 0 {} \;
+            fi
+            pm2 flush 2>/dev/null || true
+            if [ -d ~/.npm/_cacache ]; then
+              find ~/.npm/_cacache -type f -atime +30 -delete 2>/dev/null || true
+            fi
+            sudo yum clean all 2>/dev/null || true
+            sudo rm -rf /var/cache/yum/* 2>/dev/null || true
+            sudo find /tmp -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+
+            echo "==> df -h / after auto-reclaim"
+            df -h /
+          '
+
       - name: Free disk space on EC2 (opt-in)
         if: github.event_name == 'workflow_dispatch' && inputs.cleanup_disk
         run: |
@@ -200,38 +228,39 @@ jobs:
             df -h /
           '
 
-      - name: Upload and extract build on EC2
-        env:
-          REMOTE_TMP: /home/ec2-user/build-output.tar.gz.${{ github.run_id }}
-          REMOTE_FINAL: /home/ec2-user/build-output.tar.gz
+      - name: Stream build to EC2 and atomically swap .next
         run: |
           set -euo pipefail
-          scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 build-output.tar.gz ec2-user@${{ secrets.EC2_HOST }}:"$REMOTE_TMP"
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} "
+          # Stream the tarball over SSH and extract on the remote with no
+          # intermediate file. Extract into a staging dir then rename, so the
+          # running .next is never half-replaced if extraction fails.
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} '
             set -e
-            mv '$REMOTE_TMP' '$REMOTE_FINAL'
             mkdir -p ~/task-app
             cd ~/task-app
-            rm -rf .next
-            tar -xzf '$REMOTE_FINAL'
-            rm -f '$REMOTE_FINAL'
-          "
+            rm -rf .next.staging .next.old
+            mkdir .next.staging
+            tar -xzf - -C .next.staging
+            # Tarball was created with `tar -czf build-output.tar.gz .next`
+            # so its top entry is `.next/`; promote the inner dir.
+            if [ ! -d .next.staging/.next ]; then
+              echo "ERROR: extracted archive missing top-level .next/"; exit 1
+            fi
+            if [ -d .next ]; then mv .next .next.old; fi
+            mv .next.staging/.next .next
+            rmdir .next.staging
+            rm -rf .next.old
+          ' < build-output.tar.gz
 
-      - name: Sync Nginx config
-        env:
-          REMOTE_TMP: /home/ec2-user/nginx-taskflow.conf.${{ github.run_id }}
-          REMOTE_FINAL: /home/ec2-user/nginx-taskflow.conf
+      - name: Stream Nginx config to EC2 and reload
         run: |
           set -euo pipefail
-          scp -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 deploy/nginx-taskflow.conf ec2-user@${{ secrets.EC2_HOST }}:"$REMOTE_TMP"
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} "
-            set -e
-            mv '$REMOTE_TMP' '$REMOTE_FINAL'
-            sudo cp '$REMOTE_FINAL' /etc/nginx/conf.d/taskflow.conf
-            rm -f '$REMOTE_FINAL'
-            sudo nginx -t
-            sudo systemctl reload nginx
-          "
+          # Pipe the file through ssh|sudo tee — no intermediate file lands
+          # in /home/ec2-user. tee writes atomically enough for nginx config
+          # (nginx -t validates before reload).
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 ec2-user@${{ secrets.EC2_HOST }} \
+            "sudo tee /etc/nginx/conf.d/taskflow.conf >/dev/null && sudo nginx -t && sudo systemctl reload nginx" \
+            < deploy/nginx-taskflow.conf
 
       - name: EC2 diagnostics (on failure)
         if: failure()
