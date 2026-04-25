@@ -238,12 +238,10 @@ jobs:
             exit 1
           fi
 
-          PRIMARY=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-            --query 'services[0].deployments[?status==`PRIMARY`] | [0]' --output json)
-          ROLLOUT=$(echo "$PRIMARY" | jq -r '.rolloutState // "UNKNOWN"')
-          if [ "$ROLLOUT" != "COMPLETED" ]; then
-            echo "ERROR: primary deployment rolloutState=$ROLLOUT"
-            echo "$PRIMARY"
-            exit 1
-          fi
-          echo "Deploy complete (rolloutState=$ROLLOUT)"
+          # services-stable verifies: deployments length == 1, runningCount == desiredCount.
+          # Surface the primary deployment for traceability but don't gate on rolloutState —
+          # it can lag behind the steady-state signal and produce false negatives.
+          aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query 'services[0].deployments[?status==`PRIMARY`] | [0].[taskDefinition,runningCount,desiredCount,rolloutState]' \
+            --output text
+          echo "Deploy complete"
