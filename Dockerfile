@@ -1,6 +1,10 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# openssl + libc6-compat are required for Prisma's schema/query engine
+# (linux-musl-openssl-3.0.x binary) to load libssl3 at runtime.
+RUN apk add --no-cache openssl libc6-compat
+
 COPY package.json ./
 COPY prisma ./prisma
 RUN npm install --no-package-lock --include=optional
@@ -27,6 +31,9 @@ RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /app
+
+RUN apk add --no-cache openssl libc6-compat
+
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
