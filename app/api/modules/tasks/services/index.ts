@@ -4,6 +4,7 @@ import { requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
 import { requireSpaceAccess } from '@/lib/guards/space-guard';
 import { notifyTaskAssigned, notifyTaskAssignedToMany, notifyTaskOverdue, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
 import { sendEmail, buildTaskAssignedEmail, buildTaskOverdueEmail } from '@/lib/email';
+import { getCalendarDateFromDueDate, getCalendarDateInTimezone } from '@/lib/timezone';
 import * as taskModel from '../models';
 import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
 import { logAudit } from '@/lib/audit';
@@ -469,10 +470,13 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
 }
 
 export async function sendOverdueReminders() {
-  const overdueTasks = await taskModel.findOverdueTasks();
+  const now = new Date();
+  const candidateTasks = await taskModel.findOverdueTaskCandidates(now);
   let remindersSent = 0;
 
-  for (const task of overdueTasks) {
+  for (const task of candidateTasks) {
+    if (!task.dueDate) continue;
+
     const recipients = task.assignToSpace
       ? task.project.space.members.map((member) => member.user)
       : task.assignments.map((assignment) => assignment.user);
@@ -486,25 +490,45 @@ export async function sendOverdueReminders() {
     }
 
     const scopeLabel = task.assignToSpace ? `${task.project.space.name} space` : null;
+    const dueCalendarDate = getCalendarDateFromDueDate(task.dueDate);
+    const recipientsToEmail: typeof dedupedRecipients = [];
+
+    for (const recipient of dedupedRecipients) {
+      const tz = recipient.timezone || 'UTC';
+      const todayInRecipientTz = getCalendarDateInTimezone(now, tz);
+
+      // Not overdue yet in this recipient's local calendar
+      if (dueCalendarDate >= todayInRecipientTz) continue;
+
+      // Atomically claim the per-(task, user, day) slot. Lose the race → skip.
+      const claimed = await taskModel.recordOverdueReminderSent({
+        taskId: task.id,
+        userId: recipient.id,
+        sentOnDate: todayInRecipientTz,
+      });
+      if (!claimed) continue;
+
+      recipientsToEmail.push(recipient);
+    }
+
+    if (recipientsToEmail.length === 0) continue;
 
     await notifyTaskOverdue({
-      userIds: dedupedRecipients.map((recipient) => recipient.id),
+      userIds: recipientsToEmail.map((recipient) => recipient.id),
       taskTitle: task.title,
       projectName: task.project.name,
       taskLink: `/projects/${task.projectId}/tasks/${task.id}`,
       scopeLabel: scopeLabel ?? undefined,
     }).catch(() => {});
 
-    for (const recipient of dedupedRecipients) {
+    for (const recipient of recipientsToEmail) {
       await sendOverdueEmail(recipient, task, scopeLabel ?? undefined);
       remindersSent += 1;
     }
-
-    await taskModel.markOverdueReminderSent(task.id);
   }
 
   return {
-    tasksChecked: overdueTasks.length,
+    tasksChecked: candidateTasks.length,
     remindersSent,
   };
 }

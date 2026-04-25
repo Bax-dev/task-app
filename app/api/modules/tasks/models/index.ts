@@ -5,7 +5,7 @@ const taskInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
   assignments: {
     include: {
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: { id: true, name: true, email: true, timezone: true } },
     },
   },
   project: {
@@ -153,20 +153,13 @@ export async function clearAssignments(taskId: string) {
   });
 }
 
-export async function findOverdueTasks(referenceDate = new Date()) {
-  const startOfToday = new Date(Date.UTC(
-    referenceDate.getUTCFullYear(),
-    referenceDate.getUTCMonth(),
-    referenceDate.getUTCDate(),
-  ));
+// Returns *candidate* overdue tasks (dueDate strictly in the past at the UTC level).
+// Per-recipient timezone-aware filtering and dedupe happens in the service layer.
+export async function findOverdueTaskCandidates(referenceDate = new Date()) {
   return prisma.task.findMany({
     where: {
-      dueDate: { lt: startOfToday },
+      dueDate: { lt: referenceDate, not: null },
       status: { notIn: [TaskStatus.DONE, TaskStatus.CANCELLED] },
-      OR: [
-        { lastOverdueReminderAt: null },
-        { lastOverdueReminderAt: { lt: startOfToday } },
-      ],
     },
     include: {
       ...taskInclude,
@@ -183,7 +176,7 @@ export async function findOverdueTasks(referenceDate = new Date()) {
               organization: { select: { slug: true } },
               members: {
                 select: {
-                  user: { select: { id: true, name: true, email: true } },
+                  user: { select: { id: true, name: true, email: true, timezone: true } },
                 },
               },
             },
@@ -195,9 +188,20 @@ export async function findOverdueTasks(referenceDate = new Date()) {
   });
 }
 
-export async function markOverdueReminderSent(taskId: string, sentAt = new Date()) {
-  return prisma.task.update({
-    where: { id: taskId },
-    data: { lastOverdueReminderAt: sentAt },
-  });
+// Atomic per-(task, user, local-day) dedupe insert. Returns true if this call
+// "won" the insert (i.e., this is the first reminder for this recipient today
+// in their timezone). Returns false if a row already exists.
+export async function recordOverdueReminderSent(params: {
+  taskId: string;
+  userId: string;
+  sentOnDate: string; // YYYY-MM-DD in the recipient's tz
+}): Promise<boolean> {
+  try {
+    await prisma.taskOverdueReminder.create({ data: params });
+    return true;
+  } catch (err: any) {
+    // P2002 = unique constraint violation → already sent today in this tz
+    if (err?.code === 'P2002') return false;
+    throw err;
+  }
 }

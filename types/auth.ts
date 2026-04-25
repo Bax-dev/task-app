@@ -3,6 +3,7 @@ export interface User {
   name: string | null;
   email: string;
   avatar?: string | null;
+  timezone?: string;
 }
 
 export interface LoginDTO {

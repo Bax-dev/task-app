@@ -21,6 +21,7 @@ export async function findUserById(id: string) {
       name: true,
       email: true,
       avatar: true,
+      timezone: true,
       createdAt: true,
       updatedAt: true,
     },

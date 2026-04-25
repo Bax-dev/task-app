@@ -30,8 +30,8 @@ jobs:
 
       - name: Upload Nginx config
         run: |
-          scp -i ~/.ssh/ec2_key deploy/nginx-taskflow.conf ec2-user@${{ secrets.EC2_HOST }}:~/nginx-taskflow.conf
-          ssh -i ~/.ssh/ec2_key ec2-user@${{ secrets.EC2_HOST }} "sudo mv ~/nginx-taskflow.conf /etc/nginx/conf.d/taskflow.conf && sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
+          scp -i ~/.ssh/ec2_key deploy/nginx-taskflow.conf ec2-user@${{ secrets.EC2_HOST }}:/home/ec2-user/nginx-taskflow.conf
+          ssh -i ~/.ssh/ec2_key ec2-user@${{ secrets.EC2_HOST }} "sudo mv /home/ec2-user/nginx-taskflow.conf /etc/nginx/conf.d/taskflow.conf && sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx"
 
       - name: Obtain SSL certificate
         uses: appleboy/ssh-action@v1.2.0

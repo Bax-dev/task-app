@@ -132,6 +132,7 @@ model User {
   googleId     String?  @unique
   avatar       String?
   preferences  Json?
+  timezone     String   @default("UTC")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -155,6 +156,7 @@ model User {
   dailyReports         DailyReport[]    @relation("DailyReportCreatedBy")
   createdDailyReportSchedules DailyReportSchedule[] @relation("DailyReportScheduleCreatedBy")
   spaceMemberships     SpaceMember[]
+  overdueReminders     TaskOverdueReminder[]
 }
 
 model Organization {
@@ -285,7 +287,6 @@ model Task {
   priority        TaskPriority @default(MEDIUM)
   assignToSpace   Boolean      @default(false)
   dueDate         DateTime?
-  lastOverdueReminderAt DateTime?
   rejectionReason String?
   projectId       String       @db.Uuid
   createdById     String       @db.Uuid
@@ -309,6 +310,7 @@ model Task {
   issueTypeId      String?            @db.Uuid
   issueType        IssueType?         @relation(fields: [issueTypeId], references: [id], onDelete: SetNull)
   subtasks         Subtask[]
+  overdueReminders TaskOverdueReminder[]
 
   @@index([projectId])
   @@index([createdById])
@@ -316,6 +318,20 @@ model Task {
   @@index([priority])
   @@index([boardColumnId])
   @@index([issueTypeId])
+}
+
+model TaskOverdueReminder {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @db.Uuid
+  userId      String   @db.Uuid
+  sentOnDate  String   // YYYY-MM-DD in the recipient's local timezone
+  sentAt      DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId, sentOnDate])
+  @@index([userId])
 }
 
 // ─── Subtasks / Checklist ───────────────────────────────

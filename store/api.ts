@@ -188,7 +188,7 @@ export const apiSlice = createApi({
     resetPassword: builder.mutation<void, { email: string; otp: string; newPassword: string }>({
       query: (body) => ({ url: '/auth/reset-password', method: 'POST', body }),
     }),
-    updateProfile: builder.mutation<User, { name?: string; email?: string; avatar?: string | null }>({
+    updateProfile: builder.mutation<User, { name?: string; email?: string; avatar?: string | null; timezone?: string }>({
       query: (body) => ({ url: '/users/profile', method: 'PATCH', body }),
       invalidatesTags: ['Auth'],
     }),
