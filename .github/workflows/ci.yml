@@ -61,8 +61,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, test]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    outputs:
-      image: ${{ steps.build.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +74,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push
-        id: build
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPO: ${{ secrets.ECR_REPOSITORY }}
@@ -95,7 +92,6 @@ jobs:
             -t "$REGISTRY/$REPO:latest" .
           docker push "$IMAGE"
           docker push "$REGISTRY/$REPO:latest"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy to Fargate
@@ -105,7 +101,6 @@ jobs:
       github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && needs.build-and-push.result == 'success'
-      && needs.build-and-push.outputs.image != ''
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -116,16 +111,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Register new task definition
         id: task-def
         env:
-          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPO: ${{ secrets.ECR_REPOSITORY }}
+          TAG: ${{ github.sha }}
           CONTAINER_NAME: app
           TASK_FAMILY: ${{ secrets.ECS_TASK_DEFINITION }}
         run: |
           set -euo pipefail
-          : "${IMAGE:?build-and-push job did not produce an image output}"
+          : "${REGISTRY:?ECR registry was not resolved (amazon-ecr-login output empty)}"
+          : "${REPO:?ECR_REPOSITORY secret is not set}"
+          : "${TAG:?github.sha is empty}"
           : "${TASK_FAMILY:?ECS_TASK_DEFINITION secret is not set}"
+          IMAGE="$REGISTRY/$REPO:$TAG"
           echo "Image: $IMAGE"
           echo "Family: $TASK_FAMILY"
           echo "Container: $CONTAINER_NAME"
