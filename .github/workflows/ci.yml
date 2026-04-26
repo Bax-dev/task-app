@@ -220,6 +220,11 @@ jobs:
           CLUSTER: ${{ secrets.ECS_CLUSTER }}
           SERVICE: ${{ secrets.ECS_SERVICE }}
           TASK_DEF: ${{ steps.task-def.outputs.arn }}
+          # `aws ecs wait services-stable` is hard-capped at 40 polls × 15s = 10m.
+          # Stacked deploys or slow drains routinely exceed that, so we run our own
+          # poll loop with a longer ceiling.
+          DEPLOY_TIMEOUT_MINUTES: '25'
+          POLL_INTERVAL_SECONDS: '15'
         run: |
           set -euo pipefail
           : "${CLUSTER:?ECS_CLUSTER secret is not set}"
@@ -231,17 +236,49 @@ jobs:
             --task-definition "$TASK_DEF" \
             --force-new-deployment > /dev/null
 
-          if ! aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"; then
-            echo "ERROR: service did not reach a stable state in time"
-            aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-              --query 'services[0].deployments' --output json
-            exit 1
-          fi
+          DEADLINE=$(( $(date +%s) + DEPLOY_TIMEOUT_MINUTES * 60 ))
+          while :; do
+            DEPLOYMENTS=$(aws ecs describe-services \
+              --cluster "$CLUSTER" --services "$SERVICE" \
+              --query 'services[0].deployments' --output json)
 
-          # services-stable verifies: deployments length == 1, runningCount == desiredCount.
-          # Surface the primary deployment for traceability but don't gate on rolloutState —
-          # it can lag behind the steady-state signal and produce false negatives.
-          aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
-            --query 'services[0].deployments[?status==`PRIMARY`] | [0].[taskDefinition,runningCount,desiredCount,rolloutState]' \
-            --output text
+            PRIMARY=$(echo "$DEPLOYMENTS" | jq -c '[.[] | select(.status == "PRIMARY")][0]')
+            if [ "$PRIMARY" = "null" ] || [ -z "$PRIMARY" ]; then
+              echo "ERROR: no PRIMARY deployment found"
+              echo "$DEPLOYMENTS" | jq .
+              exit 1
+            fi
+
+            ROLLOUT=$(echo "$PRIMARY"     | jq -r '.rolloutState')
+            RUNNING=$(echo "$PRIMARY"     | jq -r '.runningCount')
+            DESIRED=$(echo "$PRIMARY"     | jq -r '.desiredCount')
+            FAILED=$(echo "$PRIMARY"      | jq -r '.failedTasks')
+            PRIMARY_TD=$(echo "$PRIMARY"  | jq -r '.taskDefinition')
+            OTHERS=$(echo "$DEPLOYMENTS"  | jq '[.[] | select(.status != "PRIMARY")] | length')
+
+            # Circuit breaker has tripped — bail immediately rather than waiting out the timeout.
+            if [ "$ROLLOUT" = "FAILED" ]; then
+              echo "ERROR: deployment failed (rolloutState=FAILED, failedTasks=$FAILED)"
+              echo "$DEPLOYMENTS" | jq .
+              exit 1
+            fi
+
+            # Steady state: PRIMARY at full count, no draining peers, and the PRIMARY
+            # task definition matches the one we just deployed (guards against a CI race
+            # where another deploy superseded ours mid-poll).
+            if [ "$RUNNING" = "$DESIRED" ] && [ "$OTHERS" = "0" ] && [ "$PRIMARY_TD" = "$TASK_DEF" ]; then
+              echo "Deploy stable: $PRIMARY_TD running=$RUNNING/$DESIRED rolloutState=$ROLLOUT failedTasks=$FAILED"
+              break
+            fi
+
+            if [ "$(date +%s)" -gt "$DEADLINE" ]; then
+              echo "ERROR: service did not stabilise within ${DEPLOY_TIMEOUT_MINUTES}m"
+              echo "$DEPLOYMENTS" | jq .
+              exit 1
+            fi
+
+            echo "waiting: primary=$PRIMARY_TD running=$RUNNING/$DESIRED rollout=$ROLLOUT failed=$FAILED other-deployments=$OTHERS"
+            sleep "$POLL_INTERVAL_SECONDS"
+          done
+
           echo "Deploy complete"
