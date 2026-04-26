@@ -15,6 +15,9 @@ interface ChatMessage {
   content: string;
 }
 
+const STORAGE_KEY = 'taskflow-ai-chat-history';
+const MAX_STORED_MESSAGES = 100;
+
 export default function AiAssistantPanel({
   open,
   onOpenChange,
@@ -22,24 +25,42 @@ export default function AiAssistantPanel({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as ChatMessage[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [input, setInput] = useState('');
   const [aiChat, { isLoading }] = useAiChatMutation();
   const { data: orgs } = useGetOrganizationsQuery();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const orgId = orgs?.[0]?.id;
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)),
+      );
+    } catch {
+      // storage full or disabled — ignore
     }
   }, [messages]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, isLoading]);
 
   const handleSend = async () => {
     if (!input.trim() || !orgId || isLoading) return;
 
     const userMessage = input.trim();
+    const history = messages.slice(-20);
     setInput('');
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
 
@@ -48,6 +69,7 @@ export default function AiAssistantPanel({
         message: userMessage,
         organizationId: orgId,
         context: 'tasks',
+        history,
       }).unwrap();
 
       setMessages((prev) => [...prev, { role: 'assistant', content: result.response }]);
@@ -68,7 +90,7 @@ export default function AiAssistantPanel({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-[440px] p-0 flex flex-col">
+      <SheetContent side="right" className="w-full max-w-[440px] p-0 gap-0 flex flex-col h-dvh">
         <SheetHeader className="px-4 py-3 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -77,14 +99,21 @@ export default function AiAssistantPanel({
               </div>
               <div>
                 <SheetTitle className="text-sm">TaskFlow AI</SheetTitle>
-                <p className="text-[11px] text-muted-foreground">Powered by AWS Bedrock</p>
+                {/* <p className="text-[11px] text-muted-foreground">Powered by AWS Bedrock</p> */}
               </div>
             </div>
             {messages.length > 0 && (
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => setMessages([])}
+                onClick={() => {
+                  setMessages([]);
+                  try {
+                    window.localStorage.removeItem(STORAGE_KEY);
+                  } catch {
+                    // ignore
+                  }
+                }}
                 className="text-muted-foreground"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -93,7 +122,7 @@ export default function AiAssistantPanel({
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 min-h-0 px-4">
           <div className="py-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-center py-12">
@@ -156,6 +185,7 @@ export default function AiAssistantPanel({
                 </div>
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
         </ScrollArea>
 

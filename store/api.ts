@@ -974,7 +974,15 @@ export const apiSlice = createApi({
     aiSummarize: builder.mutation<{ summary: string }, { organizationId: string; type: 'sprint' | 'project' | 'daily'; targetId?: string }>({
       query: (body) => ({ url: '/ai/summarize', method: 'POST', body }),
     }),
-    aiChat: builder.mutation<{ response: string }, { message: string; organizationId: string; context?: 'general' | 'tasks' | 'planning' }>({
+    aiChat: builder.mutation<
+      { response: string },
+      {
+        message: string;
+        organizationId: string;
+        context?: 'general' | 'tasks' | 'planning';
+        history?: { role: 'user' | 'assistant'; content: string }[];
+      }
+    >({
       query: (body) => ({ url: '/ai/chat', method: 'POST', body }),
     }),
 

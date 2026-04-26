@@ -20,6 +20,15 @@ export const chatSchema = z.object({
   message: z.string().min(1).max(4000),
   organizationId: z.string().uuid('Invalid organization ID'),
   context: z.enum(['general', 'tasks', 'planning']).default('general'),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1).max(8000),
+      }),
+    )
+    .max(40)
+    .optional(),
 });
 
 export type SuggestTaskDTO = z.infer<typeof suggestTaskSchema>;
