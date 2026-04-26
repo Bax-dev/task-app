@@ -2,11 +2,29 @@ import {
   BedrockRuntimeClient,
   InvokeModelCommand,
 } from '@aws-sdk/client-bedrock-runtime';
-import { fromIni } from '@aws-sdk/credential-providers';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
+
+const region = process.env.AWS_REGION || 'us-east-1';
+
+function getBedrockCredentials() {
+  if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    return {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      ...(process.env.AWS_SESSION_TOKEN
+        ? { sessionToken: process.env.AWS_SESSION_TOKEN }
+        : {}),
+    };
+  }
+
+  // Fall back to the standard AWS provider chain so production can use
+  // IAM roles, ECS task roles, EC2 instance profiles, or local AWS profiles.
+  return fromNodeProviderChain();
+}
 
 const bedrock = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: fromIni(),
+  region,
+  credentials: getBedrockCredentials(),
 });
 
 const MODEL_ID = process.env.AWS_BEDROCK_MODEL_ID || 'us.amazon.nova-micro-v1:0';

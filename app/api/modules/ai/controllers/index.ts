@@ -69,6 +69,7 @@ export async function handleChat(request: NextRequest) {
     const result = await aiService.chat(session.userId, validation.data);
     return successResponse(result);
   } catch (error: any) {
+    console.error('[AI chat]', error);
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
     return errorResponse(error.message, 500);
   }
