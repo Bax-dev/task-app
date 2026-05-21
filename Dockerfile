@@ -35,8 +35,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl libc6-compat
 
 ENV NODE_ENV=production \
-    PORT=3000 \
-    HOSTNAME=0.0.0.0
+    PORT=3000
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
@@ -54,4 +53,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD wget -q -T 5 -O /dev/null http://127.0.0.1:3000/api/health || exit 1
 
-CMD ["node", "server.js"]
+# Fargate auto-injects HOSTNAME=<eni-hostname>, overriding any Dockerfile ENV.
+# Next.js standalone reads process.env.HOSTNAME and binds to it, so the server
+# ends up listening on the ENI IP instead of 0.0.0.0 — making the localhost
+# healthcheck above unreachable. Strip HOSTNAME here so the server falls back
+# to 0.0.0.0.
+CMD ["sh", "-c", "exec env -u HOSTNAME node server.js"]
