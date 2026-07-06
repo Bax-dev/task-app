@@ -1,6 +1,9 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { ACCESS_TOKEN_MAX_AGE } from './constants';
 
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
+
+export { ACCESS_TOKEN_MAX_AGE } from './constants';
 
 export interface JWTPayload {
   userId: string;
@@ -11,7 +14,7 @@ export async function signToken(payload: JWTPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('15m')
+    .setExpirationTime(`${ACCESS_TOKEN_MAX_AGE}s`)
     .sign(SECRET);
 }
 

@@ -1,6 +1,6 @@
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
-import { signRefreshToken, verifyRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from '@/lib/auth/refresh-token';
+import { signRefreshToken, consumeRefreshToken, revokeRefreshTokenValue, revokeAllRefreshTokens } from '@/lib/auth/refresh-token';
 import { generateOTP, storeOTP, verifyOTP as verifyStoredOTP, canResendOTP } from '@/lib/otp';
 import { sendEmail, buildOTPEmail } from '@/lib/email';
 import { verifyGoogleToken } from '@/lib/google-auth';
@@ -85,32 +85,38 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
 }
 
 export async function refreshSession(refreshTokenValue: string): Promise<{ token: string; refreshToken: string }> {
-  const payload = await verifyRefreshToken(refreshTokenValue);
+  // Consuming first makes refresh tokens strictly one-time use, even under races.
+  const payload = await consumeRefreshToken(refreshTokenValue);
   if (!payload) {
     throw new Error('Invalid or expired refresh token');
   }
 
-  // Revoke old refresh token (token rotation)
-  await revokeRefreshToken(payload.userId, payload.tokenId);
+  // Confirm the account still exists before minting another session.
+  const user = await authModel.findUserById(payload.userId);
+  if (!user || user.email !== payload.email) {
+    throw new Error('Invalid or expired refresh token');
+  }
 
-  // Issue new access token + new refresh token
   const token = await createSession(payload.userId, payload.email);
   const { token: refreshToken } = await signRefreshToken(payload.userId, payload.email);
 
   return { token, refreshToken };
 }
 
-export async function logoutUser(userId: string, refreshTokenValue?: string): Promise<void> {
-  if (refreshTokenValue) {
-    // Revoke the specific refresh token
-    const payload = await verifyRefreshToken(refreshTokenValue);
-    if (payload) {
-      await revokeRefreshToken(payload.userId, payload.tokenId);
-    }
-  } else {
-    // If no refresh token provided, revoke all for safety
-    await revokeAllRefreshTokens(userId);
+export async function logoutUser({
+  userId,
+  refreshToken,
+}: {
+  userId?: string;
+  refreshToken?: string | null;
+}): Promise<void> {
+  if (refreshToken) {
+    await revokeRefreshTokenValue(refreshToken);
+    return;
   }
+
+  // If only an authenticated access session remains, revoke all user sessions.
+  if (userId) await revokeAllRefreshTokens(userId);
 }
 
 export async function getMe(userId: string) {
@@ -171,6 +177,7 @@ export async function resetPassword(dto: ResetPasswordDTO) {
 
   const passwordHash = await hashPassword(dto.newPassword);
   await authModel.updateUserPassword(dto.email, passwordHash);
+  await revokeAllRefreshTokens(user.id);
 
   return { message: 'Password reset successfully' };
 }

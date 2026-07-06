@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { REFRESH_MARKER_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 
 const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-secret-key-change-in-production'
@@ -9,8 +10,10 @@ const protectedRoutes = ['/dashboard', '/organizations', '/projects', '/tasks', 
 const authRoutes = ['/login', '/signup', '/forgot-password'];
 
 export async function middleware(request: NextRequest) {
-  const token = request.cookies.get('session')?.value;
-  const refreshToken = request.cookies.get('refresh_token')?.value;
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  // The real refresh token is scoped to /api/auth and is intentionally invisible
+  // here. This marker is a routing hint only; it never authorizes an API request.
+  const hasRefreshSession = request.cookies.get(REFRESH_MARKER_COOKIE_NAME)?.value === '1';
   const pathname = request.nextUrl.pathname;
 
   const isProtectedRoute = protectedRoutes.some((route) =>
@@ -21,7 +24,7 @@ export async function middleware(request: NextRequest) {
   );
 
   if (isProtectedRoute) {
-    if (!token && !refreshToken) {
+    if (!token && !hasRefreshSession) {
       // No tokens at all — redirect to login
       const url = new URL('/login', request.url);
       url.searchParams.set('redirect', pathname);
@@ -33,16 +36,16 @@ export async function middleware(request: NextRequest) {
         await jwtVerify(token, SECRET);
         // Access token is valid, proceed
       } catch {
-        // Access token expired but refresh token exists — let client-side handle refresh
-        if (!refreshToken) {
+        // Access token expired but refresh may be available — let the API rotate it.
+        if (!hasRefreshSession) {
           const url = new URL('/login', request.url);
           url.searchParams.set('redirect', pathname);
           return NextResponse.redirect(url);
         }
-        // Has refresh token, allow through so RTK Query can auto-refresh
+        // Has marker, allow through so RTK Query can auto-refresh.
       }
     }
-    // If no access token but has refresh token, allow through for client-side refresh
+    // If no access token but the marker remains, allow client-side refresh.
   }
 
   if (isAuthRoute && token) {
