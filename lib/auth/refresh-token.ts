@@ -1,141 +1,159 @@
-import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
-import { redis, safeRedisCall } from '@/lib/redis';
 import crypto from 'crypto';
+import { cookies } from 'next/headers';
+import { redis } from '@/lib/redis';
+import {
+  REFRESH_COOKIE_NAME,
+  REFRESH_MARKER_COOKIE_NAME,
+  REFRESH_TOKEN_MAX_AGE,
+} from './constants';
 
-const SECRET = new TextEncoder().encode(process.env.JWT_SECRET!);
-const REFRESH_COOKIE_NAME = 'refresh_token';
-const REFRESH_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
-const REDIS_PREFIX = 'refresh:';
+export const REFRESH_MAX_AGE = REFRESH_TOKEN_MAX_AGE;
 
-// In-memory fallback for when Redis is unavailable
-const memoryStore = new Map<string, { token: string; expiresAt: number }>();
+const TOKEN_PREFIX = 'auth:refresh:token:';
+const USER_PREFIX = 'auth:refresh:user:';
 
 export interface RefreshTokenPayload {
   userId: string;
   email: string;
-  tokenId: string;
+  tokenHash: string;
 }
 
-/**
- * Generate a unique token ID for tracking refresh tokens
- */
-function generateTokenId(): string {
-  return crypto.randomUUID();
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-/**
- * Sign a refresh token JWT (30 days expiry)
- */
-export async function signRefreshToken(userId: string, email: string): Promise<{ token: string; tokenId: string }> {
-  const tokenId = generateTokenId();
+function tokenKey(tokenHash: string): string {
+  return `${TOKEN_PREFIX}${tokenHash}`;
+}
 
-  const token = await new SignJWT({ userId, email, tokenId })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('30d')
-    .sign(SECRET);
+function userKey(userId: string): string {
+  return `${USER_PREFIX}${userId}`;
+}
 
-  // Store in Redis (or memory fallback) so we can revoke it
-  const key = `${REDIS_PREFIX}${userId}:${tokenId}`;
-  const stored = await safeRedisCall(() =>
-    redis.set(key, token, 'EX', REFRESH_MAX_AGE)
-  );
+function newOpaqueToken(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
 
-  if (!stored) {
-    // Fallback to in-memory
-    memoryStore.set(key, {
-      token,
-      expiresAt: Date.now() + REFRESH_MAX_AGE * 1000,
-    });
+function useSecureCookies(): boolean {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  return appUrl ? appUrl.startsWith('https://') : process.env.NODE_ENV === 'production';
+}
+
+/** Store only a SHA-256 fingerprint in Redis; a Redis leak does not expose live tokens. */
+export async function signRefreshToken(
+  userId: string,
+  email: string
+): Promise<{ token: string; tokenId: string }> {
+  const token = newOpaqueToken();
+  const tokenHash = hashToken(token);
+  const value = JSON.stringify({ userId, email });
+
+  const transaction = redis.multi();
+  transaction.set(tokenKey(tokenHash), value, 'EX', REFRESH_MAX_AGE, 'NX');
+  transaction.sadd(userKey(userId), tokenHash);
+  transaction.expire(userKey(userId), REFRESH_MAX_AGE);
+  const result = await transaction.exec();
+
+  if (!result || result.some(([error]) => error)) {
+    throw new Error('Refresh token store unavailable');
   }
 
-  return { token, tokenId };
+  return { token, tokenId: tokenHash };
 }
 
 /**
- * Verify a refresh token and check it hasn't been revoked
+ * Atomically consumes a refresh token. GETDEL guarantees that concurrent replay
+ * attempts cannot both rotate the same token.
  */
-export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload | null> {
+export async function consumeRefreshToken(token: string): Promise<RefreshTokenPayload | null> {
+  if (!token || token.length > 512) return null;
+
+  const tokenHash = hashToken(token);
+  const value = await redis.getdel(tokenKey(tokenHash));
+  if (!value) return null;
+
   try {
-    const { payload } = await jwtVerify(token, SECRET);
-    const { userId, email, tokenId } = payload as unknown as RefreshTokenPayload;
-
-    if (!userId || !email || !tokenId) return null;
-
-    // Check if token is still valid in store (not revoked)
-    const key = `${REDIS_PREFIX}${userId}:${tokenId}`;
-    const storedToken = await safeRedisCall(() => redis.get(key));
-
-    if (storedToken === null) {
-      // Check in-memory fallback
-      const memEntry = memoryStore.get(key);
-      if (!memEntry || memEntry.expiresAt < Date.now()) {
-        memoryStore.delete(key);
-        return null;
-      }
-    }
-
-    return { userId, email, tokenId };
+    const parsed = JSON.parse(value) as { userId?: unknown; email?: unknown };
+    if (typeof parsed.userId !== 'string' || typeof parsed.email !== 'string') return null;
+    await redis.srem(userKey(parsed.userId), tokenHash);
+    return { userId: parsed.userId, email: parsed.email, tokenHash };
   } catch {
     return null;
   }
 }
 
-/**
- * Revoke a specific refresh token
- */
-export async function revokeRefreshToken(userId: string, tokenId: string): Promise<void> {
-  const key = `${REDIS_PREFIX}${userId}:${tokenId}`;
-  await safeRedisCall(() => redis.del(key));
-  memoryStore.delete(key);
+/** Read-only validation is retained for callers that must inspect without rotating. */
+export async function verifyRefreshToken(token: string): Promise<RefreshTokenPayload | null> {
+  if (!token || token.length > 512) return null;
+  const tokenHash = hashToken(token);
+  const value = await redis.get(tokenKey(tokenHash));
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as { userId?: unknown; email?: unknown };
+    if (typeof parsed.userId !== 'string' || typeof parsed.email !== 'string') return null;
+    return { userId: parsed.userId, email: parsed.email, tokenHash };
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Revoke all refresh tokens for a user (e.g., on password change)
- */
+export async function revokeRefreshToken(userId: string, tokenHash: string): Promise<void> {
+  await redis.multi().del(tokenKey(tokenHash)).srem(userKey(userId), tokenHash).exec();
+}
+
+export async function revokeRefreshTokenValue(token: string): Promise<void> {
+  await consumeRefreshToken(token);
+}
+
 export async function revokeAllRefreshTokens(userId: string): Promise<void> {
-  // Redis: scan and delete all keys for this user
-  const pattern = `${REDIS_PREFIX}${userId}:*`;
-  const keys = await safeRedisCall(() => redis.keys(pattern));
-  if (keys && keys.length > 0) {
-    await safeRedisCall(() => redis.del(...keys));
-  }
-
-  // In-memory fallback: delete matching keys
-  for (const key of memoryStore.keys()) {
-    if (key.startsWith(`${REDIS_PREFIX}${userId}:`)) {
-      memoryStore.delete(key);
-    }
-  }
+  const key = userKey(userId);
+  const hashes = await redis.smembers(key);
+  const transaction = redis.multi();
+  for (const hash of hashes) transaction.del(tokenKey(hash));
+  transaction.del(key);
+  await transaction.exec();
 }
 
-/**
- * Set refresh token as httpOnly cookie
- */
 export async function setRefreshTokenCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NEXT_PUBLIC_APP_URL?.startsWith('https'),
-    sameSite: 'lax',
+    secure: useSecureCookies(),
+    sameSite: 'strict',
+    maxAge: REFRESH_MAX_AGE,
+    path: '/api/auth',
+  });
+  // This root-scoped marker grants no API access. It only lets middleware know
+  // that client-side refresh may be attempted after the access cookie expires.
+  cookieStore.set(REFRESH_MARKER_COOKIE_NAME, '1', {
+    httpOnly: true,
+    secure: useSecureCookies(),
+    sameSite: 'strict',
     maxAge: REFRESH_MAX_AGE,
     path: '/',
   });
 }
 
-/**
- * Get refresh token from cookie
- */
 export async function getRefreshTokenFromCookie(): Promise<string | null> {
   const cookieStore = await cookies();
   return cookieStore.get(REFRESH_COOKIE_NAME)?.value ?? null;
 }
 
-/**
- * Delete refresh token cookie
- */
 export async function deleteRefreshTokenCookie(): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.delete(REFRESH_COOKIE_NAME);
+  cookieStore.set(REFRESH_COOKIE_NAME, '', {
+    httpOnly: true,
+    secure: useSecureCookies(),
+    sameSite: 'strict',
+    maxAge: 0,
+    path: '/api/auth',
+  });
+  cookieStore.set(REFRESH_MARKER_COOKIE_NAME, '', {
+    httpOnly: true,
+    secure: useSecureCookies(),
+    sameSite: 'strict',
+    maxAge: 0,
+    path: '/',
+  });
 }

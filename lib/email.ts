@@ -6,8 +6,6 @@ interface EmailOptions {
   html: string;
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function sendEmail(options: EmailOptions): Promise<void> {
   if (process.env.NODE_ENV === 'development') {
     console.log(`[EMAIL] To: ${options.to} | Subject: ${options.subject}`);
@@ -19,6 +17,8 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
   }
 
   try {
+    // Construct lazily so local builds and non-email routes work without a key.
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
       to: options.to,

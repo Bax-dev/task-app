@@ -83,26 +83,32 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   let result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error && result.error.status === 401) {
-     const url = typeof args === 'string' ? args : args.url;
-    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register' || url === '/auth/me') {
+    const url = typeof args === 'string' ? args : args.url;
+    // Login/register failures are expected credential errors. Refresh must also
+    // be excluded to prevent a recursive refresh loop. `/auth/me` is deliberately
+    // included: it is the auth bootstrap request and must recover an expired access token.
+    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register') {
       return normalizeError(result);
     }
 
     if (!isRefreshing) {
       isRefreshing = true;
       refreshPromise = (async () => {
-        const refreshResult = await rawBaseQuery(
-          { url: '/auth/refresh', method: 'POST' },
-          api,
-          extraOptions
-        );
-        isRefreshing = false;
-        refreshPromise = null;
-        return !refreshResult.error;
+        try {
+          const refreshResult = await rawBaseQuery(
+            { url: '/auth/refresh', method: 'POST' },
+            api,
+            extraOptions
+          );
+          return !refreshResult.error;
+        } finally {
+          isRefreshing = false;
+          refreshPromise = null;
+        }
       })();
     }
 
-    const refreshed = await refreshPromise;
+    const refreshed = await refreshPromise!;
 
     if (refreshed) {
       result = await rawBaseQuery(args, api, extraOptions);

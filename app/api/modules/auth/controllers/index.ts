@@ -60,9 +60,11 @@ export async function handleLogout(request: NextRequest) {
     const session = await authenticateRequest(request);
     const refreshToken = await getRefreshTokenFromCookie();
 
-    if (session) {
-      await authService.logoutUser(session.userId, refreshToken ?? undefined);
-    }
+    // The refresh token can revoke its own session even if the access token expired.
+    await authService.logoutUser({
+      userId: session?.userId,
+      refreshToken,
+    });
 
     await deleteSessionCookie();
     await deleteRefreshTokenCookie();
