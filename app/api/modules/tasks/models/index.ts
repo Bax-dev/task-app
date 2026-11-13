@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db/client';
-import { TaskStatus, TaskPriority } from '@prisma/client';
+import { Prisma, TaskStatus, TaskPriority } from '@prisma/client';
+import { pageArgs, toPage } from '@/lib/pagination';
+import type { ListUserTasksQuery } from '../types';
 
 const taskInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
@@ -77,32 +79,81 @@ export async function findTasksByProject(projectId: string) {
   return prisma.task.findMany({
     where: { projectId },
     include: taskInclude,
-    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ boardPosition: { sort: 'asc', nulls: 'last' } }, { priority: 'desc' }, { createdAt: 'desc' }],
+    take: 1000, // shortcut: hard cap against unbounded reads; add pagination when lists grow
   });
+}
+
+function userTasksWhere(userId: string): Prisma.TaskWhereInput {
+  return {
+    // Current members only: created/assigned tasks in an org the user has left must not show.
+    project: { space: { organization: { memberships: { some: { userId } } } } },
+    OR: [
+      { createdById: userId },
+      { assignments: { some: { userId } } },
+      {
+        assignToSpace: true,
+        project: {
+          space: {
+            OR: [
+              { organization: { memberships: { some: { userId, role: 'ADMIN' } } } },
+              { members: { some: { userId } } },
+            ],
+          },
+        },
+      },
+    ],
+  };
 }
 
 export async function findTasksByUser(userId: string) {
   return prisma.task.findMany({
-    where: {
-      OR: [
-        { createdById: userId },
-        { assignments: { some: { userId } } },
-        {
-          assignToSpace: true,
-          project: {
-            space: {
-              OR: [
-                { organization: { memberships: { some: { userId, role: 'ADMIN' } } } },
-                { members: { some: { userId } } },
-              ],
-            },
-          },
-        },
-      ],
-    },
+    where: userTasksWhere(userId),
     include: taskInclude,
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    take: 1000, // shortcut: unpaginated mode for dashboard/calendar/reports widgets, move them to ?limit= if users exceed 1000 tasks
   });
+}
+
+const userTaskOrder: Record<NonNullable<ListUserTasksQuery['sort']> | 'default', Prisma.TaskOrderByWithRelationInput[]> = {
+  'due-soon': [{ dueDate: { sort: 'asc', nulls: 'last' } }, { priority: 'desc' }],
+  'urgent-first': [{ priority: 'desc' }, { title: 'asc' }],
+  'recently-updated': [{ updatedAt: 'desc' }],
+  alphabetical: [{ title: 'asc' }],
+  default: [{ priority: 'desc' }, { createdAt: 'desc' }],
+};
+
+/** My Tasks page: filtered, sorted, cursor-paginated; statusCounts covers every status for the status pills. */
+export async function findTasksByUserPage(userId: string, query: ListUserTasksQuery & { limit: number }) {
+  const q = query.q;
+  const where: Prisma.TaskWhereInput = {
+    AND: [
+      userTasksWhere(userId),
+      q
+        ? {
+            OR: [
+              { title: { contains: q, mode: 'insensitive' } },
+              { description: { contains: q, mode: 'insensitive' } },
+              { project: { name: { contains: q, mode: 'insensitive' } } },
+              { issueType: { name: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {},
+    ],
+  };
+
+  const [rows, counts] = await Promise.all([
+    prisma.task.findMany({
+      where: query.status ? { AND: [where, { status: query.status }] } : where,
+      include: taskInclude,
+      orderBy: [...userTaskOrder[query.sort ?? 'default'], { id: 'asc' }],
+      ...pageArgs(query.limit, query.cursor),
+    }),
+    prisma.task.groupBy({ by: ['status'], where, _count: { _all: true } }),
+  ]);
+
+  const statusCounts = Object.fromEntries(counts.map((c) => [c.status, c._count._all])) as Partial<Record<TaskStatus, number>>;
+  return { ...toPage(rows, query.limit), statusCounts };
 }
 
 export async function updateTask(id: string, data: {
@@ -114,12 +165,19 @@ export async function updateTask(id: string, data: {
   dueDate?: Date | null;
   rejectionReason?: string | null;
   issueTypeId?: string | null;
-}) {
+}, { clearAssignments = false } = {}) {
   return prisma.task.update({
     where: { id },
-    data,
+    data: { ...data, ...(clearAssignments && { assignments: { deleteMany: {} } }) },
     include: taskInclude,
   });
+}
+
+export async function moveTask(id: string, data: {
+  boardPosition: number;
+  boardColumnId?: string | null;
+}) {
+  return prisma.task.update({ where: { id }, data, include: taskInclude });
 }
 
 export async function deleteTask(id: string) {
@@ -144,12 +202,6 @@ export async function unassignUser(taskId: string, userId: string) {
 export async function findAssignment(taskId: string, userId: string) {
   return prisma.taskAssignment.findUnique({
     where: { taskId_userId: { taskId, userId } },
-  });
-}
-
-export async function clearAssignments(taskId: string) {
-  return prisma.taskAssignment.deleteMany({
-    where: { taskId },
   });
 }
 

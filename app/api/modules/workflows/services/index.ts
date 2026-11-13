@@ -1,10 +1,12 @@
-import { requireOrgMembership, requireOrgAdmin } from '@/lib/guards/org-guard';
+import { requireOrgMembership, requireOrgAdmin, assertIssueTypeInOrg } from '@/lib/guards/org-guard';
+import { HttpError } from '@/lib/api-response';
 import { prisma } from '@/lib/db/client';
 import * as workflowModel from '../models';
 import { CreateWorkflowDTO, UpdateWorkflowDTO, CreateWorkflowStepDTO, UpdateWorkflowStepDTO, CreateWorkflowTransitionDTO } from '../types';
 
 export async function createWorkflow(userId: string, dto: CreateWorkflowDTO) {
   await requireOrgAdmin(userId, dto.organizationId);
+  await assertIssueTypeInOrg(dto.issueTypeId, dto.organizationId);
 
   return workflowModel.createWorkflow({
     name: dto.name,
@@ -76,6 +78,8 @@ export async function createTransition(workflowId: string, userId: string, dto: 
   if (!workflow) throw new Error('Workflow not found');
 
   await requireOrgAdmin(userId, workflow.organization.id);
+  const steps = await prisma.workflowStep.count({ where: { workflowId, id: { in: [dto.fromStepId, dto.toStepId] } } });
+  if (steps !== new Set([dto.fromStepId, dto.toStepId]).size) throw new HttpError('Workflow step not found', 404);
   return workflowModel.createWorkflowTransition({
     name: dto.name,
     fromStepId: dto.fromStepId,

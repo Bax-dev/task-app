@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createProjectSchema, updateProjectSchema } from '../types';
@@ -18,7 +18,7 @@ export async function handleCreateProject(request: NextRequest) {
     return successResponse(project, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function handleGetProject(request: NextRequest, projectId: string) 
   } catch (error: any) {
     if (error.message === 'Project not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -46,7 +46,7 @@ export async function handleGetSpaceProjects(request: NextRequest, spaceId: stri
   } catch (error: any) {
     if (error.message === 'Space not found') return notFoundResponse('Space not found');
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -58,7 +58,7 @@ export async function handleGetUserProjects(request: NextRequest) {
     const projects = await projectService.getUserProjects(session.userId);
     return successResponse(projects);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -76,7 +76,7 @@ export async function handleUpdateProject(request: NextRequest, projectId: strin
   } catch (error: any) {
     if (error.message === 'Project not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -92,6 +92,6 @@ export async function handleDeleteProject(request: NextRequest, projectId: strin
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required' || error.message === 'Guest users have read-only access') {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

@@ -45,9 +45,10 @@ export async function generatePresignedUploadUrl(
     Bucket: BUCKET,
     Key: fileKey,
     ContentType: mimeType,
+    ContentLength: fileSize, // signed: S3 rejects a PUT whose body isn't exactly this size, so the 5MB check holds
   });
 
-  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 }); // 5 min
+  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300, signableHeaders: new Set(['content-length']) }); // 5 min
   const fileUrl = `https://${BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${fileKey}`;
 
   return { uploadUrl, fileUrl, fileKey };

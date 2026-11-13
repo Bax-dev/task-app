@@ -1,12 +1,19 @@
 import { prisma } from "@/lib/db/client";
 import { invokeModel } from "@/lib/bedrock";
 import { requireOrgMembership } from "@/lib/guards/org-guard";
+import { getAccessibleSpaceIds, requireProjectAccess } from "@/lib/guards/space-guard";
 import type {
   SuggestTaskDTO,
   GenerateSubtasksDTO,
   SummarizeDTO,
   ChatDTO,
 } from "../types";
+
+/** Task filter limited to spaces the user can see (private spaces must not reach the model). */
+async function visibleTasksWhere(userId: string, organizationId: string) {
+  const access = await getAccessibleSpaceIds(userId, organizationId);
+  return { space: { organizationId }, ...(access.all ? {} : { spaceId: { in: access.ids } }) };
+}
 
 export async function suggestTask(userId: string, dto: SuggestTaskDTO) {
   const project = await prisma.project.findUnique({
@@ -22,7 +29,7 @@ export async function suggestTask(userId: string, dto: SuggestTaskDTO) {
   });
   if (!project) throw new Error("Project not found");
 
-  await requireOrgMembership(userId, project.space.organizationId);
+  await requireProjectAccess(userId, dto.projectId);
 
   const existingTasks = project.tasks
     .map((t) => `- ${t.title} [${t.priority}, ${t.status}]`)
@@ -93,6 +100,7 @@ Return a JSON array: ["subtask 1", "subtask 2", ...]`;
 
 export async function summarize(userId: string, dto: SummarizeDTO) {
   await requireOrgMembership(userId, dto.organizationId);
+  const projectWhere = await visibleTasksWhere(userId, dto.organizationId);
 
   let context = "";
 
@@ -102,7 +110,7 @@ export async function summarize(userId: string, dto: SummarizeDTO) {
 
     const recentTasks = await prisma.task.findMany({
       where: {
-        project: { space: { organizationId: dto.organizationId } },
+        project: projectWhere,
         updatedAt: { gte: since },
       },
       select: { title: true, status: true, priority: true, updatedAt: true },
@@ -115,7 +123,7 @@ export async function summarize(userId: string, dto: SummarizeDTO) {
       .join("\n");
   } else if (dto.type === "project" && dto.targetId) {
     const tasks = await prisma.task.findMany({
-      where: { projectId: dto.targetId },
+      where: { projectId: dto.targetId, project: projectWhere },
       select: { title: true, status: true, priority: true },
     });
 
@@ -129,10 +137,11 @@ export async function summarize(userId: string, dto: SummarizeDTO) {
 
     context = `Project stats: ${stats.total} total, ${stats.done} done, ${stats.inProgress} in progress, ${stats.todo} todo, ${stats.urgent} urgent\n\nTasks:\n${tasks.map((t) => `- ${t.title} [${t.status}]`).join("\n")}`;
   } else if (dto.type === "sprint" && dto.targetId) {
-    const sprint = await prisma.sprint.findUnique({
-      where: { id: dto.targetId },
+    const sprint = await prisma.sprint.findFirst({
+      where: { id: dto.targetId, organizationId: dto.organizationId },
       include: {
         sprintTasks: {
+          where: { task: { project: projectWhere } },
           include: {
             task: { select: { title: true, status: true, priority: true } },
           },
@@ -162,13 +171,14 @@ export async function summarize(userId: string, dto: SummarizeDTO) {
 
 export async function chat(userId: string, dto: ChatDTO) {
   await requireOrgMembership(userId, dto.organizationId);
+  const projectWhere = await visibleTasksWhere(userId, dto.organizationId);
 
   let contextInfo = "";
 
   if (dto.context === "tasks") {
     const tasks = await prisma.task.findMany({
       where: {
-        project: { space: { organizationId: dto.organizationId } },
+        project: projectWhere,
         status: { in: ["TODO", "IN_PROGRESS"] },
       },
       select: { title: true, status: true, priority: true, dueDate: true },

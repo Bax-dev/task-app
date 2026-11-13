@@ -1,3 +1,4 @@
+import { HttpError } from '@/lib/api-response';
 import { prisma } from '@/lib/db/client';
 import { Role } from '@prisma/client';
 
@@ -21,7 +22,7 @@ export async function requireOrgMembership(
 ): Promise<Role> {
   const { isMember, role } = await verifyOrgMembership(userId, organizationId);
   if (!isMember || !role) {
-    throw new Error('Not a member of this organization');
+    throw new HttpError('Not a member of this organization', 403);
   }
   return role;
 }
@@ -32,7 +33,7 @@ export async function requireOrgAdmin(
 ): Promise<void> {
   const role = await requireOrgMembership(userId, organizationId);
   if (role !== 'ADMIN') {
-    throw new Error('Admin access required');
+    throw new HttpError('Admin access required', 403);
   }
 }
 
@@ -42,7 +43,14 @@ export async function requireNonGuest(
 ): Promise<Role> {
   const role = await requireOrgMembership(userId, organizationId);
   if (role === 'GUEST') {
-    throw new Error('Guest users have read-only access');
+    throw new HttpError('Guest users have read-only access', 403);
   }
   return role;
+}
+
+/** Ids from request bodies must not point into another org. Throws 404 so existence isn't leaked. */
+export async function assertIssueTypeInOrg(issueTypeId: string | null | undefined, organizationId: string): Promise<void> {
+  if (!issueTypeId) return;
+  const found = await prisma.issueType.findFirst({ where: { id: issueTypeId, organizationId }, select: { id: true } });
+  if (!found) throw new HttpError('Issue type not found', 404);
 }

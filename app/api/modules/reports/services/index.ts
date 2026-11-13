@@ -1,4 +1,5 @@
 import { requireOrgMembership } from '@/lib/guards/org-guard';
+import { getAccessibleSpaceIds } from '@/lib/guards/space-guard';
 import * as reportModel from '../models';
 
 export async function getBurndownChart(userId: string, sprintId: string) {
@@ -74,7 +75,8 @@ export async function getVelocityChart(userId: string, organizationId: string, s
 export async function getCumulativeFlow(userId: string, organizationId: string, days: number) {
   await requireOrgMembership(userId, organizationId);
 
-  const tasks = await reportModel.getTasksByOrganization(organizationId);
+  const access = await getAccessibleSpaceIds(userId, organizationId);
+  const tasks = await reportModel.getTasksByOrganization(organizationId, access.all ? null : access.ids);
   const now = new Date();
   const startDate = new Date(now);
   startDate.setDate(startDate.getDate() - days);
@@ -87,12 +89,14 @@ export async function getCumulativeFlow(userId: string, organizationId: string, 
     currentDate.setDate(currentDate.getDate() + day);
     const dateStr = currentDate.toISOString().split('T')[0];
 
+    // shortcut: no status history, so each task is counted in its *current* status from its creation date on.
+    // Upgrade by recording status changes (ActivityLog) and replaying them per day.
+    const existing = tasks.filter((t) => new Date(t.createdAt) <= currentDate);
     const counts: Record<string, number> = {};
     for (const status of statuses) {
-      counts[status] = tasks.filter((t) => new Date(t.createdAt) <= currentDate).length;
+      counts[status] = existing.filter((t) => t.status === status).length;
     }
-    // Simplified: count total tasks created by that date
-    const totalTasks = tasks.filter((t) => new Date(t.createdAt) <= currentDate).length;
+    const totalTasks = existing.length;
 
     flowData.push({ date: dateStr, total: totalTasks, ...counts });
   }

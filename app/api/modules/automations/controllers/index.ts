@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createAutomationSchema, updateAutomationSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateAutomation(request: NextRequest) {
     return successResponse(automation, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadAutomation(request: NextRequest, automationId: string)
   } catch (error: any) {
     if (error.message === 'Automation not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadAutomations(request: NextRequest, organizationId: stri
     return successResponse(automations);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -63,7 +63,7 @@ export async function EditAutomation(request: NextRequest, automationId: string)
   } catch (error: any) {
     if (error.message === 'Automation not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -77,6 +77,6 @@ export async function RemoveAutomation(request: NextRequest, automationId: strin
   } catch (error: any) {
     if (error.message === 'Automation not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

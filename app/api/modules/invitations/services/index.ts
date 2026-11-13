@@ -5,6 +5,8 @@ import { sendEmail, buildInviteEmail } from '@/lib/email';
 import * as invitationModel from '../models';
 import { CreateInvitationDTO } from '../types';
 import { logAudit } from '@/lib/audit';
+import { requireOrgAdmin } from '@/lib/guards/org-guard';
+import { HttpError } from '@/lib/api-response';
 
 const INVITE_EXPIRY_DAYS = 7;
 
@@ -72,6 +74,12 @@ export async function acceptInvitation(token: string, userId: string) {
     throw new Error('Invitation has expired');
   }
 
+  // Tokens get forwarded and leak; only the invited address may use one (it can carry ADMIN).
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!user || user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+    throw new HttpError(`This invitation was sent to ${invitation.email}. Sign in with that account to accept it.`, 403);
+  }
+
   // Check if already a member
   const existingMembership = await invitationModel.findExistingMembership(
     userId,
@@ -82,14 +90,17 @@ export async function acceptInvitation(token: string, userId: string) {
     throw new Error('You are already a member of this organization');
   }
 
-  // Create membership and update invitation
-  await invitationModel.createMembership({
-    userId,
-    organizationId: invitation.organizationId,
-    role: invitation.role,
+  // Claim the invitation and join atomically: a double submit can't create two memberships or half-accept.
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.invitation.updateMany({
+      where: { id: invitation.id, status: InvitationStatus.PENDING },
+      data: { status: InvitationStatus.ACCEPTED },
+    });
+    if (!count) throw new Error('Invitation is no longer valid');
+    await tx.membership.create({
+      data: { userId, organizationId: invitation.organizationId, role: invitation.role },
+    });
   });
-
-  await invitationModel.updateInvitationStatus(invitation.id, InvitationStatus.ACCEPTED);
 
   logAudit({ userId, organizationId: invitation.organizationId, description: `accepted invitation and joined the organization` });
   return invitation;
@@ -111,17 +122,21 @@ export async function getOrganizationInvitations(organizationId: string) {
   return invitationModel.findOrganizationInvitations(organizationId, InvitationStatus.PENDING);
 }
 
-export async function revokeInvitation(invitationId: string) {
+export async function revokeInvitation(userId: string, invitationId: string) {
+  const invitation = await prisma.invitation.findUnique({ where: { id: invitationId }, select: { organizationId: true } });
+  if (!invitation) throw new Error('Invitation not found');
+  await requireOrgAdmin(userId, invitation.organizationId);
   return invitationModel.updateInvitationStatus(invitationId, InvitationStatus.REVOKED);
 }
 
-export async function resendInvitation(invitationId: string) {
+export async function resendInvitation(userId: string, invitationId: string) {
   const invitation = await prisma.invitation.findUnique({
     where: { id: invitationId },
     include: { organization: { select: { name: true } } },
   });
 
   if (!invitation) throw new Error('Invitation not found');
+  await requireOrgAdmin(userId, invitation.organizationId);
   if (invitation.status !== InvitationStatus.PENDING) throw new Error('Invitation is no longer pending');
 
   // Extend expiry by 7 days from now

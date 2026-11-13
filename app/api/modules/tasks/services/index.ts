@@ -1,12 +1,13 @@
 import { TaskStatus, TaskPriority } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
-import { requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
-import { requireSpaceAccess } from '@/lib/guards/space-guard';
+import { requireOrgAdmin, requireNonGuest, assertIssueTypeInOrg } from '@/lib/guards/org-guard';
+import { requireSpaceAccess, requireTaskWrite } from '@/lib/guards/space-guard';
+import { HttpError } from '@/lib/api-response';
 import { notifyTaskAssigned, notifyTaskAssignedToMany, notifyTaskOverdue, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
 import { sendEmail, buildTaskAssignedEmail, buildTaskOverdueEmail } from '@/lib/email';
 import { getCalendarDateFromDueDate, getCalendarDateInTimezone } from '@/lib/timezone';
 import * as taskModel from '../models';
-import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
+import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO, MoveTaskDTO, ListUserTasksQuery } from '../types';
 import { logAudit } from '@/lib/audit';
 import { publishEvent } from '@/lib/redis-pubsub';
 
@@ -93,6 +94,9 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
   const { orgId, spaceId } = await getProjectScope(dto.projectId);
   await requireNonGuest(userId, orgId);
   await requireSpaceAccess(userId, spaceId);
+  // Same rule as updateTask: creating straight into REJECTED must not bypass it.
+  if (dto.status === 'REJECTED') await requireOrgAdmin(userId, orgId);
+  await assertIssueTypeInOrg(dto.issueTypeId, orgId);
 
   const task = await taskModel.createTask({
     title: dto.title,
@@ -190,8 +194,10 @@ export async function getProjectTasks(projectId: string, userId: string) {
   return taskModel.findTasksByProject(projectId);
 }
 
-export async function getUserTasks(userId: string) {
-  return taskModel.findTasksByUser(userId);
+export async function getUserTasks(userId: string, query: ListUserTasksQuery = {}) {
+  const { limit } = query;
+  // Opt-in: without ?limit the endpoint keeps returning a plain array for existing callers.
+  return limit ? taskModel.findTasksByUserPage(userId, { ...query, limit }) : taskModel.findTasksByUser(userId);
 }
 
 export async function deleteTask(taskId: string, userId: string) {
@@ -381,6 +387,7 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
   if (dto.status === 'REJECTED') {
     await requireOrgAdmin(userId, orgId);
   }
+  await assertIssueTypeInOrg(dto.issueTypeId, orgId);
 
   const updateData: any = {
     title: dto.title,
@@ -399,11 +406,8 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
     updateData.rejectionReason = null; // Clear rejection when status changes away
   }
 
-  if (dto.assignToSpace === true) {
-    await taskModel.clearAssignments(taskId);
-  }
-
-  const updated = await taskModel.updateTask(taskId, updateData);
+  // Whole-space assignment replaces individual ones, in the same write.
+  const updated = await taskModel.updateTask(taskId, updateData, { clearAssignments: dto.assignToSpace === true });
 
   // Audit log
   let auditDesc = `updated task "${task.title}"`;
@@ -467,6 +471,35 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
   }).catch(() => {});
 
   return updated;
+}
+
+export async function moveTask(taskId: string, userId: string, dto: MoveTaskDTO) {
+  const { projectId } = await requireTaskWrite(userId, taskId);
+
+  if (dto.boardColumnId) {
+    const column = await prisma.boardColumn.findFirst({
+      where: { id: dto.boardColumnId, board: { projectId } },
+      select: { id: true },
+    });
+    if (!column) throw new HttpError('Board column not found', 404);
+  }
+
+  // Status goes through updateTask so the admin-only REJECTED rule, audit log and notifications stay in one place.
+  if (dto.status) await updateTask(taskId, userId, { status: dto.status });
+
+  const moved = await taskModel.moveTask(taskId, {
+    boardPosition: dto.position,
+    boardColumnId: dto.boardColumnId,
+  });
+
+  publishEvent(`events:project:${projectId}`, {
+    type: 'TASK_UPDATED',
+    tags: ['Tasks'],
+    ids: [taskId, `project-${projectId}`],
+    projectId,
+  }).catch(() => {});
+
+  return moved;
 }
 
 export async function sendOverdueReminders() {

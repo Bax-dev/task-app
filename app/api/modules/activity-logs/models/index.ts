@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/client';
 import { ActivityStatus } from '@prisma/client';
+import { pageArgs, toPage } from '@/lib/pagination';
 
 const activityLogInclude = {
   createdBy: { select: { id: true, name: true, email: true } },
@@ -39,20 +40,24 @@ export async function findActivityLogById(id: string) {
   });
 }
 
-export async function findActivityLogsByOrg(organizationId: string) {
-  return prisma.activityLog.findMany({
+export async function findActivityLogsByOrg(organizationId: string, limit: number, cursor?: string) {
+  const rows = await prisma.activityLog.findMany({
     where: { organizationId },
     include: activityLogInclude,
-    orderBy: { loggedAt: 'desc' },
+    orderBy: [{ loggedAt: 'desc' }, { id: 'desc' }],
+    ...pageArgs(limit, cursor),
   });
+  return toPage(rows, limit);
 }
 
-export async function findActivityLogsByUser(userId: string) {
-  return prisma.activityLog.findMany({
+export async function findActivityLogsByUser(userId: string, limit: number, cursor?: string) {
+  const rows = await prisma.activityLog.findMany({
     where: { createdById: userId },
     include: activityLogInclude,
-    orderBy: { loggedAt: 'desc' },
+    orderBy: [{ loggedAt: 'desc' }, { id: 'desc' }],
+    ...pageArgs(limit, cursor),
   });
+  return toPage(rows, limit);
 }
 
 export async function updateActivityLog(id: string, data: {

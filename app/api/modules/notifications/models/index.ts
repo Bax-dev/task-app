@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/client';
 import { NotificationType } from '@prisma/client';
+import { pageArgs, toPage } from '@/lib/pagination';
 
 export async function createNotification(data: {
   userId: string;
@@ -21,12 +22,13 @@ export async function createManyNotifications(data: {
   return prisma.notification.createMany({ data });
 }
 
-export async function findUserNotifications(userId: string, limit = 50) {
-  return prisma.notification.findMany({
+export async function findUserNotifications(userId: string, limit: number, cursor?: string) {
+  const rows = await prisma.notification.findMany({
     where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    ...pageArgs(limit, cursor),
   });
+  return toPage(rows, limit);
 }
 
 export async function findUnreadCount(userId: string) {

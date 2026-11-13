@@ -16,11 +16,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install --no-package-lock --include=optional
+      - run: npm ci
       - uses: actions/cache/save@v4
         with:
           path: node_modules
-          key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
+          key: nm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
 
   lint-and-typecheck:
     name: Lint & Type Check
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: node_modules
-          key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
+          key: nm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           fail-on-cache-miss: true
       - run: npx prisma generate
       - run: npx tsc --noEmit
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: node_modules
-          key: nm-${{ runner.os }}-${{ hashFiles('package.json') }}-${{ github.sha }}
+          key: nm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           fail-on-cache-miss: true
       - run: npx prisma generate
       - run: npm test

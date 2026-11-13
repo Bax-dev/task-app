@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createWorkflowSchema, updateWorkflowSchema, createWorkflowStepSchema, updateWorkflowStepSchema, createWorkflowTransitionSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateWorkflow(request: NextRequest) {
     return successResponse(workflow, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadWorkflow(request: NextRequest, workflowId: string) {
   } catch (error: any) {
     if (error.message === 'Workflow not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadWorkflows(request: NextRequest, organizationId: string
     return successResponse(workflows);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -63,7 +63,7 @@ export async function EditWorkflow(request: NextRequest, workflowId: string) {
   } catch (error: any) {
     if (error.message === 'Workflow not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -77,7 +77,7 @@ export async function RemoveWorkflow(request: NextRequest, workflowId: string) {
   } catch (error: any) {
     if (error.message === 'Workflow not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -95,7 +95,7 @@ export async function CreateWorkflowStep(request: NextRequest, workflowId: strin
   } catch (error: any) {
     if (error.message === 'Workflow not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -113,7 +113,7 @@ export async function EditWorkflowStep(request: NextRequest, stepId: string) {
   } catch (error: any) {
     if (error.message === 'Workflow step not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -127,7 +127,7 @@ export async function RemoveWorkflowStep(request: NextRequest, stepId: string) {
   } catch (error: any) {
     if (error.message === 'Workflow step not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -145,7 +145,7 @@ export async function CreateWorkflowTransition(request: NextRequest, workflowId:
   } catch (error: any) {
     if (error.message === 'Workflow not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -159,6 +159,6 @@ export async function RemoveWorkflowTransition(request: NextRequest, transitionI
   } catch (error: any) {
     if (error.message === 'Workflow transition not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

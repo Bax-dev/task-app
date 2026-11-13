@@ -1,4 +1,5 @@
-import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { randomBytes } from 'crypto';
+import { hashPassword, verifyPassword, verifyPasswordAgainstNothing } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
 import { signRefreshToken, consumeRefreshToken, revokeRefreshTokenValue, revokeAllRefreshTokens } from '@/lib/auth/refresh-token';
 import { generateOTP, storeOTP, verifyOTP as verifyStoredOTP, canResendOTP } from '@/lib/otp';
@@ -6,34 +7,45 @@ import { sendEmail, buildOTPEmail } from '@/lib/email';
 import { verifyGoogleToken } from '@/lib/google-auth';
 import * as authModel from '../models';
 import { challengeIfEnabled, type MfaChallengeResponse } from './mfa';
-import { RegisterDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO, ResendOTPDTO, AuthResponse } from '../types';
+import { RegisterDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO, ResendOTPDTO, AuthResponse, VerificationRequiredResponse } from '../types';
 
-export async function register(dto: RegisterDTO): Promise<AuthResponse> {
+/** Emails a verify-email code unless one was sent in the last minute (the resend cooldown). */
+async function sendVerificationCode(email: string) {
+  if (!(await canResendOTP('verify-email', email))) return;
+  const otp = generateOTP();
+  await storeOTP('verify-email', email, otp);
+  const content = buildOTPEmail(otp, 'verify-email');
+  await sendEmail({ to: email, subject: content.subject, html: content.html });
+}
+
+async function issueSession(user: { id: string; name: string | null; email: string; avatar?: string | null }): Promise<AuthResponse> {
+  const token = await createSession(user.id, user.email);
+  const { token: refreshToken } = await signRefreshToken(user.id, user.email);
+  return { user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar }, token, refreshToken };
+}
+
+export async function register(dto: RegisterDTO): Promise<VerificationRequiredResponse> {
   const existing = await authModel.findUserByEmail(dto.email);
-  if (existing) {
+  if (existing?.emailVerifiedAt) {
     throw new Error('A user with this email already exists');
   }
 
   const passwordHash = await hashPassword(dto.password);
-  const user = await authModel.createUser({
-    name: dto.name,
-    email: dto.email,
-    passwordHash,
-  });
-
-  const token = await createSession(user.id, user.email);
-  const { token: refreshToken } = await signRefreshToken(user.id, user.email);
-
-  return { user, token, refreshToken };
-}
-
-export async function login(dto: LoginDTO): Promise<AuthResponse | MfaChallengeResponse> {
-  const user = await authModel.findUserByEmail(dto.email);
-  if (!user) {
-    throw new Error('Invalid email or password');
+  if (existing) {
+    // Unverified (abandoned or squatted) signup: the inbox owner proves it with the code, so let them restart.
+    await authModel.resetPendingSignup(dto.email, dto.name, passwordHash);
+  } else {
+    await authModel.createUser({ name: dto.name, email: dto.email, passwordHash });
   }
 
-  if (!user.passwordHash) {
+  await sendVerificationCode(dto.email);
+  return { verificationRequired: true, email: dto.email };
+}
+
+export async function login(dto: LoginDTO): Promise<AuthResponse | MfaChallengeResponse | VerificationRequiredResponse> {
+  const user = await authModel.findUserByEmail(dto.email);
+  if (!user?.passwordHash) {
+    await verifyPasswordAgainstNothing(dto.password);
     throw new Error('Invalid email or password');
   }
 
@@ -42,17 +54,15 @@ export async function login(dto: LoginDTO): Promise<AuthResponse | MfaChallengeR
     throw new Error('Invalid email or password');
   }
 
+  if (!user.emailVerifiedAt) {
+    await sendVerificationCode(user.email);
+    return { verificationRequired: true, email: user.email };
+  }
+
   const challenge = await challengeIfEnabled(user);
   if (challenge) return challenge;
 
-  const token = await createSession(user.id, user.email);
-  const { token: refreshToken } = await signRefreshToken(user.id, user.email);
-
-  return {
-    user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar },
-    token,
-    refreshToken,
-  };
+  return issueSession(user);
 }
 
 export async function googleAuth(idToken: string): Promise<AuthResponse | MfaChallengeResponse> {
@@ -71,7 +81,9 @@ export async function googleAuth(idToken: string): Promise<AuthResponse | MfaCha
   // Check if user exists by email (link Google account)
   const existingUser = await authModel.findUserByEmail(googleUser.email);
   if (existingUser) {
-    const linked = await authModel.linkGoogleAccount(googleUser.email, googleUser.googleId, googleUser.avatar);
+    const wasVerified = !!existingUser.emailVerifiedAt;
+    const linked = await authModel.linkGoogleAccount(googleUser.email, googleUser.googleId, googleUser.avatar, wasVerified);
+    if (!wasVerified) await revokeAllRefreshTokens(linked.id); // sessions of whoever squatted the address
     const challenge = await challengeIfEnabled(linked);
     if (challenge) return challenge;
     const token = await createSession(linked.id, linked.email);
@@ -85,6 +97,7 @@ export async function googleAuth(idToken: string): Promise<AuthResponse | MfaCha
     email: googleUser.email,
     googleId: googleUser.googleId,
     avatar: googleUser.avatar || undefined,
+    emailVerifiedAt: new Date(), // verifyGoogleToken requires email_verified
   });
 
   const token = await createSession(newUser.id, newUser.email);
@@ -161,9 +174,20 @@ export async function verifyOTP(email: string, otp: string, purpose: 'forgot-pas
     throw new Error('Invalid or expired OTP');
   }
 
+  // Proving the inbox finishes signup: mark verified, then sign in (2FA still applies if somehow on).
+  if (purpose === 'verify-email') {
+    if (!(await authModel.markEmailVerified(email))) throw new Error('Invalid or expired OTP');
+    const user = await authModel.findUserByEmail(email);
+    if (!user) throw new Error('Invalid or expired OTP');
+    const challenge = await challengeIfEnabled(user);
+    if (challenge) return { valid: true, ...challenge };
+    return { valid: true, ...(await issueSession(user)) };
+  }
+
   // For forgot-password, generate a short-lived reset token stored in Redis
   if (purpose === 'forgot-password') {
-    const resetToken = generateOTP(); // reuse OTP generator for simplicity
+    // Unguessable, unlike the 6-digit code: it's the only thing that authorizes the reset.
+    const resetToken = randomBytes(32).toString('base64url');
     await storeOTP('reset-token', email, resetToken);
     return { valid: true, resetToken };
   }
@@ -172,9 +196,9 @@ export async function verifyOTP(email: string, otp: string, purpose: 'forgot-pas
 }
 
 export async function resetPassword(dto: ResetPasswordDTO) {
+  // Only the token from verifyOTP: accepting the raw 6-digit code here would double the guessing surface.
   const isResetToken = await verifyStoredOTP('reset-token', dto.email, dto.otp);
-  const isDirectOtp = !isResetToken && await verifyStoredOTP('forgot-password', dto.email, dto.otp);
-  if (!isResetToken && !isDirectOtp) {
+  if (!isResetToken) {
     throw new Error('Invalid or expired OTP');
   }
 
@@ -185,6 +209,7 @@ export async function resetPassword(dto: ResetPasswordDTO) {
 
   const passwordHash = await hashPassword(dto.newPassword);
   await authModel.updateUserPassword(dto.email, passwordHash);
+  await authModel.markEmailVerified(dto.email); // the reset code proved the inbox
   await revokeAllRefreshTokens(user.id);
 
   return { message: 'Password reset successfully' };
@@ -196,9 +221,9 @@ export async function resendOTP(dto: ResendOTPDTO) {
     throw new Error('Please wait before requesting another OTP');
   }
 
-  // Only send if user exists (but don't reveal this)
+  // Only send if user exists (but don't reveal this); verify-email codes only for unverified accounts.
   const user = await authModel.findUserByEmail(dto.email);
-  if (!user) {
+  if (!user || (dto.purpose === 'verify-email' && user.emailVerifiedAt)) {
     return { message: 'If an account exists, a new OTP has been sent.' };
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { requireOrgMembership, requireOrgAdmin } from '@/lib/guards/org-guard';
 import { validateBody } from '@/lib/guards/validate';
@@ -14,7 +14,7 @@ export async function handleGetProfile(request: NextRequest) {
     const user = await userService.getUserProfile(session.userId);
     return successResponse(user);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -30,7 +30,7 @@ export async function handleUpdateProfile(request: NextRequest) {
     const user = await userService.updateUserProfile(session.userId, validation.data);
     return successResponse(user);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -42,7 +42,7 @@ export async function handleGetPreferences(request: NextRequest) {
     const prefs = await userService.getUserPreferences(session.userId);
     return successResponse(prefs);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -58,7 +58,7 @@ export async function handleUpdatePreferences(request: NextRequest) {
     const prefs = await userService.updateUserPreferences(session.userId, validation.data);
     return successResponse(prefs);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -74,7 +74,7 @@ export async function handleGetOrgMembers(request: NextRequest, organizationId: 
     if (error.message === 'Not a member of this organization') {
       return errorResponse(error.message, 403);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -100,7 +100,7 @@ export async function handleAddMember(request: NextRequest, organizationId?: str
     if (error.message === 'User is already a member of this organization') {
       return errorResponse(error.message, 409);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -116,6 +116,6 @@ export async function handleRemoveMember(request: NextRequest, organizationId: s
   } catch (error: any) {
     if (error.message === 'Admin access required') return forbiddenResponse();
     if (error.message === 'You cannot remove yourself') return errorResponse(error.message, 400);
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

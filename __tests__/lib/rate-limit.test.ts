@@ -1,57 +1,46 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// We'll test the rate limit logic directly
+// Redis down: exercises the in-memory fallback without a server.
+vi.mock('@/lib/redis', () => ({ redis: {}, safeRedisCall: async () => null }));
+
 describe('Rate Limit', () => {
-  let rateLimit: (config: { windowMs: number; maxRequests: number }) => {
-    check(key: string): { success: boolean; remaining: number; resetIn: number };
-  };
+  let rateLimit: typeof import('@/lib/rate-limit').rateLimit;
+  let clientIp: typeof import('@/lib/rate-limit').clientIp;
 
   beforeEach(async () => {
-    // Dynamic import to get fresh module each time
     vi.resetModules();
-    const mod = await import('@/lib/rate-limit');
-    rateLimit = mod.rateLimit;
+    ({ rateLimit, clientIp } = await import('@/lib/rate-limit'));
   });
 
-  it('should allow requests within the limit', () => {
-    const limiter = rateLimit({ windowMs: 60000, maxRequests: 5 });
-    const result = limiter.check('test-key');
-    expect(result.success).toBe(true);
-    expect(result.remaining).toBe(4);
+  it('allows requests within the limit', async () => {
+    const result = await rateLimit({ windowMs: 60000, maxRequests: 5 }).check('test-key');
+    expect(result).toMatchObject({ success: true, remaining: 4 });
   });
 
-  it('should block requests exceeding the limit', () => {
+  it('blocks requests exceeding the limit', async () => {
     const limiter = rateLimit({ windowMs: 60000, maxRequests: 3 });
-
-    limiter.check('test-key');
-    limiter.check('test-key');
-    limiter.check('test-key');
-
-    const result = limiter.check('test-key');
-    expect(result.success).toBe(false);
-    expect(result.remaining).toBe(0);
+    for (let i = 0; i < 3; i++) await limiter.check('test-key');
+    expect(await limiter.check('test-key')).toMatchObject({ success: false, remaining: 0 });
   });
 
-  it('should track different keys independently', () => {
+  it('tracks different keys independently', async () => {
     const limiter = rateLimit({ windowMs: 60000, maxRequests: 1 });
-
-    const result1 = limiter.check('key1');
-    const result2 = limiter.check('key2');
-
-    expect(result1.success).toBe(true);
-    expect(result2.success).toBe(true);
-
-    const result3 = limiter.check('key1');
-    expect(result3.success).toBe(false);
+    expect((await limiter.check('key1')).success).toBe(true);
+    expect((await limiter.check('key2')).success).toBe(true);
+    expect((await limiter.check('key1')).success).toBe(false);
   });
 
-  it('should decrement remaining count correctly', () => {
-    const limiter = rateLimit({ windowMs: 60000, maxRequests: 5 });
+  it('decrements remaining count', async () => {
+    const limiter = rateLimit({ windowMs: 60000, maxRequests: 3 });
+    expect((await limiter.check('key')).remaining).toBe(2);
+    expect((await limiter.check('key')).remaining).toBe(1);
+    expect((await limiter.check('key')).remaining).toBe(0);
+  });
 
-    expect(limiter.check('key').remaining).toBe(4);
-    expect(limiter.check('key').remaining).toBe(3);
-    expect(limiter.check('key').remaining).toBe(2);
-    expect(limiter.check('key').remaining).toBe(1);
-    expect(limiter.check('key').remaining).toBe(0);
+  it('uses the proxy-set IP, never the client-supplied first XFF hop', () => {
+    const req = (h: Record<string, string>) => new Request('http://x', { headers: h });
+    expect(clientIp(req({ 'x-real-ip': '9.9.9.9', 'x-forwarded-for': '1.1.1.1' }))).toBe('9.9.9.9');
+    expect(clientIp(req({ 'x-forwarded-for': '1.1.1.1, 2.2.2.2' }))).toBe('2.2.2.2');
+    expect(clientIp(req({}))).toBe('unknown');
   });
 });

@@ -34,7 +34,7 @@ function newOpaqueToken(): string {
   return crypto.randomBytes(32).toString('base64url');
 }
 
-function useSecureCookies(): boolean {
+export function useSecureCookies(): boolean {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   return appUrl ? appUrl.startsWith('https://') : process.env.NODE_ENV === 'production';
 }

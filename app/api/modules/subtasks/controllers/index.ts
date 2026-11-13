@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createSubtaskSchema, updateSubtaskSchema, reorderSubtasksSchema } from '../types';
@@ -15,7 +15,7 @@ export async function handleGetSubtasks(request: NextRequest, taskId: string) {
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -33,7 +33,7 @@ export async function handleCreateSubtask(request: NextRequest, taskId: string) 
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -51,7 +51,7 @@ export async function handleUpdateSubtask(request: NextRequest, subtaskId: strin
   } catch (error: any) {
     if (error.message === 'Subtask not found') return notFoundResponse('Subtask not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -65,7 +65,7 @@ export async function handleDeleteSubtask(request: NextRequest, subtaskId: strin
   } catch (error: any) {
     if (error.message === 'Subtask not found') return notFoundResponse('Subtask not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -83,6 +83,6 @@ export async function handleReorderSubtasks(request: NextRequest, taskId: string
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

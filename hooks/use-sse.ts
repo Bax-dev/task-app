@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch } from '@/store/hooks';
 import { apiSlice } from '@/store/api';
 
@@ -10,12 +10,15 @@ import { apiSlice } from '@/store/api';
  * active queries matching the invalidated tags.
  *
  * @param projectId - Optional project ID for scoped subscriptions (e.g., board views)
+ * @returns `paused` once reconnect attempts are exhausted, and `retry` to start over.
  */
 export function useSSE(projectId?: string) {
   const dispatch = useAppDispatch();
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [paused, setPaused] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +35,7 @@ export function useSSE(projectId?: string) {
 
       es.onopen = () => {
         retryCountRef.current = 0;
+        setPaused(false);
       };
 
       es.onmessage = (event) => {
@@ -77,6 +81,7 @@ export function useSSE(projectId?: string) {
 
         // Stop reconnecting after 10 consecutive failures
         if (retryCountRef.current > 10) {
+          setPaused(true);
           return;
         }
 
@@ -96,5 +101,13 @@ export function useSSE(projectId?: string) {
         eventSourceRef.current = null;
       }
     };
-  }, [dispatch, projectId]);
+  }, [dispatch, projectId, attempt]);
+
+  const retry = useCallback(() => {
+    retryCountRef.current = 0;
+    setPaused(false);
+    setAttempt((a) => a + 1);
+  }, []);
+
+  return { paused, retry };
 }

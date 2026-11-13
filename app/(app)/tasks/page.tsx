@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LoadMore } from '@/components/ui/load-more';
 import {
   Empty,
   EmptyContent,
@@ -68,7 +69,7 @@ import {
   useGetOrgIssueTypesQuery,
   useGetOrgMembersQuery,
   useGetProjectsQuery,
-  useGetUserTasksQuery,
+  useGetUserTasksPageInfiniteQuery,
   useUpdateTaskMutation,
 } from '@/store/api';
 import AiTaskSuggestion from '@/components/ai/AiTaskSuggestion';
@@ -121,39 +122,6 @@ function getTaskSpaceOptions(projects: any[]) {
   return Array.from(spaces.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function getPriorityRank(priority?: string) {
-  const ranks: Record<string, number> = {
-    URGENT: 4,
-    HIGH: 3,
-    MEDIUM: 2,
-    LOW: 1,
-  };
-  return ranks[priority || ''] || 0;
-}
-
-function compareTasks(a: any, b: any, sortMode: SortMode) {
-  if (sortMode === 'urgent-first') {
-    return (
-      getPriorityRank(b.priority) - getPriorityRank(a.priority) ||
-      a.title.localeCompare(b.title)
-    );
-  }
-
-  if (sortMode === 'alphabetical') {
-    return a.title.localeCompare(b.title);
-  }
-
-  if (sortMode === 'recently-updated') {
-    const left = new Date(b.updatedAt || b.createdAt || 0).getTime();
-    const right = new Date(a.updatedAt || a.createdAt || 0).getTime();
-    return left - right;
-  }
-
-  const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-  const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-  return aDue - bDue || getPriorityRank(b.priority) - getPriorityRank(a.priority);
-}
-
 function loadTaskPrefs(): TaskPrefs {
   if (typeof window === 'undefined') return {};
   try {
@@ -182,7 +150,27 @@ export default function TasksPage() {
   const [selectedAssignees, setSelectedAssignees] = useState<Set<string>>(new Set());
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
-  const { data: tasks = [], isLoading } = useGetUserTasksQuery();
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Status, search and sort run server-side so they cover every task, not just loaded pages.
+  const {
+    data: taskPages,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useGetUserTasksPageInfiniteQuery({
+    status: statusFilter === 'ALL' ? undefined : statusFilter,
+    q: debouncedSearch || undefined,
+    sort: sortMode,
+  });
+  const tasks = useMemo(() => taskPages?.pages.flatMap((page) => page.items) ?? [], [taskPages]);
+  const statusCounts = taskPages?.pages[0]?.statusCounts ?? {};
+  const totalCount = Object.values(statusCounts).reduce((sum: number, n) => sum + (n ?? 0), 0);
   const { data: projects = [] } = useGetProjectsQuery();
   const [updateTask] = useUpdateTaskMutation();
 
@@ -198,6 +186,7 @@ export default function TasksPage() {
     );
   }, [tasks]);
 
+  // The people filter applies to loaded tasks only (assignee options come from loaded tasks too).
   const filteredByAssignee = useMemo(() => {
     if (selectedAssignees.size === 0) return tasks;
     return tasks.filter((task: any) =>
@@ -205,31 +194,9 @@ export default function TasksPage() {
     );
   }, [tasks, selectedAssignees]);
 
-  const searchLower = search.trim().toLowerCase();
-  const searchedTasks = useMemo(() => {
-    if (!searchLower) return filteredByAssignee;
-    return filteredByAssignee.filter((task: any) => {
-      const haystack = [
-        task.title,
-        task.description,
-        task.project?.name,
-        task.issueType?.name,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(searchLower);
-    });
-  }, [filteredByAssignee, searchLower]);
-
-  const sortedTasks = useMemo(
-    () => [...searchedTasks].sort((a, b) => compareTasks(a, b, sortMode)),
-    [searchedTasks, sortMode]
-  );
-
   const groupedTasks = useMemo(() => {
     const groups: Record<string, any[]> = { TODO: [], IN_PROGRESS: [], DONE: [], REJECTED: [], CANCELLED: [] };
-    for (const task of sortedTasks as any[]) {
+    for (const task of filteredByAssignee as any[]) {
       const key = groups[task.status] ? task.status : 'TODO';
       groups[key].push(task);
     }
@@ -240,17 +207,17 @@ export default function TasksPage() {
       { key: 'REJECTED', label: 'Rejected', tasks: groups.REJECTED, dot: 'bg-red-500', icon: XCircle },
       { key: 'CANCELLED', label: 'Cancelled', tasks: groups.CANCELLED, dot: 'bg-slate-400', icon: XCircle },
     ];
-  }, [sortedTasks]);
+  }, [filteredByAssignee]);
 
   const focusStats = useMemo(() => {
     let dueSoon = 0, urgent = 0;
-    for (const task of sortedTasks as any[]) {
+    for (const task of filteredByAssignee as any[]) {
       if (task.status === 'DONE') continue;
       if (task.dueDate) dueSoon++;
       if (task.priority === 'URGENT') urgent++;
     }
     return { dueSoon, urgent };
-  }, [sortedTasks]);
+  }, [filteredByAssignee]);
 
   const visibleSections = statusFilter === 'ALL'
     ? groupedTasks
@@ -376,7 +343,7 @@ export default function TasksPage() {
             </div>
             <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">My Tasks</h1>
             <span className="text-xs text-muted-foreground tabular-nums">
-              {tasks.length}{selectedTaskIds.size > 0 ? ` · ${selectedTaskIds.size} selected` : ''}
+              {totalCount}{selectedTaskIds.size > 0 ? ` · ${selectedTaskIds.size} selected` : ''}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -451,12 +418,12 @@ export default function TasksPage() {
 
           <div className="flex flex-wrap items-center gap-1.5">
             {[
-              { key: 'ALL', label: 'All', count: sortedTasks.length },
-              { key: 'TODO', label: 'To Do', dot: 'bg-blue-500', count: groupedTasks[0].tasks.length },
-              { key: 'IN_PROGRESS', label: 'In Progress', dot: 'bg-amber-500', count: groupedTasks[1].tasks.length },
-              { key: 'DONE', label: 'Done', dot: 'bg-green-500', count: groupedTasks[2].tasks.length },
-              { key: 'REJECTED', label: 'Rejected', dot: 'bg-red-500', count: groupedTasks[3].tasks.length },
-              { key: 'CANCELLED', label: 'Cancelled', dot: 'bg-slate-400', count: groupedTasks[4].tasks.length },
+              { key: 'ALL', label: 'All' },
+              { key: 'TODO', label: 'To Do', dot: 'bg-blue-500' },
+              { key: 'IN_PROGRESS', label: 'In Progress', dot: 'bg-amber-500' },
+              { key: 'DONE', label: 'Done', dot: 'bg-green-500' },
+              { key: 'REJECTED', label: 'Rejected', dot: 'bg-red-500' },
+              { key: 'CANCELLED', label: 'Cancelled', dot: 'bg-slate-400' },
             ].map((filter) => (
               <button
                 key={filter.key}
@@ -469,7 +436,14 @@ export default function TasksPage() {
               >
                 {filter.dot && <span className={`h-1.5 w-1.5 rounded-full ${filter.dot}`} />}
                 {filter.label}
-                <span className="tabular-nums opacity-70">{filter.count}</span>
+                <span className="tabular-nums opacity-70">
+                  {/* Server counts cover all tasks; with a people filter, count the loaded matches instead. */}
+                  {selectedAssignees.size === 0
+                    ? filter.key === 'ALL' ? totalCount : statusCounts[filter.key] ?? 0
+                    : filter.key === 'ALL'
+                      ? filteredByAssignee.length
+                      : groupedTasks.find((section) => section.key === filter.key)?.tasks.length ?? 0}
+                </span>
               </button>
             ))}
           </div>
@@ -547,9 +521,9 @@ export default function TasksPage() {
         )}
       </div>
 
-      {tasks.length === 0 ? (
+      {tasks.length === 0 && statusFilter === 'ALL' && !debouncedSearch ? (
         <TasksEmptyState onCreate={() => setOpen(true)} />
-      ) : sortedTasks.length === 0 ? (
+      ) : filteredByAssignee.length === 0 ? (
         <FilteredEmptyState onClear={clearFilters} onCreate={() => setOpen(true)} />
       ) : populatedSections.length === 0 ? (
         <FilteredEmptyState onClear={clearFilters} onCreate={() => setOpen(true)} />
@@ -582,6 +556,10 @@ export default function TasksPage() {
           ))}
         </div>
       )}
+      {selectedAssignees.size > 0 && hasNextPage && (
+        <p className="pt-4 text-center text-xs text-muted-foreground">People filter applies to loaded tasks. Load more to include older ones.</p>
+      )}
+      <LoadMore hasMore={hasNextPage} loading={isFetchingNextPage} onLoadMore={() => fetchNextPage()} />
     </div>
   );
 }

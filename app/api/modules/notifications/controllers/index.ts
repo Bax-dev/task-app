@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { markReadSchema } from '../types';
+import { markReadSchema, listNotificationsQuerySchema } from '../types';
 import * as notificationService from '../services';
 
 export async function handleGetNotifications(request: NextRequest) {
@@ -10,10 +10,13 @@ export async function handleGetNotifications(request: NextRequest) {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    const result = await notificationService.getUserNotifications(session.userId);
+    const query = validateBody(listNotificationsQuerySchema, Object.fromEntries(request.nextUrl.searchParams));
+    if (!query.success) return errorResponse(query.error);
+
+    const result = await notificationService.getUserNotifications(session.userId, query.data);
     return successResponse(result);
   } catch {
-    return successResponse({ notifications: [], unreadCount: 0 });
+    return successResponse({ items: [], nextCursor: null, unreadCount: 0 });
   }
 }
 
@@ -41,7 +44,7 @@ export async function handleMarkAsRead(request: NextRequest) {
     const result = await notificationService.markAsRead(session.userId, validation.data.notificationIds);
     return successResponse(result);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -53,6 +56,6 @@ export async function handleMarkAllAsRead(request: NextRequest) {
     const result = await notificationService.markAllAsRead(session.userId);
     return successResponse(result);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

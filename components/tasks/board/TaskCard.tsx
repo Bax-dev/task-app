@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 
@@ -37,13 +37,19 @@ export default function TaskCard({
     data: { taskId: task.id, status: task.status },
     disabled: dragging,
   });
+  // Cards are drop targets too, so a drop can land between cards (ordering), not only on the column.
+  const { setNodeRef: setDropRef } = useDroppable({ id: task.id, disabled: dragging });
+  const setRefs = (node: HTMLElement | null) => {
+    setNodeRef(node);
+    setDropRef(node);
+  };
 
   const style = transform ? { transform: CSS.Transform.toString(transform) } : undefined;
   const visualDragging = dragging || isDragging;
 
   return (
     <div
-      ref={dragging ? undefined : setNodeRef}
+      ref={dragging ? undefined : setRefs}
       style={dragging ? undefined : style}
       className={visualDragging ? 'opacity-70' : undefined}
     >

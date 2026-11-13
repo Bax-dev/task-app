@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createCommentSchema, updateCommentSchema } from '../types';
@@ -19,7 +19,7 @@ export async function CreateComment(request: NextRequest) {
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -33,7 +33,7 @@ export async function ReadComment(request: NextRequest, commentId: string) {
   } catch (error: any) {
     if (error.message === 'Comment not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -47,7 +47,7 @@ export async function ReadComments(request: NextRequest, taskId: string) {
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -65,7 +65,7 @@ export async function EditComment(request: NextRequest, commentId: string) {
   } catch (error: any) {
     if (error.message === 'Comment not found') return notFoundResponse();
     if (error.message === 'Only the author can edit this comment') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -79,6 +79,6 @@ export async function RemoveComment(request: NextRequest, commentId: string) {
   } catch (error: any) {
     if (error.message === 'Comment not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

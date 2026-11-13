@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createDashboardSchema, updateDashboardSchema } from '../types';
@@ -19,7 +19,7 @@ export async function CreateDashboard(request: NextRequest) {
   } catch (error: any) {
     if (error.message === 'Dashboard not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Access denied') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -33,7 +33,7 @@ export async function ReadDashboard(request: NextRequest, dashboardId: string) {
   } catch (error: any) {
     if (error.message === 'Dashboard not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Access denied') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -46,7 +46,7 @@ export async function ReadDashboards(request: NextRequest, organizationId: strin
     return successResponse(dashboards);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -64,7 +64,7 @@ export async function EditDashboard(request: NextRequest, dashboardId: string) {
   } catch (error: any) {
     if (error.message === 'Dashboard not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Access denied') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -78,6 +78,6 @@ export async function RemoveDashboard(request: NextRequest, dashboardId: string)
   } catch (error: any) {
     if (error.message === 'Dashboard not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Access denied') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

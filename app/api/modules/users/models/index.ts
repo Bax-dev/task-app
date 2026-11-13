@@ -74,10 +74,14 @@ export async function createMembership(data: { userId: string; organizationId: s
   });
 }
 
+/** Drops the membership and everything that grants access through it, atomically. */
 export async function removeMembership(userId: string, organizationId: string) {
-  return prisma.membership.delete({
-    where: { userId_organizationId: { userId, organizationId } },
-  });
+  const inOrg = { space: { organizationId } };
+  return prisma.$transaction([
+    prisma.spaceMember.deleteMany({ where: { userId, ...inOrg } }),
+    prisma.taskAssignment.deleteMany({ where: { userId, task: { project: inOrg } } }),
+    prisma.membership.delete({ where: { userId_organizationId: { userId, organizationId } } }),
+  ]);
 }
 
 export async function findUsersByOrganization(organizationId: string) {

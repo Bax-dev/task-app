@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { requireOrgAdmin } from '@/lib/guards/org-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { createActivityLogSchema, updateActivityLogSchema } from '../types';
+import { createActivityLogSchema, updateActivityLogSchema, listActivityLogsQuerySchema } from '../types';
 import * as activityLogService from '../services';
 
 export async function handleCreateActivityLog(request: NextRequest) {
@@ -23,7 +23,7 @@ export async function handleCreateActivityLog(request: NextRequest) {
   } catch (error: any) {
     if (error.message === 'Admin access required') return forbiddenResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -37,7 +37,7 @@ export async function handleGetActivityLog(request: NextRequest, logId: string) 
   } catch (error: any) {
     if (error.message === 'Activity log not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -46,10 +46,13 @@ export async function handleGetUserActivityLogs(request: NextRequest) {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    const logs = await activityLogService.getUserActivityLogs(session.userId);
+    const query = validateBody(listActivityLogsQuerySchema, Object.fromEntries(request.nextUrl.searchParams));
+    if (!query.success) return errorResponse(query.error);
+
+    const logs = await activityLogService.getUserActivityLogs(session.userId, query.data);
     return successResponse(logs);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -61,12 +64,15 @@ export async function handleGetOrgActivityLogs(request: NextRequest, organizatio
     // Only admins can view org activity logs
     await requireOrgAdmin(session.userId, organizationId);
 
-    const logs = await activityLogService.getOrgActivityLogs(organizationId, session.userId);
+    const query = validateBody(listActivityLogsQuerySchema, Object.fromEntries(request.nextUrl.searchParams));
+    if (!query.success) return errorResponse(query.error);
+
+    const logs = await activityLogService.getOrgActivityLogs(organizationId, session.userId, query.data);
     return successResponse(logs);
   } catch (error: any) {
     if (error.message === 'Admin access required') return forbiddenResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -84,7 +90,7 @@ export async function handleUpdateActivityLog(request: NextRequest, logId: strin
   } catch (error: any) {
     if (error.message === 'Activity log not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access' || error.message === 'You can only update your own activity logs') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -98,6 +104,6 @@ export async function handleDeleteActivityLog(request: NextRequest, logId: strin
   } catch (error: any) {
     if (error.message === 'Activity log not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access' || error.message === 'You can only delete your own activity logs') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

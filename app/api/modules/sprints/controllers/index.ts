@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createSprintSchema, updateSprintSchema, sprintTaskSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateSprint(request: NextRequest) {
     return successResponse(sprint, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadSprint(request: NextRequest, sprintId: string) {
   } catch (error: any) {
     if (error.message === 'Sprint not found') return notFoundResponse('Sprint not found');
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadSprints(request: NextRequest, organizationId: string) 
     return successResponse(sprints);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -63,7 +63,7 @@ export async function EditSprint(request: NextRequest, sprintId: string) {
   } catch (error: any) {
     if (error.message === 'Sprint not found') return notFoundResponse('Sprint not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -79,7 +79,7 @@ export async function RemoveSprint(request: NextRequest, sprintId: string) {
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required' || error.message === 'Guest users have read-only access') {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -99,7 +99,7 @@ export async function AddSprintTask(request: NextRequest, sprintId: string) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Task does not belong to this organization') return errorResponse('Task does not belong to this organization', 400);
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -117,6 +117,6 @@ export async function RemoveSprintTask(request: NextRequest, sprintId: string) {
   } catch (error: any) {
     if (error.message === 'Sprint not found') return notFoundResponse('Sprint not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

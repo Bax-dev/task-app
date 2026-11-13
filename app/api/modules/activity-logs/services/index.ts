@@ -1,10 +1,21 @@
 import { ActivityStatus } from '@prisma/client';
 import { requireOrgMembership, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireTaskAccess } from '@/lib/guards/space-guard';
+import { HttpError } from '@/lib/api-response';
+
+/** A linked task must be one the user can see, in the log's org (the response echoes its title). */
+async function assertTaskLinkable(userId: string, taskId: string | null | undefined, organizationId: string) {
+  if (!taskId) return;
+  const access = await requireTaskAccess(userId, taskId);
+  if (access.organizationId !== organizationId) throw new HttpError('Task not found', 404);
+}
 import * as activityLogModel from '../models';
-import { CreateActivityLogDTO, UpdateActivityLogDTO } from '../types';
+import { CreateActivityLogDTO, UpdateActivityLogDTO, ListActivityLogsQuery } from '../types';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
 
 export async function createActivityLog(userId: string, dto: CreateActivityLogDTO) {
   await requireNonGuest(userId, dto.organizationId);
+  await assertTaskLinkable(userId, dto.taskId, dto.organizationId);
 
   return activityLogModel.createActivityLog({
     description: dto.description,
@@ -24,13 +35,13 @@ export async function getActivityLog(logId: string, userId: string) {
   return log;
 }
 
-export async function getOrgActivityLogs(organizationId: string, userId: string) {
+export async function getOrgActivityLogs(organizationId: string, userId: string, query: ListActivityLogsQuery = {}) {
   await requireOrgMembership(userId, organizationId);
-  return activityLogModel.findActivityLogsByOrg(organizationId);
+  return activityLogModel.findActivityLogsByOrg(organizationId, query.limit ?? DEFAULT_PAGE_SIZE, query.cursor);
 }
 
-export async function getUserActivityLogs(userId: string) {
-  return activityLogModel.findActivityLogsByUser(userId);
+export async function getUserActivityLogs(userId: string, query: ListActivityLogsQuery = {}) {
+  return activityLogModel.findActivityLogsByUser(userId, query.limit ?? DEFAULT_PAGE_SIZE, query.cursor);
 }
 
 export async function updateActivityLog(logId: string, userId: string, dto: UpdateActivityLogDTO) {
@@ -42,6 +53,7 @@ export async function updateActivityLog(logId: string, userId: string, dto: Upda
   if (log.createdById !== userId) {
     throw new Error('You can only update your own activity logs');
   }
+  await assertTaskLinkable(userId, dto.taskId, log.organizationId);
 
   return activityLogModel.updateActivityLog(logId, {
     description: dto.description,

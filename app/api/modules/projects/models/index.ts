@@ -42,6 +42,7 @@ export async function findProjectsByUser(userId: string) {
   return prisma.project.findMany({
     where: {
       space: {
+        organization: { memberships: { some: { userId } } }, // stale SpaceMember rows must not grant access
         OR: [
           { organization: { memberships: { some: { userId, role: 'ADMIN' } } } },
           { members: { some: { userId } } },

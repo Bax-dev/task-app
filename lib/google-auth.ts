@@ -16,7 +16,8 @@ export async function verifyGoogleToken(idToken: string): Promise<GoogleUserInfo
   });
 
   const payload = ticket.getPayload();
-  if (!payload || !payload.email) {
+  // Unverified emails must not link to (and take over) an existing account with that address.
+  if (!payload || !payload.email || payload.email_verified !== true) {
     throw new Error('Invalid Google token');
   }
 

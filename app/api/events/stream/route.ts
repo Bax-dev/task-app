@@ -2,11 +2,15 @@ import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { createSubscriber } from '@/lib/redis-pubsub';
 import { prisma } from '@/lib/db/client';
+import { requireProjectAccess } from '@/lib/guards/space-guard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const HEARTBEAT_INTERVAL = 30_000; // 30 seconds
+const MAX_STREAMS_PER_USER = 5;
+// shortcut: per-instance count, upgrade to a Redis counter when running several instances.
+const openStreams = new Map<string, number>();
 
 /**
  * SSE endpoint: GET /api/events/stream?projectId=<optional>
@@ -29,20 +33,35 @@ export async function GET(request: NextRequest) {
   // Determine channels to subscribe to
   const channels: string[] = [`events:user:${userId}`];
 
+  if ((openStreams.get(userId) ?? 0) >= MAX_STREAMS_PER_USER) {
+    return new Response('Too many open streams', { status: 429 });
+  }
+
   if (projectId) {
+    try {
+      await requireProjectAccess(userId, projectId);
+    } catch {
+      return new Response('Forbidden', { status: 403 });
+    }
     channels.push(`events:project:${projectId}`);
   } else {
-    // Subscribe to all projects the user has access to (via org memberships)
+    // Projects in spaces the user can access: every space in orgs they admin, else spaces they're a member of.
     try {
       const memberships = await prisma.membership.findMany({
         where: { userId },
-        select: { organizationId: true },
+        select: { organizationId: true, role: true },
       });
-      const orgIds = memberships.map((m) => m.organizationId);
+      const adminOrgIds = memberships.filter((m) => m.role === 'ADMIN').map((m) => m.organizationId);
+      const memberOrgIds = memberships.filter((m) => m.role !== 'ADMIN').map((m) => m.organizationId);
 
-      if (orgIds.length > 0) {
+      if (memberships.length > 0) {
         const projects = await prisma.project.findMany({
-          where: { space: { organizationId: { in: orgIds } } },
+          where: {
+            OR: [
+              { space: { organizationId: { in: adminOrgIds } } },
+              { space: { organizationId: { in: memberOrgIds }, members: { some: { userId } } } },
+            ],
+          },
           select: { id: true },
         });
         for (const p of projects) {
@@ -58,6 +77,7 @@ export async function GET(request: NextRequest) {
     start(controller) {
       const encoder = new TextEncoder();
       let closed = false;
+      openStreams.set(userId, (openStreams.get(userId) ?? 0) + 1);
 
       function send(data: string) {
         if (closed) return;
@@ -101,9 +121,14 @@ export async function GET(request: NextRequest) {
           send(`data: ${JSON.stringify({ type: 'REDIS_UNAVAILABLE' })}\n\n`);
         });
 
-      // Cleanup when client disconnects
-      request.signal.addEventListener('abort', () => {
+      // Cleanup when client disconnects (runs once, also if it aborted before start()).
+      let cleanedUp = false; // separate from `closed`: a failed send sets that, but resources still need releasing
+      const cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
         closed = true;
+        const left = (openStreams.get(userId) ?? 1) - 1;
+        if (left > 0) openStreams.set(userId, left); else openStreams.delete(userId);
         clearInterval(heartbeatTimer);
         try {
           subscriber.unsubscribe().catch(() => {});
@@ -112,7 +137,9 @@ export async function GET(request: NextRequest) {
         try {
           controller.close();
         } catch {}
-      });
+      };
+      if (request.signal.aborted) cleanup();
+      else request.signal.addEventListener('abort', cleanup);
     },
   });
 

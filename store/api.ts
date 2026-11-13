@@ -4,6 +4,7 @@ import type { User } from '@/types/auth';
 import type { Organization, Member } from '@/types/organization';
 import type { Project } from '@/types/project';
 import type { Task } from '@/types/task';
+import type { Page } from '@/lib/pagination';
 import type { Space } from '@/types/space';
 import type { Notification, NotificationsResponse } from '@/types/notification';
 import type { Invitation } from '@/types/invitation';
@@ -28,6 +29,16 @@ import type {
   Weekday,
 } from '@/types/daily-report';
 import type { ThemeColor, ModuleCard } from '@/store/slices/preferencesSlice';
+
+export type UserTasksFilter = { status?: string; q?: string; sort?: string };
+export type UserTasksPage = Page<Task> & { statusCounts: Partial<Record<string, number>> };
+
+const PAGE_SIZE = 50;
+const cursorPages = {
+  initialPageParam: null as string | null,
+  getNextPageParam: (lastPage: { nextCursor: string | null }) => lastPage.nextCursor,
+};
+const pageParams = (pageParam: string | null) => ({ limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) });
 
 export type UserPreferencesPayload = {
   themeColorId?: string;
@@ -132,7 +143,11 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 // Two-step verification: a correct password for an account with MFA returns a challenge instead of a session.
 export type MfaChallenge = { mfaRequired: true; mfaToken: string; methods: ('totp' | 'recovery_code')[]; expiresAt: string };
 export const isMfaChallenge = (v: unknown): v is MfaChallenge => (v as MfaChallenge)?.mfaRequired === true;
-export type MfaStatus = { enabled: boolean; pendingSetup: boolean; confirmedAt: string | null; recoveryCodesRemaining: number; methods: string[] };
+/** Signup/login of an unproven address: show the emailed-code step (verify-otp, purpose verify-email). */
+export type VerificationRequired = { verificationRequired: true; email: string };
+export const isVerificationRequired = (v: unknown): v is VerificationRequired => (v as VerificationRequired)?.verificationRequired === true;
+export type VerifyOtpResult = { valid: boolean; resetToken?: string; user?: User } | (MfaChallenge & { valid: boolean });
+export type MfaStatus = { enabled: boolean; pendingSetup: boolean; confirmedAt: string | null; recoveryCodesRemaining: number; methods: string[]; hasPassword?: boolean };
 export type MfaSetup = { secret: string; otpauthUrl: string; digits: number; period: number };
 export type MfaRecoveryCodes = MfaStatus & { recoveryCodes: string[] };
 
@@ -175,7 +190,7 @@ export const apiSlice = createApi({
       query: () => '/auth/me',
       providesTags: ['Auth'],
     }),
-    login: builder.mutation<{ user: User } | MfaChallenge, { email: string; password: string }>({
+    login: builder.mutation<{ user: User } | MfaChallenge | VerificationRequired, { email: string; password: string }>({
       query: (body) => ({ url: '/auth/login', method: 'POST', body }),
       invalidatesTags: ['Auth'],
     }),
@@ -206,7 +221,7 @@ export const apiSlice = createApi({
       query: (body) => ({ url: '/auth/mfa/recovery-codes', method: 'POST', body }),
       invalidatesTags: ['Mfa'],
     }),
-    register: builder.mutation<{ user: User }, { name: string; email: string; password: string }>({
+    register: builder.mutation<VerificationRequired, { name: string; email: string; password: string }>({
       query: (body) => ({ url: '/auth/register', method: 'POST', body }),
       invalidatesTags: ['Auth'],
     }),
@@ -220,8 +235,9 @@ export const apiSlice = createApi({
     forgotPassword: builder.mutation<void, { email: string }>({
       query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
     }),
-    verifyOtp: builder.mutation<{ valid: boolean; resetToken?: string }, { email: string; otp: string; purpose?: string }>({
+    verifyOtp: builder.mutation<VerifyOtpResult, { email: string; otp: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/verify-otp', method: 'POST', body }),
+      invalidatesTags: ['Auth'], // verify-email signs the user in
     }),
     resendOtp: builder.mutation<void, { email: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/resend-otp', method: 'POST', body }),
@@ -400,6 +416,14 @@ export const apiSlice = createApi({
           ? [...result.map(({ id }) => ({ type: 'Tasks' as const, id })), { type: 'Tasks', id: 'LIST' }]
           : [{ type: 'Tasks', id: 'LIST' }],
     }),
+    getUserTasksPage: builder.infiniteQuery<UserTasksPage, UserTasksFilter, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ queryArg, pageParam }) => ({ url: '/tasks', params: { ...queryArg, ...pageParams(pageParam) } }),
+      providesTags: (result) => [
+        ...(result?.pages.flatMap((page) => page.items.map(({ id }) => ({ type: 'Tasks' as const, id }))) ?? []),
+        { type: 'Tasks', id: 'LIST' },
+      ],
+    }),
     getProjectTasks: builder.query<Task[], string>({
       query: (projectId) => `/projects/${projectId}/tasks`,
       providesTags: (result, _, projectId) =>
@@ -446,6 +470,22 @@ export const apiSlice = createApi({
           )
         );
 
+        const userTaskPageQueries = state.api?.queries
+          ? Object.values(state.api.queries).filter(
+              (query: any) => query?.endpointName === 'getUserTasksPage' && query?.originalArgs !== undefined
+            )
+          : [];
+
+        for (const query of userTaskPageQueries as any[]) {
+          patchResults.push(
+            dispatch(
+              apiSlice.util.updateQueryData('getUserTasksPage', query.originalArgs, (draft) => {
+                draft.pages.forEach((page) => updateTaskInList(page.items));
+              })
+            )
+          );
+        }
+
         const projectTaskSubscriptions = state.api?.queries
           ? Object.values(state.api.queries).filter(
               (query: any) =>
@@ -475,6 +515,36 @@ export const apiSlice = createApi({
               if (patch.issueTypeId !== undefined) draft.issueTypeId = patch.issueTypeId ?? null;
               if (patch.assignToSpace !== undefined) draft.assignToSpace = patch.assignToSpace;
               if (patch.rejectionReason !== undefined) draft.rejectionReason = patch.rejectionReason ?? null;
+            })
+          )
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResults.forEach((result) => result.undo());
+        }
+      },
+      invalidatesTags: (result) =>
+        result
+          ? [{ type: 'Tasks', id: result.id }, { type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: `project-${result.projectId}` }]
+          : [{ type: 'Tasks', id: 'LIST' }],
+    }),
+    moveTask: builder.mutation<Task, { id: string; position: number; boardColumnId?: string | null; status?: string }>({
+      query: ({ id, ...body }) => ({ url: `/tasks/${id}/move`, method: 'PATCH', body }),
+      async onQueryStarted({ id, position, boardColumnId, status }, { dispatch, getState, queryFulfilled }) {
+        const state = getState() as any;
+        const queries = Object.values(state.api?.queries ?? {}).filter(
+          (query: any) => query?.endpointName === 'getProjectTasks' && query?.originalArgs !== undefined
+        ) as any[];
+        const patchResults = queries.map((query) =>
+          dispatch(
+            apiSlice.util.updateQueryData('getProjectTasks', query.originalArgs, (draft) => {
+              const task = draft.find((item) => item.id === id);
+              if (!task) return;
+              task.boardPosition = position;
+              if (boardColumnId !== undefined) task.boardColumnId = boardColumnId;
+              if (status !== undefined) task.status = status;
             })
           )
         );
@@ -559,8 +629,9 @@ export const apiSlice = createApi({
     }),
 
     // ─── Notifications ───
-    getNotifications: builder.query<NotificationsResponse, void>({
-      query: () => '/notifications',
+    getNotifications: builder.infiniteQuery<NotificationsResponse, void, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ pageParam }) => ({ url: '/notifications', params: pageParams(pageParam) }),
       providesTags: ['Notifications'],
     }),
     getUnreadCount: builder.query<{ count: number }, void>({
@@ -628,15 +699,17 @@ export const apiSlice = createApi({
     }),
 
     // ─── Activity Logs ───
-    getUserActivityLogs: builder.query<ActivityLog[], void>({
-      query: () => '/activity-logs',
-      providesTags: (result) =>
-        result
-          ? [...result.map(({ id }) => ({ type: 'ActivityLogs' as const, id })), { type: 'ActivityLogs', id: 'LIST' }]
-          : [{ type: 'ActivityLogs', id: 'LIST' }],
+    getUserActivityLogs: builder.infiniteQuery<Page<ActivityLog>, void, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ pageParam }) => ({ url: '/activity-logs', params: pageParams(pageParam) }),
+      providesTags: (result) => [
+        ...(result?.pages.flatMap((page) => page.items.map(({ id }) => ({ type: 'ActivityLogs' as const, id }))) ?? []),
+        { type: 'ActivityLogs', id: 'LIST' },
+      ],
     }),
-    getOrgActivityLogs: builder.query<ActivityLog[], string>({
-      query: (orgId) => `/organizations/${orgId}/activity-logs`,
+    getOrgActivityLogs: builder.infiniteQuery<Page<ActivityLog>, string, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ queryArg: orgId, pageParam }) => ({ url: `/organizations/${orgId}/activity-logs`, params: pageParams(pageParam) }),
       providesTags: [{ type: 'ActivityLogs', id: 'LIST' }],
     }),
     createActivityLog: builder.mutation<ActivityLog, { description: string; status?: string; note?: string | null; taskId?: string | null; organizationId: string }>({
@@ -1109,16 +1182,18 @@ export const {
   useDeleteProjectMutation,
   // Tasks
   useGetUserTasksQuery,
+  useGetUserTasksPageInfiniteQuery,
   useGetProjectTasksQuery,
   useGetTaskQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
+  useMoveTaskMutation,
   useDeleteTaskMutation,
   useToggleAssignmentMutation,
   useBulkAssignTaskMembersMutation,
   useSendOverdueRemindersMutation,
   // Notifications
-  useGetNotificationsQuery,
+  useGetNotificationsInfiniteQuery,
   useGetUnreadCountQuery,
   useMarkAsReadMutation,
   useMarkAllAsReadMutation,
@@ -1136,8 +1211,8 @@ export const {
   useUpdateNoteMutation,
   useDeleteNoteMutation,
   // Activity Logs
-  useGetUserActivityLogsQuery,
-  useGetOrgActivityLogsQuery,
+  useGetUserActivityLogsInfiniteQuery,
+  useGetOrgActivityLogsInfiniteQuery,
   useCreateActivityLogMutation,
   useUpdateActivityLogMutation,
   useDeleteActivityLogMutation,

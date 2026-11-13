@@ -9,6 +9,7 @@ export interface Notification {
 }
 
 export interface NotificationsResponse {
-  notifications: Notification[];
+  items: Notification[];
+  nextCursor: string | null;
   unreadCount: number;
 }

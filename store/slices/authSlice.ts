@@ -29,8 +29,9 @@ const authSlice = createSlice({
       .addMatcher(apiSlice.endpoints.verifyMfa.matchFulfilled, (state, action) => {
         state.user = action.payload.user;
       })
-      .addMatcher(apiSlice.endpoints.register.matchFulfilled, (state, action) => {
-        state.user = action.payload.user;
+      // Register returns no session (email code first); verify-email delivers the user.
+      .addMatcher(apiSlice.endpoints.verifyOtp.matchFulfilled, (state, action) => {
+        if ('user' in action.payload && action.payload.user) state.user = action.payload.user;
       })
       .addMatcher(apiSlice.endpoints.logout.matchFulfilled, (state) => {
         state.user = null;

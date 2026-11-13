@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createSpaceSchema, updateSpaceSchema, addSpaceMemberSchema } from '../types';
@@ -25,7 +25,7 @@ export async function handleCreateSpace(request: NextRequest) {
     return successResponse(space, 201);
   } catch (error: any) {
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -39,7 +39,7 @@ export async function handleGetSpace(request: NextRequest, spaceId: string) {
   } catch (error: any) {
     if (error.message === 'Space not found') return notFoundResponse();
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -52,7 +52,7 @@ export async function handleGetOrgSpaces(request: NextRequest, organizationId: s
     return successResponse(spaces);
   } catch (error: any) {
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -70,7 +70,7 @@ export async function handleUpdateSpace(request: NextRequest, spaceId: string) {
   } catch (error: any) {
     if (error.message === 'Space not found') return notFoundResponse();
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -86,7 +86,7 @@ export async function handleDeleteSpace(request: NextRequest, spaceId: string) {
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -100,7 +100,7 @@ export async function handleListSpaceMembers(request: NextRequest, spaceId: stri
   } catch (error: any) {
     if (error.message === 'Space not found') return notFoundResponse();
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -118,7 +118,7 @@ export async function handleAddSpaceMember(request: NextRequest, spaceId: string
   } catch (error: any) {
     if (error.message === 'Space not found') return notFoundResponse();
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -132,6 +132,6 @@ export async function handleRemoveSpaceMember(request: NextRequest, spaceId: str
   } catch (error: any) {
     if (error.message === 'Space not found') return notFoundResponse();
     if (SPACE_ACCESS_FORBIDDEN.includes(error.message)) return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

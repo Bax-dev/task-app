@@ -28,7 +28,7 @@ export const verifyOTPSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
-  otp: z.string().length(6, 'OTP must be 6 digits'),
+  otp: z.string().min(6, 'Reset token is required').max(128), // reset token from verify-otp
   newPassword: z
     .string()
     .min(8, 'Password must be at least 8 characters')
@@ -75,6 +75,14 @@ export type ForgotPasswordDTO = z.infer<typeof forgotPasswordSchema>;
 export type VerifyOTPDTO = z.infer<typeof verifyOTPSchema>;
 export type ResetPasswordDTO = z.infer<typeof resetPasswordSchema>;
 export type ResendOTPDTO = z.infer<typeof resendOTPSchema>;
+
+/** Returned instead of a session until the address is proven with the emailed code. */
+export interface VerificationRequiredResponse {
+  verificationRequired: true;
+  email: string;
+}
+export const isVerificationRequired = (r: unknown): r is VerificationRequiredResponse =>
+  (r as VerificationRequiredResponse)?.verificationRequired === true;
 
 export interface AuthResponse {
   user: {

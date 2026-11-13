@@ -5,9 +5,10 @@ WORKDIR /app
 # (linux-musl-openssl-3.0.x binary) to load libssl3 at runtime.
 RUN apk add --no-cache openssl libc6-compat
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm install --no-package-lock --include=optional
+# The lockfile lists native binaries for every platform (incl. linux-musl), so ci installs the right ones.
+RUN npm ci
 
 COPY . .
 

@@ -9,6 +9,8 @@ export interface Task {
   dueDate: string | null;
   rejectionReason?: string | null;
   issueTypeId?: string | null;
+  boardColumnId?: string | null;
+  boardPosition?: number | null;
   projectId: string;
   createdById: string;
   createdAt: string;

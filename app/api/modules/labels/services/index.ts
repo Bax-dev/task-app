@@ -1,16 +1,8 @@
-import { prisma } from '@/lib/db/client';
 import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireTaskWrite } from '@/lib/guards/space-guard';
+import { HttpError } from '@/lib/api-response';
 import * as labelModel from '../models';
 import { CreateLabelDTO, UpdateLabelDTO, TaskLabelDTO } from '../types';
-
-async function getOrgIdFromTask(taskId: string): Promise<string> {
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { project: { select: { space: { select: { organizationId: true } } } } },
-  });
-  if (!task) throw new Error('Task not found');
-  return task.project.space.organizationId;
-}
 
 export async function createLabel(userId: string, dto: CreateLabelDTO) {
   await requireNonGuest(userId, dto.organizationId);
@@ -52,15 +44,16 @@ export async function removeLabel(labelId: string, userId: string) {
 }
 
 export async function addTaskLabel(taskId: string, userId: string, dto: TaskLabelDTO) {
-  const orgId = await getOrgIdFromTask(taskId);
-  await requireNonGuest(userId, orgId);
+  const { organizationId } = await requireTaskWrite(userId, taskId);
+  // Labels from another org must not be attachable (and leak their name/colour back).
+  const label = await labelModel.findLabelById(dto.labelId);
+  if (!label || label.organization.id !== organizationId) throw new HttpError('Label not found', 404);
 
   return labelModel.addTaskLabel(taskId, dto.labelId);
 }
 
 export async function removeTaskLabel(taskId: string, userId: string, labelId: string) {
-  const orgId = await getOrgIdFromTask(taskId);
-  await requireNonGuest(userId, orgId);
+  await requireTaskWrite(userId, taskId);
 
   return labelModel.removeTaskLabel(taskId, labelId);
 }

@@ -1,16 +1,7 @@
-import { prisma } from '@/lib/db/client';
-import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireOrgAdmin } from '@/lib/guards/org-guard';
+import { requireProjectAccess, requireProjectWrite } from '@/lib/guards/space-guard';
 import * as boardModel from '../models';
 import { CreateBoardDTO, UpdateBoardDTO, CreateBoardColumnDTO, UpdateBoardColumnDTO } from '../types';
-
-async function getOrgIdFromProject(projectId: string): Promise<string> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { space: { select: { organizationId: true } } },
-  });
-  if (!project) throw new Error('Project not found');
-  return project.space.organizationId;
-}
 
 const DEFAULT_COLUMNS = [
   { name: 'TODO', position: 0 },
@@ -19,8 +10,7 @@ const DEFAULT_COLUMNS = [
 ];
 
 export async function createBoard(userId: string, dto: CreateBoardDTO) {
-  const orgId = await getOrgIdFromProject(dto.projectId);
-  await requireNonGuest(userId, orgId);
+  await requireProjectWrite(userId, dto.projectId);
 
   return boardModel.createBoard({
     name: dto.name,
@@ -35,13 +25,12 @@ export async function readBoard(boardId: string, userId: string) {
   const board = await boardModel.findBoardById(boardId);
   if (!board) throw new Error('Board not found');
 
-  await requireOrgMembership(userId, board.project.space.organizationId);
+  await requireProjectAccess(userId, board.projectId);
   return board;
 }
 
 export async function readBoards(projectId: string, userId: string) {
-  const orgId = await getOrgIdFromProject(projectId);
-  await requireOrgMembership(userId, orgId);
+  await requireProjectAccess(userId, projectId);
   return boardModel.findBoardsByProject(projectId);
 }
 
@@ -49,7 +38,7 @@ export async function editBoard(boardId: string, userId: string, dto: UpdateBoar
   const board = await boardModel.findBoardById(boardId);
   if (!board) throw new Error('Board not found');
 
-  await requireNonGuest(userId, board.project.space.organizationId);
+  await requireProjectWrite(userId, board.projectId);
   return boardModel.updateBoard(boardId, dto);
 }
 
@@ -57,10 +46,8 @@ export async function removeBoard(boardId: string, userId: string) {
   const board = await boardModel.findBoardById(boardId);
   if (!board) throw new Error('Board not found');
 
-  const isCreator = board.createdById === userId;
-  if (!isCreator) {
-    await requireOrgAdmin(userId, board.project.space.organizationId);
-  }
+  const { organizationId } = await requireProjectWrite(userId, board.projectId);
+  if (board.createdById !== userId) await requireOrgAdmin(userId, organizationId);
 
   return boardModel.deleteBoard(boardId);
 }
@@ -69,7 +56,7 @@ export async function createColumn(boardId: string, userId: string, dto: CreateB
   const board = await boardModel.findBoardById(boardId);
   if (!board) throw new Error('Board not found');
 
-  await requireNonGuest(userId, board.project.space.organizationId);
+  await requireProjectWrite(userId, board.projectId);
 
   return boardModel.createBoardColumn({
     name: dto.name,
@@ -83,8 +70,7 @@ export async function editColumn(columnId: string, userId: string, dto: UpdateBo
   const column = await boardModel.findBoardColumnById(columnId);
   if (!column) throw new Error('Board column not found');
 
-  const orgId = column.board.project.space.organizationId;
-  await requireNonGuest(userId, orgId);
+  await requireProjectWrite(userId, column.board.projectId);
 
   return boardModel.updateBoardColumn(columnId, dto);
 }
@@ -93,8 +79,7 @@ export async function removeColumn(columnId: string, userId: string) {
   const column = await boardModel.findBoardColumnById(columnId);
   if (!column) throw new Error('Board column not found');
 
-  const orgId = column.board.project.space.organizationId;
-  await requireNonGuest(userId, orgId);
+  await requireProjectWrite(userId, column.board.projectId);
 
   return boardModel.deleteBoardColumn(columnId);
 }

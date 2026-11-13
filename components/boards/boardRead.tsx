@@ -5,17 +5,20 @@ import {
   Plus, LayoutGrid, Loader2, Trash2, Search, Columns,
   ArrowLeft, Calendar, AlertTriangle, ChevronRight, Users, Pencil, GripVertical,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import {
-  useGetBoardQuery, useGetProjectTasksQuery, useUpdateTaskMutation, useCreateTaskMutation,
+  useGetBoardQuery, useGetProjectTasksQuery, useMoveTaskMutation, useCreateTaskMutation,
 } from '@/store/api';
+import { computeBoardPosition, sortByBoardPosition } from '@/lib/board-position';
 import type { Task } from '@/types/task';
 import type { BoardColumn } from '@/types/board';
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -46,6 +49,8 @@ const COLUMN_STATUS_MAP: Record<string, string> = {
   'Cancelled': 'CANCELLED',
   'CANCELLED': 'CANCELLED',
 };
+
+const TASK_STATUSES = ['TODO', 'IN_PROGRESS', 'DONE', 'REJECTED', 'CANCELLED'];
 
 const PRIORITY_COLORS: Record<string, string> = {
   URGENT: 'border-l-red-500',
@@ -192,13 +197,22 @@ function DraggableTaskCard({
     id: task.id,
     data: { type: 'task', task, columnId },
   });
+  // Cards are drop targets too, so a drop can land between cards (ordering), not only on the column.
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: task.id,
+    data: { type: 'task', task, columnId },
+  });
+  const setRefs = (node: HTMLElement | null) => {
+    setNodeRef(node);
+    setDropRef(node);
+  };
 
   const style = transform
     ? { transform: `translate(${transform.x}px, ${transform.y}px)`, opacity: isDragging ? 0.4 : 1 }
     : undefined;
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setRefs} style={style} {...attributes} {...listeners}>
       <TaskCardContent task={task} />
     </div>
   );
@@ -335,7 +349,7 @@ function BoardDetailView({
     board?.projectId ?? '',
     { skip: !board?.projectId },
   );
-  const [updateTask] = useUpdateTaskMutation();
+  const [moveTask] = useMoveTaskMutation();
   const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
 
   // Drag state
@@ -349,6 +363,7 @@ function BoardDetailView({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
   // Derive columns sorted by position
@@ -366,20 +381,18 @@ function BoardDetailView({
     return map;
   }, [columns]);
 
-  // Group tasks by column
+  // Group tasks by column: a saved boardColumnId on this board wins, else fall back to status mapping.
   const tasksByColumn = useMemo(() => {
-    const map: Record<string, Task[]> = {};
-    for (const col of columns) {
-      const status = resolveColumnStatus(col.name);
-      map[col.id] = optimisticTasks.filter((t) => t.status === status);
+    const map: Record<string, Task[]> = Object.fromEntries(columns.map((col) => [col.id, []]));
+    for (const task of optimisticTasks) {
+      const columnId = task.boardColumnId && map[task.boardColumnId]
+        ? task.boardColumnId
+        : columns.find((col) => columnStatusMap[col.id] === task.status)?.id ?? columns[0]?.id;
+      if (columnId) map[columnId].push(task);
     }
-    const matchedStatuses = new Set(columns.map((c) => resolveColumnStatus(c.name)));
-    const unmatched = optimisticTasks.filter((t) => !matchedStatuses.has(t.status));
-    if (unmatched.length > 0 && columns.length > 0) {
-      map[columns[0].id] = [...(map[columns[0].id] ?? []), ...unmatched];
-    }
+    for (const id of Object.keys(map)) map[id] = sortByBoardPosition(map[id]);
     return map;
-  }, [columns, optimisticTasks]);
+  }, [columns, columnStatusMap, optimisticTasks]);
 
   // ── Drag handlers ─────────────────────────────────────────────��─────────────
 
@@ -426,19 +439,33 @@ function BoardDetailView({
       return;
     }
 
-    const newStatus = columnStatusMap[targetColumnId];
-    if (!newStatus || task.status === newStatus) return;
+    if (over.id === task.id) return;
+
+    const sourceList = tasksByColumn[active.data.current?.columnId as string] ?? [];
+    const targetList = (tasksByColumn[targetColumnId] ?? []).filter((item) => item.id !== task.id);
+    let index = targetList.length;
+    if (overData?.type === 'task') {
+      index = targetList.findIndex((item) => item.id === over.id);
+      // Moving down within a column lands after the card it was dropped on.
+      if (sourceList.findIndex((item) => item.id === task.id) < sourceList.findIndex((item) => item.id === over.id)) index += 1;
+    }
+    const position = computeBoardPosition(targetList.map((item) => item.boardPosition), index);
+
+    // Custom column names don't map to a TaskStatus; those moves only change boardColumnId.
+    const mappedStatus = columnStatusMap[targetColumnId];
+    const status = TASK_STATUSES.includes(mappedStatus) && mappedStatus !== task.status ? mappedStatus : undefined;
 
     const previousTasks = optimisticTasks;
     setOptimisticTasks((current) =>
       current.map((item) =>
-        item.id === task.id ? { ...item, status: newStatus } : item
+        item.id === task.id
+          ? { ...item, boardColumnId: targetColumnId, boardPosition: position, ...(status && { status }) }
+          : item
       )
     );
 
     try {
-      await updateTask({ id: task.id, status: newStatus }).unwrap();
-      toast.success('Task moved');
+      await moveTask({ id: task.id, position, boardColumnId: targetColumnId, ...(status && { status }) }).unwrap();
     } catch (err: any) {
       setOptimisticTasks(previousTasks);
       toast.error(err?.data?.message || 'Failed to move task');
@@ -462,8 +489,11 @@ function BoardDetailView({
 
   if (boardLoading || tasksLoading) {
     return (
-      <div className="flex items-center justify-center h-full py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col h-full">
+        <Skeleton className="h-8 w-64 mb-6" />
+        <div className="flex gap-4 overflow-hidden">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-96 w-72 shrink-0 rounded-xl" />)}
+        </div>
       </div>
     );
   }
@@ -485,7 +515,7 @@ function BoardDetailView({
     <div className="flex flex-col h-full">
       {/* Board header */}
       <div className="flex items-center gap-4 mb-6 px-1">
-        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to boards" className="shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -589,8 +619,8 @@ export default function BoardRead({
   // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
       </div>
     );
   }

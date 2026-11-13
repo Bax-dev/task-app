@@ -40,3 +40,39 @@ describe('totp', () => {
     expect(looksLikeTotp(code)).toBe(false);
   });
 });
+
+describe('MFA key rotation', () => {
+  const env = { ...process.env };
+  const restore = () => { process.env = { ...env, JWT_SECRET: 'test-secret' }; };
+
+  it('reads legacy (JWT-derived) secrets after MFA_ENCRYPTION_KEY is set, and flags them stale', async () => {
+    restore();
+    delete process.env.MFA_ENCRYPTION_KEY;
+    const { encryptMfaSecret, openMfaSecret } = await import('@/lib/auth/totp');
+    const legacy = encryptMfaSecret('LEGACYSECRET');
+    process.env.MFA_ENCRYPTION_KEY = 'new-key';
+    expect(openMfaSecret(legacy)).toEqual({ secret: 'LEGACYSECRET', stale: true });
+    expect(openMfaSecret(encryptMfaSecret('FRESH'))).toEqual({ secret: 'FRESH', stale: false });
+    restore();
+  });
+
+  it('accepts recovery codes issued under the previous key', async () => {
+    restore();
+    process.env.MFA_ENCRYPTION_KEY = 'old-key';
+    const { recoveryHash, recoveryHashCandidates } = await import('@/lib/auth/totp');
+    const issued = recoveryHash('u1', 'abcd-efgh');
+    process.env.MFA_ENCRYPTION_KEY = 'new-key';
+    process.env.MFA_ENCRYPTION_KEY_PREVIOUS = 'old-key';
+    expect(recoveryHashCandidates('u1', 'abcd-efgh')).toContain(issued);
+    restore();
+  });
+
+  it('refuses to write with the JWT-derived key in production', async () => {
+    restore();
+    delete process.env.MFA_ENCRYPTION_KEY;
+    (process.env as any).NODE_ENV = 'production';
+    const { encryptMfaSecret } = await import('@/lib/auth/totp');
+    expect(() => encryptMfaSecret('X')).toThrow('MFA_ENCRYPTION_KEY must be set in production');
+    restore();
+  });
+});

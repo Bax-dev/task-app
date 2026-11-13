@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from '@/lib/pagination';
 
 export const createActivityLogSchema = z.object({
   description: z.string().min(1, 'Description is required').max(2000),
@@ -17,3 +18,6 @@ export const updateActivityLogSchema = z.object({
 
 export type CreateActivityLogDTO = z.infer<typeof createActivityLogSchema>;
 export type UpdateActivityLogDTO = z.infer<typeof updateActivityLogSchema>;
+
+export const listActivityLogsQuerySchema = paginationQuerySchema;
+export type ListActivityLogsQuery = z.infer<typeof listActivityLogsQuerySchema>;
