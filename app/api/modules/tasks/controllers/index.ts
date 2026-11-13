@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest, isCronRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { createTaskSchema, updateTaskSchema, assignTaskSchema } from '../types';
+import { createTaskSchema, updateTaskSchema, assignTaskSchema, moveTaskSchema } from '../types';
 import * as taskService from '../services';
 import { prisma } from '@/lib/db/client';
 
@@ -82,6 +82,24 @@ export async function handleUpdateTask(request: NextRequest, taskId: string) {
     if (!validation.success) return errorResponse(validation.error);
 
     const task = await taskService.updateTask(taskId, session.userId, validation.data);
+    return successResponse(task);
+  } catch (error: any) {
+    if (error.message === 'Task not found') return notFoundResponse();
+    if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
+    return exceptionResponse(error);
+  }
+}
+
+export async function handleMoveTask(request: NextRequest, taskId: string) {
+  try {
+    const session = await authenticateRequest(request);
+    if (!session) return unauthorizedResponse();
+
+    const body = await request.json();
+    const validation = validateBody(moveTaskSchema, body);
+    if (!validation.success) return errorResponse(validation.error);
+
+    const task = await taskService.moveTask(taskId, session.userId, validation.data);
     return successResponse(task);
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();

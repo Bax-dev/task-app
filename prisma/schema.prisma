@@ -343,6 +343,7 @@ model Task {
   sprintTasks      SprintTask[]
   boardColumnId    String?            @db.Uuid
   boardColumn      BoardColumn?       @relation(fields: [boardColumnId], references: [id], onDelete: SetNull)
+  boardPosition    Float?
   storyPoints      Int?
   issueTypeId      String?            @db.Uuid
   issueType        IssueType?         @relation(fields: [issueTypeId], references: [id], onDelete: SetNull)
@@ -353,7 +354,7 @@ model Task {
   @@index([createdById])
   @@index([status])
   @@index([priority])
-  @@index([boardColumnId])
+  @@index([boardColumnId, boardPosition])
   @@index([issueTypeId])
 }
 

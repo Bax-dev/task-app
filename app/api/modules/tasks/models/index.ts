@@ -77,7 +77,7 @@ export async function findTasksByProject(projectId: string) {
   return prisma.task.findMany({
     where: { projectId },
     include: taskInclude,
-    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ boardPosition: { sort: 'asc', nulls: 'last' } }, { priority: 'desc' }, { createdAt: 'desc' }],
     take: 1000, // shortcut: hard cap against unbounded reads; add pagination when lists grow
   });
 }
@@ -124,6 +124,13 @@ export async function updateTask(id: string, data: {
     data: { ...data, ...(clearAssignments && { assignments: { deleteMany: {} } }) },
     include: taskInclude,
   });
+}
+
+export async function moveTask(id: string, data: {
+  boardPosition: number;
+  boardColumnId?: string | null;
+}) {
+  return prisma.task.update({ where: { id }, data, include: taskInclude });
 }
 
 export async function deleteTask(id: string) {
