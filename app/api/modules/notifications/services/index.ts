@@ -1,13 +1,15 @@
 import { NotificationType } from '@prisma/client';
 import * as notificationModel from '../models';
+import type { ListNotificationsQuery } from '../types';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
 import { publishEvent } from '@/lib/redis-pubsub';
 
-export async function getUserNotifications(userId: string) {
-  const [notifications, unreadCount] = await Promise.all([
-    notificationModel.findUserNotifications(userId),
+export async function getUserNotifications(userId: string, query: ListNotificationsQuery = {}) {
+  const [page, unreadCount] = await Promise.all([
+    notificationModel.findUserNotifications(userId, query.limit ?? DEFAULT_PAGE_SIZE, query.cursor),
     notificationModel.findUnreadCount(userId),
   ]);
-  return { notifications, unreadCount };
+  return { ...page, unreadCount };
 }
 
 export async function getUnreadCount(userId: string) {

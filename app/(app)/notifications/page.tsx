@@ -4,18 +4,19 @@ import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useGetNotificationsQuery, useMarkAsReadMutation, useMarkAllAsReadMutation } from '@/store/api';
+import { LoadMore } from '@/components/ui/load-more';
+import { useGetNotificationsInfiniteQuery, useMarkAsReadMutation, useMarkAllAsReadMutation } from '@/store/api';
 
 export default function NotificationsPage() {
   const router = useRouter();
 
-  const { data: notifData, isLoading } = useGetNotificationsQuery();
+  const { data: notifData, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useGetNotificationsInfiniteQuery();
 
   const [markAsRead] = useMarkAsReadMutation();
   const [markAllAsRead, { isLoading: isMarkingAllRead }] = useMarkAllAsReadMutation();
 
-  const notifications = notifData?.notifications ?? [];
-  const unreadCount = notifData?.unreadCount ?? 0;
+  const notifications = notifData?.pages.flatMap((page) => page.items) ?? [];
+  const unreadCount = notifData?.pages[0]?.unreadCount ?? 0;
 
   const formatTime = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -82,6 +83,7 @@ export default function NotificationsPage() {
           <p className="text-muted-foreground">No notifications yet</p>
         </div>
       )}
+      <LoadMore hasMore={hasNextPage} loading={isFetchingNextPage} onLoadMore={() => fetchNextPage()} />
     </div>
   );
 }

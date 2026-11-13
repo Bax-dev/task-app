@@ -10,7 +10,8 @@ async function assertTaskLinkable(userId: string, taskId: string | null | undefi
   if (access.organizationId !== organizationId) throw new HttpError('Task not found', 404);
 }
 import * as activityLogModel from '../models';
-import { CreateActivityLogDTO, UpdateActivityLogDTO } from '../types';
+import { CreateActivityLogDTO, UpdateActivityLogDTO, ListActivityLogsQuery } from '../types';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pagination';
 
 export async function createActivityLog(userId: string, dto: CreateActivityLogDTO) {
   await requireNonGuest(userId, dto.organizationId);
@@ -34,13 +35,13 @@ export async function getActivityLog(logId: string, userId: string) {
   return log;
 }
 
-export async function getOrgActivityLogs(organizationId: string, userId: string) {
+export async function getOrgActivityLogs(organizationId: string, userId: string, query: ListActivityLogsQuery = {}) {
   await requireOrgMembership(userId, organizationId);
-  return activityLogModel.findActivityLogsByOrg(organizationId);
+  return activityLogModel.findActivityLogsByOrg(organizationId, query.limit ?? DEFAULT_PAGE_SIZE, query.cursor);
 }
 
-export async function getUserActivityLogs(userId: string) {
-  return activityLogModel.findActivityLogsByUser(userId);
+export async function getUserActivityLogs(userId: string, query: ListActivityLogsQuery = {}) {
+  return activityLogModel.findActivityLogsByUser(userId, query.limit ?? DEFAULT_PAGE_SIZE, query.cursor);
 }
 
 export async function updateActivityLog(logId: string, userId: string, dto: UpdateActivityLogDTO) {

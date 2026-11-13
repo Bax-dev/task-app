@@ -6,7 +6,7 @@ import { notifyTaskAssigned, notifyTaskAssignedToMany, notifyTaskOverdue, notify
 import { sendEmail, buildTaskAssignedEmail, buildTaskOverdueEmail } from '@/lib/email';
 import { getCalendarDateFromDueDate, getCalendarDateInTimezone } from '@/lib/timezone';
 import * as taskModel from '../models';
-import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO } from '../types';
+import { CreateTaskDTO, UpdateTaskDTO, AssignTaskDTO, ListUserTasksQuery } from '../types';
 import { logAudit } from '@/lib/audit';
 import { publishEvent } from '@/lib/redis-pubsub';
 
@@ -193,8 +193,10 @@ export async function getProjectTasks(projectId: string, userId: string) {
   return taskModel.findTasksByProject(projectId);
 }
 
-export async function getUserTasks(userId: string) {
-  return taskModel.findTasksByUser(userId);
+export async function getUserTasks(userId: string, query: ListUserTasksQuery = {}) {
+  const { limit } = query;
+  // Opt-in: without ?limit the endpoint keeps returning a plain array for existing callers.
+  return limit ? taskModel.findTasksByUserPage(userId, { ...query, limit }) : taskModel.findTasksByUser(userId);
 }
 
 export async function deleteTask(taskId: string, userId: string) {

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest, isCronRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { createTaskSchema, updateTaskSchema, assignTaskSchema } from '../types';
+import { createTaskSchema, updateTaskSchema, assignTaskSchema, listUserTasksQuerySchema } from '../types';
 import * as taskService from '../services';
 import { prisma } from '@/lib/db/client';
 
@@ -62,7 +62,10 @@ export async function handleGetUserTasks(request: NextRequest) {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    const tasks = await taskService.getUserTasks(session.userId);
+    const query = validateBody(listUserTasksQuerySchema, Object.fromEntries(request.nextUrl.searchParams));
+    if (!query.success) return errorResponse(query.error);
+
+    const tasks = await taskService.getUserTasks(session.userId, query.data);
     return successResponse(tasks);
   } catch (error: any) {
     if (isTaskSchemaMismatch(error)) {

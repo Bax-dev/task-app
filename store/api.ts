@@ -4,6 +4,7 @@ import type { User } from '@/types/auth';
 import type { Organization, Member } from '@/types/organization';
 import type { Project } from '@/types/project';
 import type { Task } from '@/types/task';
+import type { Page } from '@/lib/pagination';
 import type { Space } from '@/types/space';
 import type { Notification, NotificationsResponse } from '@/types/notification';
 import type { Invitation } from '@/types/invitation';
@@ -28,6 +29,16 @@ import type {
   Weekday,
 } from '@/types/daily-report';
 import type { ThemeColor, ModuleCard } from '@/store/slices/preferencesSlice';
+
+export type UserTasksFilter = { status?: string; q?: string; sort?: string };
+export type UserTasksPage = Page<Task> & { statusCounts: Partial<Record<string, number>> };
+
+const PAGE_SIZE = 50;
+const cursorPages = {
+  initialPageParam: null as string | null,
+  getNextPageParam: (lastPage: { nextCursor: string | null }) => lastPage.nextCursor,
+};
+const pageParams = (pageParam: string | null) => ({ limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) });
 
 export type UserPreferencesPayload = {
   themeColorId?: string;
@@ -400,6 +411,14 @@ export const apiSlice = createApi({
           ? [...result.map(({ id }) => ({ type: 'Tasks' as const, id })), { type: 'Tasks', id: 'LIST' }]
           : [{ type: 'Tasks', id: 'LIST' }],
     }),
+    getUserTasksPage: builder.infiniteQuery<UserTasksPage, UserTasksFilter, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ queryArg, pageParam }) => ({ url: '/tasks', params: { ...queryArg, ...pageParams(pageParam) } }),
+      providesTags: (result) => [
+        ...(result?.pages.flatMap((page) => page.items.map(({ id }) => ({ type: 'Tasks' as const, id }))) ?? []),
+        { type: 'Tasks', id: 'LIST' },
+      ],
+    }),
     getProjectTasks: builder.query<Task[], string>({
       query: (projectId) => `/projects/${projectId}/tasks`,
       providesTags: (result, _, projectId) =>
@@ -445,6 +464,22 @@ export const apiSlice = createApi({
             })
           )
         );
+
+        const userTaskPageQueries = state.api?.queries
+          ? Object.values(state.api.queries).filter(
+              (query: any) => query?.endpointName === 'getUserTasksPage' && query?.originalArgs !== undefined
+            )
+          : [];
+
+        for (const query of userTaskPageQueries as any[]) {
+          patchResults.push(
+            dispatch(
+              apiSlice.util.updateQueryData('getUserTasksPage', query.originalArgs, (draft) => {
+                draft.pages.forEach((page) => updateTaskInList(page.items));
+              })
+            )
+          );
+        }
 
         const projectTaskSubscriptions = state.api?.queries
           ? Object.values(state.api.queries).filter(
@@ -559,8 +594,9 @@ export const apiSlice = createApi({
     }),
 
     // ─── Notifications ───
-    getNotifications: builder.query<NotificationsResponse, void>({
-      query: () => '/notifications',
+    getNotifications: builder.infiniteQuery<NotificationsResponse, void, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ pageParam }) => ({ url: '/notifications', params: pageParams(pageParam) }),
       providesTags: ['Notifications'],
     }),
     getUnreadCount: builder.query<{ count: number }, void>({
@@ -628,15 +664,17 @@ export const apiSlice = createApi({
     }),
 
     // ─── Activity Logs ───
-    getUserActivityLogs: builder.query<ActivityLog[], void>({
-      query: () => '/activity-logs',
-      providesTags: (result) =>
-        result
-          ? [...result.map(({ id }) => ({ type: 'ActivityLogs' as const, id })), { type: 'ActivityLogs', id: 'LIST' }]
-          : [{ type: 'ActivityLogs', id: 'LIST' }],
+    getUserActivityLogs: builder.infiniteQuery<Page<ActivityLog>, void, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ pageParam }) => ({ url: '/activity-logs', params: pageParams(pageParam) }),
+      providesTags: (result) => [
+        ...(result?.pages.flatMap((page) => page.items.map(({ id }) => ({ type: 'ActivityLogs' as const, id }))) ?? []),
+        { type: 'ActivityLogs', id: 'LIST' },
+      ],
     }),
-    getOrgActivityLogs: builder.query<ActivityLog[], string>({
-      query: (orgId) => `/organizations/${orgId}/activity-logs`,
+    getOrgActivityLogs: builder.infiniteQuery<Page<ActivityLog>, string, string | null>({
+      infiniteQueryOptions: cursorPages,
+      query: ({ queryArg: orgId, pageParam }) => ({ url: `/organizations/${orgId}/activity-logs`, params: pageParams(pageParam) }),
       providesTags: [{ type: 'ActivityLogs', id: 'LIST' }],
     }),
     createActivityLog: builder.mutation<ActivityLog, { description: string; status?: string; note?: string | null; taskId?: string | null; organizationId: string }>({
@@ -1109,6 +1147,7 @@ export const {
   useDeleteProjectMutation,
   // Tasks
   useGetUserTasksQuery,
+  useGetUserTasksPageInfiniteQuery,
   useGetProjectTasksQuery,
   useGetTaskQuery,
   useCreateTaskMutation,
@@ -1118,7 +1157,7 @@ export const {
   useBulkAssignTaskMembersMutation,
   useSendOverdueRemindersMutation,
   // Notifications
-  useGetNotificationsQuery,
+  useGetNotificationsInfiniteQuery,
   useGetUnreadCountQuery,
   useMarkAsReadMutation,
   useMarkAllAsReadMutation,
@@ -1136,8 +1175,8 @@ export const {
   useUpdateNoteMutation,
   useDeleteNoteMutation,
   // Activity Logs
-  useGetUserActivityLogsQuery,
-  useGetOrgActivityLogsQuery,
+  useGetUserActivityLogsInfiniteQuery,
+  useGetOrgActivityLogsInfiniteQuery,
   useCreateActivityLogMutation,
   useUpdateActivityLogMutation,
   useDeleteActivityLogMutation,

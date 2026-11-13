@@ -3,7 +3,7 @@ import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { requireOrgAdmin } from '@/lib/guards/org-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { createActivityLogSchema, updateActivityLogSchema } from '../types';
+import { createActivityLogSchema, updateActivityLogSchema, listActivityLogsQuerySchema } from '../types';
 import * as activityLogService from '../services';
 
 export async function handleCreateActivityLog(request: NextRequest) {
@@ -46,7 +46,10 @@ export async function handleGetUserActivityLogs(request: NextRequest) {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    const logs = await activityLogService.getUserActivityLogs(session.userId);
+    const query = validateBody(listActivityLogsQuerySchema, Object.fromEntries(request.nextUrl.searchParams));
+    if (!query.success) return errorResponse(query.error);
+
+    const logs = await activityLogService.getUserActivityLogs(session.userId, query.data);
     return successResponse(logs);
   } catch (error: any) {
     return exceptionResponse(error);
@@ -61,7 +64,10 @@ export async function handleGetOrgActivityLogs(request: NextRequest, organizatio
     // Only admins can view org activity logs
     await requireOrgAdmin(session.userId, organizationId);
 
-    const logs = await activityLogService.getOrgActivityLogs(organizationId, session.userId);
+    const query = validateBody(listActivityLogsQuerySchema, Object.fromEntries(request.nextUrl.searchParams));
+    if (!query.success) return errorResponse(query.error);
+
+    const logs = await activityLogService.getOrgActivityLogs(organizationId, session.userId, query.data);
     return successResponse(logs);
   } catch (error: any) {
     if (error.message === 'Admin access required') return forbiddenResponse();
