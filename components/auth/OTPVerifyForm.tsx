@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useVerifyOtpMutation, useResendOtpMutation } from '@/store/api';
+import { useVerifyOtpMutation, useResendOtpMutation, type VerifyOtpResult } from '@/store/api';
 import { ArrowLeft } from 'lucide-react';
 import ResetPasswordForm from './ResetPasswordForm';
 
@@ -14,9 +14,11 @@ interface OTPVerifyFormProps {
   email: string;
   purpose: 'forgot-password' | 'verify-email';
   onBack: () => void;
+  /** verify-email: called once the code is accepted (the server has set the session or returned a 2FA challenge). */
+  onVerified?: (result: VerifyOtpResult) => void;
 }
 
-export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormProps) {
+export default function OTPVerifyForm({ email, purpose, onBack, onVerified }: OTPVerifyFormProps) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [step, setStep] = useState<'otp' | 'reset'>('otp');
   const [resetToken, setResetToken] = useState('');
@@ -69,8 +71,10 @@ export default function OTPVerifyForm({ email, purpose, onBack }: OTPVerifyFormP
       const result = await verifyOtp({ email, otp: otpCode, purpose }).unwrap();
       toast.success('Code verified!');
       if (purpose === 'forgot-password') {
-        setResetToken(result?.resetToken || otpCode);
+        setResetToken(('resetToken' in result && result.resetToken) || otpCode);
         setStep('reset');
+      } else {
+        onVerified?.(result);
       }
     } catch (error: any) {
       toast.error(error?.data?.message || error?.message || 'Invalid code');

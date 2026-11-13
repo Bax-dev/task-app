@@ -5,7 +5,7 @@ import { setRefreshTokenCookie, getRefreshTokenFromCookie, deleteRefreshTokenCoo
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { loginLimiter, otpLimiter, clientIp } from '@/lib/rate-limit';
-import { registerSchema, loginSchema, forgotPasswordSchema, verifyOTPSchema, resetPasswordSchema, resendOTPSchema, googleAuthSchema, mfaPasswordSchema, mfaEnableSchema, mfaReauthSchema, mfaVerifySchema } from '../types';
+import { registerSchema, loginSchema, forgotPasswordSchema, verifyOTPSchema, resetPasswordSchema, resendOTPSchema, googleAuthSchema, mfaPasswordSchema, mfaEnableSchema, mfaReauthSchema, mfaVerifySchema, isVerificationRequired } from '../types';
 import * as authService from '../services';
 import * as mfaService from '../services/mfa';
 
@@ -19,11 +19,8 @@ export async function handleRegister(request: NextRequest) {
     const validation = validateBody(registerSchema, body);
     if (!validation.success) return errorResponse(validation.error);
 
-    const result = await authService.register(validation.data);
-    await setSessionCookie(result.token);
-    await setRefreshTokenCookie(result.refreshToken);
-
-    return successResponse({ user: result.user }, 201);
+    // No session yet: the client shows the emailed-code step (verify-otp, purpose verify-email).
+    return successResponse(await authService.register(validation.data), 201);
   } catch (error: any) {
     if (error.message === 'A user with this email already exists') {
       return errorResponse(error.message, 409);
@@ -44,7 +41,7 @@ export async function handleLogin(request: NextRequest) {
     if (!validation.success) return errorResponse(validation.error);
 
     const result = await authService.login(validation.data);
-    if (mfaService.isMfaChallenge(result)) return successResponse(result);
+    if (mfaService.isMfaChallenge(result) || isVerificationRequired(result)) return successResponse(result);
     await setSessionCookie(result.token);
     await setRefreshTokenCookie(result.refreshToken);
 
@@ -142,6 +139,12 @@ export async function handleVerifyOTP(request: NextRequest) {
       validation.data.otp,
       validation.data.purpose
     );
+    if ('token' in result) {
+      // verify-email finished signup: hand out the session as cookies, never in the body.
+      await setSessionCookie(result.token);
+      await setRefreshTokenCookie(result.refreshToken);
+      return successResponse({ valid: true, user: result.user });
+    }
     return successResponse(result);
   } catch (error: any) {
     if (error.message === 'Invalid or expired OTP') {

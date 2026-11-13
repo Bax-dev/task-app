@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner';
 import { useAcceptInvitationMutation, useRegisterMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
+import OTPVerifyForm from './OTPVerifyForm';
 import { Eye, EyeOff, Mail, Sparkles, UserPlus } from 'lucide-react';
 
 interface FieldErrors {
@@ -50,6 +51,7 @@ export default function SignupForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [register, { isLoading }] = useRegisterMutation();
   const [acceptInvitation] = useAcceptInvitationMutation();
 
@@ -105,37 +107,9 @@ export default function SignupForm() {
 
     const name = `${firstName.trim()} ${lastName.trim()}`;
     try {
-      await register({ name, email: email.trim(), password }).unwrap();
-
-      if (inviteToken) {
-        try {
-          await acceptInvitation(inviteToken).unwrap();
-          toast.success('Account created and invitation accepted!');
-          window.location.href = '/dashboard';
-          return;
-        } catch (inviteError: any) {
-          const status = inviteError?.status;
-          const message =
-            inviteError?.data?.error ||
-            inviteError?.data?.message ||
-            inviteError?.message ||
-            '';
-
-          // Fall back to the invite page when the fresh session is not ready yet.
-          if (status === 401) {
-            window.location.href = redirect || '/dashboard';
-            return;
-          }
-
-          toast.success('Account created successfully!');
-          toast.error(message || 'We could not join the organization automatically. Please continue to accept the invitation.');
-          window.location.href = redirect || '/dashboard';
-          return;
-        }
-      }
-
-      toast.success('Account created successfully!');
-      window.location.href = redirect || '/dashboard';
+      const result = await register({ name, email: email.trim(), password }).unwrap();
+      setPendingEmail(result.email);
+      toast.success('Check your inbox for a 6-digit code to confirm your email.');
     } catch (error: any) {
       const msg = error?.data?.error || error?.data?.message || error?.message || 'Registration failed';
       if (msg.toLowerCase().includes('email')) {
@@ -146,8 +120,52 @@ export default function SignupForm() {
     }
   };
 
+  // Runs once the emailed code is accepted and the session cookie is set.
+  const finishSignup = async () => {
+    if (inviteToken) {
+      try {
+        await acceptInvitation(inviteToken).unwrap();
+        toast.success('Account created and invitation accepted!');
+        window.location.href = '/dashboard';
+        return;
+      } catch (inviteError: any) {
+        const status = inviteError?.status;
+        const message =
+          inviteError?.data?.error ||
+          inviteError?.data?.message ||
+          inviteError?.message ||
+          '';
+
+        // Fall back to the invite page when the fresh session is not ready yet.
+        if (status === 401) {
+          window.location.href = redirect || '/dashboard';
+          return;
+        }
+
+        toast.success('Account created successfully!');
+        toast.error(message || 'We could not join the organization automatically. Please continue to accept the invitation.');
+        window.location.href = redirect || '/dashboard';
+        return;
+      }
+    }
+
+    toast.success('Account created successfully!');
+    window.location.href = redirect || '/dashboard';
+  };
+
   const fieldErrorClass = (field: string) =>
     touched[field] && errors[field as keyof FieldErrors] ? 'border-red-500 focus-visible:ring-red-500' : '';
+
+  if (pendingEmail) {
+    return (
+      <OTPVerifyForm
+        email={pendingEmail}
+        purpose="verify-email"
+        onBack={() => setPendingEmail(null)}
+        onVerified={finishSignup}
+      />
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full" noValidate>

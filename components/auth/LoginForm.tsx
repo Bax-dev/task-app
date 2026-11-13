@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { isMfaChallenge, useLoginMutation } from '@/store/api';
+import { isMfaChallenge, isVerificationRequired, useLoginMutation } from '@/store/api';
+import OTPVerifyForm from './OTPVerifyForm';
 import GoogleSignInButton from './GoogleSignInButton';
 import MfaChallengeForm from './MfaChallengeForm';
 import { Eye, EyeOff } from 'lucide-react';
@@ -22,6 +23,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [login, { isLoading }] = useLoginMutation();
   const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
 
   // Google sign-in for an account with MFA lands here with the challenge in the URL fragment.
   useEffect(() => {
@@ -50,11 +52,32 @@ export default function LoginForm() {
         setPassword('');
         return;
       }
+      if (isVerificationRequired(result)) {
+        setVerifyEmail(result.email);
+        setPassword('');
+        toast.info('Confirm your email to finish signing in. We sent you a code.');
+        return;
+      }
       finishSignIn();
     } catch (error: any) {
       toast.error(error?.data?.message || error?.message || 'Invalid credentials');
     }
   };
+
+  if (verifyEmail) {
+    return (
+      <OTPVerifyForm
+        email={verifyEmail}
+        purpose="verify-email"
+        onBack={() => setVerifyEmail(null)}
+        onVerified={(result) => {
+          setVerifyEmail(null);
+          if (isMfaChallenge(result)) setMfaToken(result.mfaToken);
+          else finishSignIn();
+        }}
+      />
+    );
+  }
 
   if (mfaToken) {
     return <MfaChallengeForm mfaToken={mfaToken} onSignedIn={finishSignIn} onRestart={() => setMfaToken(null)} />;

@@ -6,6 +6,7 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['**/__tests__/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '.claude/**'], // agent worktrees live under .claude/
     setupFiles: ['./__tests__/setup.ts'],
   },
   resolve: {

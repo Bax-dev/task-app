@@ -132,6 +132,10 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 // Two-step verification: a correct password for an account with MFA returns a challenge instead of a session.
 export type MfaChallenge = { mfaRequired: true; mfaToken: string; methods: ('totp' | 'recovery_code')[]; expiresAt: string };
 export const isMfaChallenge = (v: unknown): v is MfaChallenge => (v as MfaChallenge)?.mfaRequired === true;
+/** Signup/login of an unproven address: show the emailed-code step (verify-otp, purpose verify-email). */
+export type VerificationRequired = { verificationRequired: true; email: string };
+export const isVerificationRequired = (v: unknown): v is VerificationRequired => (v as VerificationRequired)?.verificationRequired === true;
+export type VerifyOtpResult = { valid: boolean; resetToken?: string; user?: User } | (MfaChallenge & { valid: boolean });
 export type MfaStatus = { enabled: boolean; pendingSetup: boolean; confirmedAt: string | null; recoveryCodesRemaining: number; methods: string[]; hasPassword?: boolean };
 export type MfaSetup = { secret: string; otpauthUrl: string; digits: number; period: number };
 export type MfaRecoveryCodes = MfaStatus & { recoveryCodes: string[] };
@@ -175,7 +179,7 @@ export const apiSlice = createApi({
       query: () => '/auth/me',
       providesTags: ['Auth'],
     }),
-    login: builder.mutation<{ user: User } | MfaChallenge, { email: string; password: string }>({
+    login: builder.mutation<{ user: User } | MfaChallenge | VerificationRequired, { email: string; password: string }>({
       query: (body) => ({ url: '/auth/login', method: 'POST', body }),
       invalidatesTags: ['Auth'],
     }),
@@ -206,7 +210,7 @@ export const apiSlice = createApi({
       query: (body) => ({ url: '/auth/mfa/recovery-codes', method: 'POST', body }),
       invalidatesTags: ['Mfa'],
     }),
-    register: builder.mutation<{ user: User }, { name: string; email: string; password: string }>({
+    register: builder.mutation<VerificationRequired, { name: string; email: string; password: string }>({
       query: (body) => ({ url: '/auth/register', method: 'POST', body }),
       invalidatesTags: ['Auth'],
     }),
@@ -220,8 +224,9 @@ export const apiSlice = createApi({
     forgotPassword: builder.mutation<void, { email: string }>({
       query: (body) => ({ url: '/auth/forgot-password', method: 'POST', body }),
     }),
-    verifyOtp: builder.mutation<{ valid: boolean; resetToken?: string }, { email: string; otp: string; purpose?: string }>({
+    verifyOtp: builder.mutation<VerifyOtpResult, { email: string; otp: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/verify-otp', method: 'POST', body }),
+      invalidatesTags: ['Auth'], // verify-email signs the user in
     }),
     resendOtp: builder.mutation<void, { email: string; purpose?: string }>({
       query: (body) => ({ url: '/auth/resend-otp', method: 'POST', body }),

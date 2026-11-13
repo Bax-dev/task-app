@@ -76,6 +76,14 @@ export type VerifyOTPDTO = z.infer<typeof verifyOTPSchema>;
 export type ResetPasswordDTO = z.infer<typeof resetPasswordSchema>;
 export type ResendOTPDTO = z.infer<typeof resendOTPSchema>;
 
+/** Returned instead of a session until the address is proven with the emailed code. */
+export interface VerificationRequiredResponse {
+  verificationRequired: true;
+  email: string;
+}
+export const isVerificationRequired = (r: unknown): r is VerificationRequiredResponse =>
+  (r as VerificationRequiredResponse)?.verificationRequired === true;
+
 export interface AuthResponse {
   user: {
     id: string;
