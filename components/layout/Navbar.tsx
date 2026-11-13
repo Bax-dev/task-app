@@ -25,7 +25,7 @@ import {
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useGetMeQuery, useGetNotificationsQuery, useLogoutMutation, apiSlice } from '@/store/api';
+import { useGetMeQuery, useGetUnreadCountQuery, useLogoutMutation, apiSlice } from '@/store/api';
 import { useAppDispatch } from '@/store/hooks';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -71,10 +71,10 @@ export default function Navbar({
   const dispatch = useAppDispatch();
 
   const { data: user } = useGetMeQuery();
-  const { data: notifData } = useGetNotificationsQuery();
+  const { data: unreadData } = useGetUnreadCountQuery();
   const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
 
-  const unreadCount = notifData?.unreadCount ?? 0;
+  const unreadCount = unreadData?.count ?? 0;
   const displayName = user?.name || user?.email || 'User';
   const initials = user?.name
     ? user.name

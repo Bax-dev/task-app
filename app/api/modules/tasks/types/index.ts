@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from '@/lib/pagination';
 
 export const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(500),
@@ -38,6 +39,14 @@ export const moveTaskSchema = z.object({
 });
 
 export type MoveTaskDTO = z.infer<typeof moveTaskSchema>;
+
+export const listUserTasksQuerySchema = paginationQuerySchema.extend({
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE', 'REJECTED', 'CANCELLED']).optional(),
+  q: z.string().trim().max(200).optional(),
+  sort: z.enum(['due-soon', 'urgent-first', 'recently-updated', 'alphabetical']).optional(),
+});
+
 export type CreateTaskDTO = z.infer<typeof createTaskSchema>;
 export type UpdateTaskDTO = z.infer<typeof updateTaskSchema>;
 export type AssignTaskDTO = z.infer<typeof assignTaskSchema>;
+export type ListUserTasksQuery = z.infer<typeof listUserTasksQuerySchema>;

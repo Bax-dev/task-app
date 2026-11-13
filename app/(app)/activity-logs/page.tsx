@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/select';
 import { Activity, Search, Shield } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useGetOrganizationsQuery, useGetOrgActivityLogsQuery, useGetOrgMembersQuery } from '@/store/api';
+import { LoadMore } from '@/components/ui/load-more';
+import { useGetOrganizationsQuery, useGetOrgActivityLogsInfiniteQuery, useGetOrgMembersQuery } from '@/store/api';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function AuditLogsPage() {
@@ -31,7 +32,9 @@ export default function AuditLogsPage() {
   const { data: members = [] } = useGetOrgMembersQuery(selectedOrg, { skip: !selectedOrg });
   const isAdmin = members.some((m: any) => m.id === user?.id && m.role === 'ADMIN');
 
-  const { data: logs = [], isLoading: logsLoading } = useGetOrgActivityLogsQuery(selectedOrg, { skip: !selectedOrg || !isAdmin });
+  const { data: logPages, isLoading: logsLoading, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useGetOrgActivityLogsInfiniteQuery(selectedOrg, { skip: !selectedOrg || !isAdmin });
+  const logs = logPages?.pages.flatMap((page) => page.items) ?? [];
 
   if (orgsLoading) {
     return (
@@ -93,6 +96,9 @@ export default function AuditLogsPage() {
           className="pl-9 max-w-md"
         />
       </div>
+      {search && hasNextPage && (
+        <p className="-mt-4 mb-6 text-xs text-muted-foreground">Searching loaded logs only. Load more to search older entries.</p>
+      )}
 
       {logsLoading ? (
         <div className="space-y-3">
@@ -152,6 +158,7 @@ export default function AuditLogsPage() {
           <p className="text-sm text-muted-foreground">Actions will appear here as your team works.</p>
         </div>
       )}
+      <LoadMore hasMore={hasNextPage} loading={isFetchingNextPage} onLoadMore={() => fetchNextPage()} />
     </div>
   );
 }
