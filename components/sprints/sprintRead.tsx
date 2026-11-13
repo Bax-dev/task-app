@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import {
   useGetSprintQuery,
@@ -95,8 +96,10 @@ function SprintDetailView({
 
   if (sprintLoading) {
     return (
-      <div className="flex items-center justify-center h-full py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
@@ -488,8 +491,8 @@ export default function SprintRead({
   // ------- Sprint List View -------
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
       </div>
     );
   }

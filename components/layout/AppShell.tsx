@@ -5,6 +5,8 @@ import Sidebar from '@/components/layout/Sidebar';
 import Navbar from '@/components/layout/Navbar';
 import CommandPalette from '@/components/CommandPalette';
 import AiAssistantPanel from '@/components/ai/AiAssistantPanel';
+import SSEProvider from '@/components/SSEProvider';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 
 const COLLAPSED_KEY = 'taskflow:sidebar-collapsed';
 
@@ -21,6 +23,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
     } catch {}
   }, []);
 
+  // Navbar advertises Ctrl/⌘+K for the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const toggleCollapse = () => {
     setCollapsed((prev) => {
       const next = !prev;
@@ -33,25 +47,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-screen overflow-hidden">
       <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
       <AiAssistantPanel open={aiPanelOpen} onOpenChange={setAiPanelOpen} />
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40 md:hidden transition-opacity"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      {/* Mobile sidebar */}
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="w-64 p-0 gap-0 md:hidden">
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <Sidebar onClose={() => setSidebarOpen(false)} collapsed={false} />
+        </SheetContent>
+      </Sheet>
 
-      {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out md:relative md:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <Sidebar
-          onClose={() => setSidebarOpen(false)}
-          collapsed={collapsed}
-          onToggleCollapse={toggleCollapse}
-        />
+      {/* Desktop sidebar */}
+      <div className="hidden md:block">
+        <Sidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       </div>
 
       {/* Main area */}
@@ -63,6 +69,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           onSearchClick={() => setCommandPaletteOpen(true)}
           onAiClick={() => setAiPanelOpen(true)}
         />
+        <SSEProvider />
         <main className="flex-1 overflow-auto bg-background">
           {children}
         </main>

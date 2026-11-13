@@ -72,6 +72,10 @@ import { useAuth } from '@/hooks/use-auth';
 import FileUpload from '@/components/ui/file-upload';
 import SubtaskList from '@/components/tasks/SubtaskList';
 import TaskLabelPicker from '@/components/tasks/TaskLabelPicker';
+import SideField from '@/components/tasks/SideField';
+import TaskComments from '@/components/tasks/TaskComments';
+import TaskIssueLinks from '@/components/tasks/TaskIssueLinks';
+import TaskCustomFields from '@/components/tasks/TaskCustomFields';
 import type { Member } from '@/types/organization';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -260,7 +264,21 @@ export default function TaskDetailPage({
     return <TaskDetailSkeleton />;
   }
 
-  if (!task) return null;
+  if (!task) {
+    return (
+      <div className="p-4 sm:p-6 max-w-md mx-auto mt-10 rounded-xl border border-border bg-card text-center space-y-3">
+        <AlertTriangle className="w-6 h-6 mx-auto text-muted-foreground" />
+        <h1 className="text-base font-semibold text-foreground">Task not found</h1>
+        <p className="text-sm text-muted-foreground">It may have been deleted, or you don&apos;t have access to it.</p>
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/projects/${projectId}`}>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Back to project
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   const selectedIssueType = task.issueType;
 
@@ -301,18 +319,26 @@ export default function TaskDetailPage({
               }}
             />
           ) : (
-            <h1
-              className={`text-xl sm:text-2xl font-semibold tracking-tight text-foreground ${!isGuest ? 'cursor-text hover:bg-secondary/30 rounded px-2 -mx-2' : ''}`}
-              onClick={() => { if (!isGuest) { setEditTitle(task.title); setEditingTitle(true); } }}
-            >
-              {task.title}
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+              {isGuest ? (
+                task.title
+              ) : (
+                <button
+                  type="button"
+                  aria-label={`Edit title: ${task.title}`}
+                  className="w-full text-left cursor-text hover:bg-secondary/30 rounded px-2 -mx-2"
+                  onClick={() => { setEditTitle(task.title); setEditingTitle(true); }}
+                >
+                  {task.title}
+                </button>
+              )}
             </h1>
           )}
         </div>
         {!isGuest && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0">
+              <Button variant="ghost" size="icon" aria-label="Delete task" className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0">
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </AlertDialogTrigger>
@@ -397,6 +423,12 @@ export default function TaskDetailPage({
             <SubtaskList taskId={taskId} taskTitle={task?.title} taskDescription={task?.description || undefined} readOnly={isGuest} />
           </section>
 
+          {/* Linked tasks */}
+          <section className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Linked tasks</h3>
+            <TaskIssueLinks taskId={taskId} projectId={projectId} readOnly={isGuest} />
+          </section>
+
           {/* Attachments */}
           {!isGuest && (
             <section className="rounded-xl border border-border bg-card p-4">
@@ -404,6 +436,12 @@ export default function TaskDetailPage({
               <FileUpload taskId={taskId} attachments={task.attachments || []} />
             </section>
           )}
+
+          {/* Comments */}
+          <section className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Comments</h3>
+            <TaskComments taskId={taskId} currentUserId={currentUser?.id} isAdmin={isAdmin} readOnly={isGuest} />
+          </section>
         </div>
 
         {/* Right sidebar */}
@@ -547,6 +585,7 @@ export default function TaskDetailPage({
                       }
                     }}
                     disabled={isAssignActionBusy}
+                    aria-label="Remove whole-space assignment"
                     className="hover:text-foreground"
                   >
                     <X className="w-3 h-3" />
@@ -569,7 +608,8 @@ export default function TaskDetailPage({
                         <button
                           onClick={() => toggleAssignment({ taskId, userId: a.user.id })}
                           disabled={isAssigning}
-                          className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label={`Unassign ${a.user.name || a.user.email}`}
+                          className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -651,6 +691,10 @@ export default function TaskDetailPage({
             </SideField>
           )}
 
+          {orgId && (
+            <TaskCustomFields taskId={taskId} orgId={orgId} issueTypeId={task.issueTypeId} readOnly={isGuest} />
+          )}
+
           <div className="pt-3 mt-2 border-t border-border space-y-1.5 text-xs text-muted-foreground">
             <div className="flex justify-between gap-2">
               <span>Created by</span>
@@ -691,18 +735,6 @@ export default function TaskDetailPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function SideField({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="py-1.5">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div>{children}</div>
     </div>
   );
 }

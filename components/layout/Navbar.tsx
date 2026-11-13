@@ -116,7 +116,7 @@ export default function Navbar({
   return (
     <nav className="flex min-h-16 items-center gap-3 border-b border-border bg-card/90 px-3 sm:px-4 backdrop-blur-sm">
       {onMenuToggle && (
-        <button onClick={onMenuToggle} className="rounded-md p-2 text-muted-foreground md:hidden">
+        <button onClick={onMenuToggle} aria-label="Open navigation menu" className="rounded-md p-2 text-muted-foreground md:hidden">
           <Menu className="h-5 w-5" />
         </button>
       )}
@@ -125,6 +125,7 @@ export default function Navbar({
           onClick={onDesktopToggle}
           className="hidden md:inline-flex rounded-md p-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
@@ -161,7 +162,7 @@ export default function Navbar({
           onClick={onSearchClick}
           className="hidden h-9 items-center gap-2 rounded-xl border border-border px-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:flex"
         >
-          <Search className="h-4 w-4" />
+          <Search className="h-4 w-4" aria-hidden="true" />
           Search or jump
           <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px] font-mono">Ctrl+K</kbd>
         </button>
@@ -170,13 +171,18 @@ export default function Navbar({
           onClick={onAiClick}
           className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
           title="TaskFlow AI"
+          aria-label="Open TaskFlow AI assistant"
         >
           <Sparkles className="h-[18px] w-[18px]" />
         </button>
 
         <ThemeToggle />
 
-        <Link href="/notifications" className="relative rounded-xl p-2 text-muted-foreground">
+        <Link
+          href="/notifications"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+          className="relative rounded-xl p-2 text-muted-foreground"
+        >
           <Bell className="h-[18px] w-[18px]" />
           {unreadCount > 0 && (
             <span className="absolute right-1 top-1 flex h-2.5 w-2.5">
@@ -188,7 +194,7 @@ export default function Navbar({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-xl p-1.5">
+            <button aria-label={`Account menu for ${displayName}`} className="flex items-center gap-2 rounded-xl p-1.5">
               <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-primary/15">
                 {user?.avatar ? (
                   <Image

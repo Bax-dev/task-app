@@ -5,6 +5,7 @@ import {
   closestCorners,
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -47,7 +48,10 @@ function buildBoardState(tasksByStatus: Record<string, Task[]>) {
 }
 
 export default function TaskBoard({ projectId, tasksByStatus }: TaskBoardProps) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
+  );
   const [boardState, setBoardState] = useState<Record<string, Task[]>>(buildBoardState(tasksByStatus));
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [updateTask] = useUpdateTaskMutation();
@@ -103,7 +107,6 @@ export default function TaskBoard({ projectId, tasksByStatus }: TaskBoardProps) 
 
     try {
       await updateTask({ id: taskId, status: targetColumn }).unwrap();
-      toast.success('Task moved');
     } catch (error: any) {
       moveTask(taskId, targetColumn, current.columnKey);
       toast.error(error?.data?.message || error?.message || 'Failed to move task');

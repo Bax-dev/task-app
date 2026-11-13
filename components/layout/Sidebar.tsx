@@ -28,7 +28,6 @@ import {
   Star,
   Tags,
   Users,
-  X,
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -196,11 +195,6 @@ export default function Sidebar({
             )}
           </div>
         </Link>
-        {onClose && !collapsed && (
-          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground md:hidden">
-            <X className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
@@ -312,6 +306,8 @@ export default function Sidebar({
                               key={color}
                               type="button"
                               onClick={() => setSpaceColor(color)}
+                              aria-label={`Color ${color}`}
+                              aria-pressed={spaceColor === color}
                               className={`h-7 w-7 rounded-full border-2 transition-transform ${
                                 spaceColor === color ? 'scale-110 border-foreground' : 'border-transparent'
                               }`}

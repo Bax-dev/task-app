@@ -5,6 +5,7 @@ import {
   Plus, LayoutGrid, Loader2, Trash2, Search, Columns,
   ArrowLeft, Calendar, AlertTriangle, ChevronRight, Users, Pencil, GripVertical,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -16,6 +17,7 @@ import type { BoardColumn } from '@/types/board';
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -349,6 +351,7 @@ function BoardDetailView({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
   // Derive columns sorted by position
@@ -438,7 +441,6 @@ function BoardDetailView({
 
     try {
       await updateTask({ id: task.id, status: newStatus }).unwrap();
-      toast.success('Task moved');
     } catch (err: any) {
       setOptimisticTasks(previousTasks);
       toast.error(err?.data?.message || 'Failed to move task');
@@ -462,8 +464,11 @@ function BoardDetailView({
 
   if (boardLoading || tasksLoading) {
     return (
-      <div className="flex items-center justify-center h-full py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col h-full">
+        <Skeleton className="h-8 w-64 mb-6" />
+        <div className="flex gap-4 overflow-hidden">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-96 w-72 shrink-0 rounded-xl" />)}
+        </div>
       </div>
     );
   }
@@ -485,7 +490,7 @@ function BoardDetailView({
     <div className="flex flex-col h-full">
       {/* Board header */}
       <div className="flex items-center gap-4 mb-6 px-1">
-        <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to boards" className="shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1 min-w-0">
@@ -589,8 +594,8 @@ export default function BoardRead({
   // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
       </div>
     );
   }

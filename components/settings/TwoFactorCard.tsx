@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { ShieldCheck, Copy, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
@@ -54,6 +55,14 @@ export default function TwoFactorCard() {
           <Button variant="destructive" onClick={() => setManage('disable')}>Turn off</Button>
         </div>
       </div>
+    );
+  } else if (status.hasPassword === false) {
+    body = (
+      <p className="text-sm text-muted-foreground">
+        Your account signs in with Google. Set a password via{' '}
+        <Link href="/forgot-password" className="font-medium text-primary hover:underline">Forgot password</Link>{' '}
+        first.
+      </p>
     );
   } else if (step === 'password') {
     body = <StartSetup onStarted={(s) => { setStep('idle'); setSetup(s); }} onCancel={() => setStep('idle')} />;

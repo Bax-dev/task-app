@@ -132,7 +132,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 // Two-step verification: a correct password for an account with MFA returns a challenge instead of a session.
 export type MfaChallenge = { mfaRequired: true; mfaToken: string; methods: ('totp' | 'recovery_code')[]; expiresAt: string };
 export const isMfaChallenge = (v: unknown): v is MfaChallenge => (v as MfaChallenge)?.mfaRequired === true;
-export type MfaStatus = { enabled: boolean; pendingSetup: boolean; confirmedAt: string | null; recoveryCodesRemaining: number; methods: string[] };
+export type MfaStatus = { enabled: boolean; pendingSetup: boolean; confirmedAt: string | null; recoveryCodesRemaining: number; methods: string[]; hasPassword?: boolean };
 export type MfaSetup = { secret: string; otpauthUrl: string; digits: number; period: number };
 export type MfaRecoveryCodes = MfaStatus & { recoveryCodes: string[] };
 

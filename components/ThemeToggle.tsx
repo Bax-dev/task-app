@@ -18,7 +18,7 @@ export default function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <button className="p-1.5 rounded-md text-muted-foreground">
+      <button aria-label="Toggle theme" className="p-1.5 rounded-md text-muted-foreground">
         <Sun className="w-[18px] h-[18px]" />
       </button>
     );
@@ -27,7 +27,7 @@ export default function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="p-1.5 rounded-md text-muted-foreground hover:text-foreground transition-colors">
+        <button aria-label="Toggle theme" className="p-1.5 rounded-md text-muted-foreground hover:text-foreground transition-colors">
           {theme === 'dark' ? (
             <Moon className="w-[18px] h-[18px]" />
           ) : theme === 'light' ? (
