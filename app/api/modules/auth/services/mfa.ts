@@ -17,7 +17,7 @@ import { createSession } from '@/lib/auth/session';
 import { signRefreshToken } from '@/lib/auth/refresh-token';
 import { sendEmail, buildMfaChangedEmail } from '@/lib/email';
 import {
-  DIGITS, PERIOD, generateSecret, encryptMfaSecret, decryptMfaSecret, matchingCounter,
+  DIGITS, PERIOD, generateSecret, encryptMfaSecret, openMfaSecret, recoveryHashCandidates, matchingCounter,
   otpauthUrl, looksLikeTotp, newRecoveryCodes, recoveryHash, hashToken,
 } from '@/lib/auth/totp';
 import type { AuthResponse } from '../types';
@@ -60,13 +60,14 @@ async function checkPassword(user: MfaUser, password: string) {
 async function checkCode(user: MfaUser, { code, recoveryCode }: { code?: string; recoveryCode?: string }) {
   if (recoveryCode) {
     const { count } = await prisma.mfaRecoveryCode.updateMany({
-      where: { userId: user.id, codeHash: recoveryHash(user.id, recoveryCode), usedAt: null },
+      where: { userId: user.id, codeHash: { in: recoveryHashCandidates(user.id, recoveryCode) }, usedAt: null },
       data: { usedAt: new Date() },
     });
     if (!count) throw invalidCode();
     return 'recovery_code' as const;
   }
-  const counter = matchingCounter(secretOf(user), code ?? '');
+  const { secret, stale } = secretOf(user);
+  const counter = matchingCounter(secret, code ?? '');
   if (counter === null) throw invalidCode();
   // Only succeeds if this time-step is newer than the last accepted one: a code can't be replayed.
   const { count } = await prisma.user.updateMany({
@@ -74,6 +75,13 @@ async function checkCode(user: MfaUser, { code, recoveryCode }: { code?: string;
     data: { mfaLastUsedCounter: counter },
   });
   if (!count) throw invalidCode();
+  if (stale) {
+    // Lazy key migration; conditional so a concurrent re-enrolment isn't overwritten.
+    await prisma.user.updateMany({
+      where: { id: user.id, mfaSecretEncrypted: user.mfaSecretEncrypted },
+      data: { mfaSecretEncrypted: encryptMfaSecret(secret) },
+    });
+  }
   return 'totp' as const;
 }
 
@@ -89,7 +97,7 @@ async function replaceRecoveryCodes(userId: string) {
 function secretOf(user: MfaUser) {
   if (!user.mfaSecretEncrypted) throw invalidCode();
   try {
-    return decryptMfaSecret(user.mfaSecretEncrypted);
+    return openMfaSecret(user.mfaSecretEncrypted);
   } catch {
     // MFA_ENCRYPTION_KEY / JWT_SECRET changed since enrolment.
     throw new MfaError('Two-step verification needs to be set up again. Contact support.', 500);
