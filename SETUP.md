@@ -15,26 +15,26 @@ A full-stack, multi-tenant task management application built with Next.js, Postg
 
 - Node.js 18+
 - PostgreSQL 14+
-- Yarn or npm
+- npm (use `npm ci`; the lockfile covers macOS, Linux glibc and Alpine/musl)
 
 ## Quick Start
 
 ```bash
 # 1. Install dependencies
-yarn install
+npm ci
 
 # 2. Set up environment variables
 cp .env.example .env
 # Edit .env with your database URL and JWT secret
 
 # 3. Generate Prisma client
-yarn db:generate
+npm run db:generate
 
 # 4. Run database migrations
-yarn db:migrate
+npm run db:migrate
 
 # 5. Start development server
-yarn dev
+npm run dev
 ```
 
 ## Architecture
@@ -147,8 +147,8 @@ Each module contains:
 ## Testing
 
 ```bash
-yarn test        # Run all tests
-yarn test:watch  # Watch mode
+npm test        # Run all tests
+npm run test:watch  # Watch mode
 ```
 
 ## Deployment
@@ -168,12 +168,12 @@ vercel deploy
 ## Scripts
 
 ```bash
-yarn dev          # Development server
-yarn build        # Production build
-yarn start        # Production server
-yarn test         # Run tests
-yarn db:generate  # Generate Prisma client
-yarn db:migrate   # Run migrations
-yarn db:push      # Push schema to DB
-yarn db:studio    # Open Prisma Studio
+npm run dev          # Development server
+npm run build        # Production build
+npm run start        # Production server
+npm test         # Run tests
+npm run db:generate  # Generate Prisma client
+npm run db:migrate   # Run migrations
+npm run db:push      # Push schema to DB
+npm run db:studio    # Open Prisma Studio
 ```

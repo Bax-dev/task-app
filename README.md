@@ -8,25 +8,25 @@ Built with Next.js (App Router), TypeScript, Prisma, PostgreSQL, Redux Toolkit Q
 
 - **Node.js** `^20 || ^22 || >=24` (Node 21 is not supported)
 - **PostgreSQL** database
-- **Yarn** (or npm)
+- **npm** (the repo ships a `package-lock.json`; don't use yarn/pnpm)
 
 ## Setup
 
 ```bash
 # 1. Install dependencies
-yarn install
+npm ci
 
 # 2. Configure environment
 cp .env.example .env   # then fill in DATABASE_URL, JWT_SECRET, etc.
 
 # 3. Run database migrations
-yarn db:migrate
+npm run db:migrate
 
 # 4. (Optional) Seed sample data
-yarn db:seed
+npm run db:seed
 
 # 5. Start the dev server
-yarn dev
+npm run dev
 ```
 
 App runs at [http://localhost:3000](http://localhost:3000).
@@ -54,14 +54,14 @@ AWS_* / BEDROCK_*             # AI features (suggest task, subtasks, chat)
 
 | Command | What it does |
 |---|---|
-| `yarn dev` | Start the dev server |
-| `yarn build` | Production build |
-| `yarn start` | Run the production build |
-| `yarn typecheck` | TypeScript type check |
-| `yarn test` | Run Vitest tests |
-| `yarn db:migrate` | Apply Prisma migrations |
-| `yarn db:generate` | Regenerate Prisma client |
-| `yarn db:studio` | Open Prisma Studio |
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build |
+| `npm run start` | Run the production build |
+| `npm run typecheck` | TypeScript type check |
+| `npm test` | Run Vitest tests |
+| `npm run db:migrate` | Apply Prisma migrations |
+| `npm run db:generate` | Regenerate Prisma client |
+| `npm run db:studio` | Open Prisma Studio |
 
 ## Features
 
