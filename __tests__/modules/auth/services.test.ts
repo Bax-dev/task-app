@@ -7,6 +7,10 @@ vi.mock('@/lib/db/client', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
     },
+    mfaChallenge: {
+      create: vi.fn(),
+      deleteMany: vi.fn(),
+    },
   },
 }));
 
@@ -95,8 +99,28 @@ describe('Auth Service', () => {
       password: 'Password1',
     });
 
+    if ('mfaRequired' in result) throw new Error('unexpected MFA challenge');
     expect(result.user.email).toBe('test@example.com');
     expect(result.token).toBe('mock-token');
+  });
+
+  it('should return an MFA challenge instead of a session when 2FA is on', async () => {
+    const { prisma } = await import('@/lib/db/client');
+    const { verifyPassword } = await import('@/lib/auth/password');
+    const { createSession } = await import('@/lib/auth/session');
+
+    (prisma.user.findUnique as any).mockResolvedValue({
+      id: 'user-1', name: 'Test User', email: 'test@example.com', passwordHash: 'hashed', mfaConfirmedAt: new Date(),
+    });
+    (verifyPassword as any).mockResolvedValue(true);
+    (prisma.mfaChallenge.create as any).mockImplementation(({ data }: any) => Promise.resolve(data));
+
+    const { login } = await import('@/app/api/modules/auth/services');
+    const result = await login({ email: 'test@example.com', password: 'Password1' });
+
+    expect(result).toMatchObject({ mfaRequired: true, methods: ['totp', 'recovery_code'] });
+    expect('token' in result).toBe(false);
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it('should reject login with wrong password', async () => {

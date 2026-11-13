@@ -3,6 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { setSessionCookie } from '@/lib/auth/session';
 import { setRefreshTokenCookie } from '@/lib/auth/refresh-token';
 import * as authService from '@/app/api/modules/auth/services';
+import { isMfaChallenge } from '@/app/api/modules/auth/services/mfa';
 
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -30,11 +31,18 @@ export async function GET(request: NextRequest) {
 
     // Use existing googleAuth service which verifies the ID token
     const result = await authService.googleAuth(idToken);
+    // Redirect to the original page (e.g. invite link) or dashboard
+    const redirectTo = state && state.startsWith('/') && !state.startsWith('//') ? state : '/dashboard';
+
+    if (isMfaChallenge(result)) {
+      // Fragment, not query: the token never reaches server logs or Referer headers.
+      const url = new URL(`/login?redirect=${encodeURIComponent(redirectTo)}`, baseUrl);
+      url.hash = `mfaToken=${result.mfaToken}`;
+      return NextResponse.redirect(url);
+    }
+
     await setSessionCookie(result.token);
     await setRefreshTokenCookie(result.refreshToken);
-
-    // Redirect to the original page (e.g. invite link) or dashboard
-    const redirectTo = state && state.startsWith('/') ? state : '/dashboard';
     return NextResponse.redirect(new URL(redirectTo, baseUrl));
   } catch (error) {
     console.error('Google OAuth callback error:', error);

@@ -9,6 +9,7 @@ export async function findUserByEmail(email: string) {
       email: true,
       avatar: true,
       passwordHash: true,
+      mfaConfirmedAt: true,
     },
   });
 }
@@ -49,6 +50,7 @@ export async function findUserByGoogleId(googleId: string) {
       email: true,
       avatar: true,
       passwordHash: true,
+      mfaConfirmedAt: true,
     },
   });
 }
@@ -62,6 +64,7 @@ export async function linkGoogleAccount(email: string, googleId: string, avatar?
       name: true,
       email: true,
       avatar: true,
+      mfaConfirmedAt: true,
     },
   });
 }

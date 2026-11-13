@@ -23,6 +23,10 @@ const authSlice = createSlice({
         state.user = action.payload;
       })
       .addMatcher(apiSlice.endpoints.login.matchFulfilled, (state, action) => {
+        // An MFA challenge isn't a session yet: the user arrives with verifyMfa.
+        if ('user' in action.payload) state.user = action.payload.user;
+      })
+      .addMatcher(apiSlice.endpoints.verifyMfa.matchFulfilled, (state, action) => {
         state.user = action.payload.user;
       })
       .addMatcher(apiSlice.endpoints.register.matchFulfilled, (state, action) => {

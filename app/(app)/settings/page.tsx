@@ -50,6 +50,7 @@ import {
 } from '@/store/slices/preferencesSlice';
 import type { LucideIcon } from 'lucide-react';
 import PageHeader from '@/components/layout/PageHeader';
+import TwoFactorCard from '@/components/settings/TwoFactorCard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -302,6 +303,8 @@ export default function SettingsPage() {
           </Button>
         </form>
       </div>
+
+      <TwoFactorCard />
 
       {/* Theme Color */}
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 mb-6">

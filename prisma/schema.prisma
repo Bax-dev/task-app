@@ -134,6 +134,12 @@ model User {
   avatar       String?
   preferences  Json?
   timezone     String   @default("UTC")
+
+  // Two-step verification (TOTP authenticator). On once mfaConfirmedAt is set.
+  mfaSecretEncrypted String?   // AES-256-GCM, see lib/auth/totp.ts
+  mfaConfirmedAt     DateTime?
+  mfaLastUsedCounter Int       @default(0) // highest accepted time-step: blocks code replay
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -158,6 +164,33 @@ model User {
   createdDailyReportSchedules DailyReportSchedule[] @relation("DailyReportScheduleCreatedBy")
   spaceMemberships     SpaceMember[]
   overdueReminders     TaskOverdueReminder[]
+  mfaRecoveryCodes     MfaRecoveryCode[]
+  mfaChallenges        MfaChallenge[]
+}
+
+/// Single-use backup codes for two-step verification, stored as HMACs.
+model MfaRecoveryCode {
+  id       String    @id @default(uuid()) @db.Uuid
+  userId   String    @db.Uuid
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String
+  usedAt   DateTime?
+
+  @@index([userId, codeHash])
+}
+
+/// Pending second sign-in step: issued after a correct password, exchanged for a session.
+model MfaChallenge {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Organization {
