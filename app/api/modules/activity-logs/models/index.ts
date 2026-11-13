@@ -44,6 +44,7 @@ export async function findActivityLogsByOrg(organizationId: string) {
     where: { organizationId },
     include: activityLogInclude,
     orderBy: { loggedAt: 'desc' },
+    take: 500, // shortcut: newest 500 only; add cursor pagination when the UI pages
   });
 }
 
@@ -52,6 +53,7 @@ export async function findActivityLogsByUser(userId: string) {
     where: { createdById: userId },
     include: activityLogInclude,
     orderBy: { loggedAt: 'desc' },
+    take: 500, // shortcut: newest 500 only; add cursor pagination when the UI pages
   });
 }
 

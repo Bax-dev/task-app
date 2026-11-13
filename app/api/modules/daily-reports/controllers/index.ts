@@ -4,8 +4,9 @@ import {
   forbiddenResponse,
   successResponse,
   unauthorizedResponse,
+  exceptionResponse,
 } from '@/lib/api-response';
-import { authenticateRequest } from '@/lib/guards/auth-guard';
+import { authenticateRequest, isCronRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import {
   createDailyReportSchema,
@@ -22,7 +23,7 @@ export async function handleGetDailyReportSchedule(request: NextRequest, organiz
     return successResponse(schedule);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -48,7 +49,7 @@ export async function handleUpdateDailyReportSchedule(request: NextRequest, orga
     ) {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -70,7 +71,7 @@ export async function handleCreateDailyReport(request: NextRequest) {
     ) {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -87,22 +88,18 @@ export async function handleGetDailyReports(
     return successResponse(result);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
 export async function handleSendDailyReportReminders(request: NextRequest) {
   try {
-    const session = await authenticateRequest(request).catch(() => null);
-    const cronSecret = process.env.TASKFLOW_CRON_SECRET;
-    const providedSecret = request.headers.get('x-taskflow-cron-secret');
-    const allowCron = cronSecret && providedSecret === cronSecret;
-
-    if (!session && !allowCron) return unauthorizedResponse();
+    // Cron only: any signed-in user could otherwise trigger an org-wide email blast.
+    if (!isCronRequest(request)) return unauthorizedResponse();
 
     const result = await dailyReportService.sendDailyReportReminders();
     return successResponse(result);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

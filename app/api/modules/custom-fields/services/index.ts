@@ -1,20 +1,13 @@
-import { prisma } from '@/lib/db/client';
 import { FieldType } from '@prisma/client';
-import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireOrgMembership, requireOrgAdmin, assertIssueTypeInOrg } from '@/lib/guards/org-guard';
+import { requireTaskAccess, requireTaskWrite } from '@/lib/guards/space-guard';
+import { HttpError } from '@/lib/api-response';
 import * as customFieldModel from '../models';
 import { CreateCustomFieldDTO, UpdateCustomFieldDTO, SetCustomFieldValueDTO } from '../types';
 
-async function getOrgIdFromTask(taskId: string): Promise<string> {
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { project: { select: { space: { select: { organizationId: true } } } } },
-  });
-  if (!task) throw new Error('Task not found');
-  return task.project.space.organizationId;
-}
-
 export async function createCustomField(userId: string, dto: CreateCustomFieldDTO) {
   await requireOrgAdmin(userId, dto.organizationId);
+  await assertIssueTypeInOrg(dto.issueTypeId, dto.organizationId);
   return customFieldModel.createCustomField({
     name: dto.name,
     fieldType: dto.fieldType as FieldType,
@@ -55,8 +48,9 @@ export async function removeCustomField(fieldId: string, userId: string) {
 }
 
 export async function setFieldValue(taskId: string, userId: string, dto: SetCustomFieldValueDTO) {
-  const organizationId = await getOrgIdFromTask(taskId);
-  await requireNonGuest(userId, organizationId);
+  const { organizationId } = await requireTaskWrite(userId, taskId);
+  const field = await customFieldModel.findCustomFieldById(dto.customFieldId);
+  if (!field || field.organizationId !== organizationId) throw new HttpError('Custom field not found', 404);
   return customFieldModel.setFieldValue({
     value: dto.value,
     customFieldId: dto.customFieldId,
@@ -65,7 +59,6 @@ export async function setFieldValue(taskId: string, userId: string, dto: SetCust
 }
 
 export async function readFieldValues(taskId: string, userId: string) {
-  const organizationId = await getOrgIdFromTask(taskId);
-  await requireOrgMembership(userId, organizationId);
+  await requireTaskAccess(userId, taskId);
   return customFieldModel.findFieldValuesByTask(taskId);
 }

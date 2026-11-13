@@ -1,4 +1,5 @@
-import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { randomBytes } from 'crypto';
+import { hashPassword, verifyPassword, verifyPasswordAgainstNothing } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
 import { signRefreshToken, consumeRefreshToken, revokeRefreshTokenValue, revokeAllRefreshTokens } from '@/lib/auth/refresh-token';
 import { generateOTP, storeOTP, verifyOTP as verifyStoredOTP, canResendOTP } from '@/lib/otp';
@@ -29,11 +30,8 @@ export async function register(dto: RegisterDTO): Promise<AuthResponse> {
 
 export async function login(dto: LoginDTO): Promise<AuthResponse | MfaChallengeResponse> {
   const user = await authModel.findUserByEmail(dto.email);
-  if (!user) {
-    throw new Error('Invalid email or password');
-  }
-
-  if (!user.passwordHash) {
+  if (!user?.passwordHash) {
+    await verifyPasswordAgainstNothing(dto.password);
     throw new Error('Invalid email or password');
   }
 
@@ -163,7 +161,8 @@ export async function verifyOTP(email: string, otp: string, purpose: 'forgot-pas
 
   // For forgot-password, generate a short-lived reset token stored in Redis
   if (purpose === 'forgot-password') {
-    const resetToken = generateOTP(); // reuse OTP generator for simplicity
+    // Unguessable, unlike the 6-digit code: it's the only thing that authorizes the reset.
+    const resetToken = randomBytes(32).toString('base64url');
     await storeOTP('reset-token', email, resetToken);
     return { valid: true, resetToken };
   }
@@ -172,9 +171,9 @@ export async function verifyOTP(email: string, otp: string, purpose: 'forgot-pas
 }
 
 export async function resetPassword(dto: ResetPasswordDTO) {
+  // Only the token from verifyOTP: accepting the raw 6-digit code here would double the guessing surface.
   const isResetToken = await verifyStoredOTP('reset-token', dto.email, dto.otp);
-  const isDirectOtp = !isResetToken && await verifyStoredOTP('forgot-password', dto.email, dto.otp);
-  if (!isResetToken && !isDirectOtp) {
+  if (!isResetToken) {
     throw new Error('Invalid or expired OTP');
   }
 

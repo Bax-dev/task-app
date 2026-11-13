@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
+import { safeRedirect } from '@/lib/utils';
 
 declare global {
   interface Window {
@@ -49,7 +50,7 @@ export default function GoogleSignInButton() {
         return;
       }
       toast.success('Signed in with Google!');
-      router.push(redirect || '/dashboard');
+      router.push(safeRedirect(redirect));
     } catch (error: any) {
       toast.error(error.message || 'Google sign-in failed');
     } finally {
@@ -94,6 +95,11 @@ export default function GoogleSignInButton() {
     }
   }, []);
 
+  // Server sets the anti-CSRF state cookie, then bounces to Google's consent screen.
+  function startRedirectFlow() {
+    window.location.href = `/api/auth/google/start${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`;
+  }
+
   function handleClick() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
@@ -103,33 +109,11 @@ export default function GoogleSignInButton() {
     if (gsiReady && window.google) {
       window.google.accounts.id.prompt((notification: any) => {
         if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
-          // Redirect to Google OAuth consent screen
-          const params = new URLSearchParams({
-            client_id: clientId,
-            redirect_uri: `${window.location.origin}/api/auth/google/callback`,
-            response_type: 'code',
-            scope: 'openid email profile',
-            access_type: 'offline',
-            prompt: 'select_account',
-            ...(redirect ? { state: redirect } : {}),
-          });
-          window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+          startRedirectFlow();
         }
       });
     } else {
-      // GSI not ready, go straight to OAuth redirect
-      if (clientId) {
-        const params = new URLSearchParams({
-          client_id: clientId,
-          redirect_uri: `${window.location.origin}/api/auth/google/callback`,
-          response_type: 'code',
-          scope: 'openid email profile',
-          access_type: 'offline',
-          prompt: 'select_account',
-          ...(redirect ? { state: redirect } : {}),
-        });
-        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-      }
+      startRedirectFlow();
     }
   }
 

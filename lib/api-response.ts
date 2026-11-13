@@ -26,3 +26,16 @@ export function rateLimitResponse(resetIn: number) {
     { status: 429, headers: { 'Retry-After': String(Math.ceil(resetIn / 1000)) } }
   );
 }
+
+/** An Error that knows its HTTP status. Guards throw these so generic catch blocks don't turn a 403/404 into a 500. */
+export class HttpError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+export function exceptionResponse(error: unknown) {
+  if (error instanceof HttpError) return errorResponse(error.message, error.status);
+  console.error('[api] unhandled error', error);
+  return errorResponse(error instanceof Error ? error.message : 'Something went wrong', 500);
+}

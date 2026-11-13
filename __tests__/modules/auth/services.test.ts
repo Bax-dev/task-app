@@ -18,6 +18,7 @@ vi.mock('@/lib/db/client', () => ({
 vi.mock('@/lib/auth/password', () => ({
   hashPassword: vi.fn().mockResolvedValue('hashed-password'),
   verifyPassword: vi.fn(),
+  verifyPasswordAgainstNothing: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('@/lib/auth/session', () => ({

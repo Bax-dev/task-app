@@ -1,6 +1,6 @@
 import { TaskStatus, TaskPriority } from '@prisma/client';
 import { prisma } from '@/lib/db/client';
-import { requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
+import { requireOrgAdmin, requireNonGuest, assertIssueTypeInOrg } from '@/lib/guards/org-guard';
 import { requireSpaceAccess } from '@/lib/guards/space-guard';
 import { notifyTaskAssigned, notifyTaskAssignedToMany, notifyTaskOverdue, notifyTaskUpdated } from '@/app/api/modules/notifications/services';
 import { sendEmail, buildTaskAssignedEmail, buildTaskOverdueEmail } from '@/lib/email';
@@ -93,6 +93,9 @@ export async function createTask(userId: string, dto: CreateTaskDTO) {
   const { orgId, spaceId } = await getProjectScope(dto.projectId);
   await requireNonGuest(userId, orgId);
   await requireSpaceAccess(userId, spaceId);
+  // Same rule as updateTask: creating straight into REJECTED must not bypass it.
+  if (dto.status === 'REJECTED') await requireOrgAdmin(userId, orgId);
+  await assertIssueTypeInOrg(dto.issueTypeId, orgId);
 
   const task = await taskModel.createTask({
     title: dto.title,
@@ -381,6 +384,7 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
   if (dto.status === 'REJECTED') {
     await requireOrgAdmin(userId, orgId);
   }
+  await assertIssueTypeInOrg(dto.issueTypeId, orgId);
 
   const updateData: any = {
     title: dto.title,
@@ -399,11 +403,8 @@ export async function updateTask(taskId: string, userId: string, dto: UpdateTask
     updateData.rejectionReason = null; // Clear rejection when status changes away
   }
 
-  if (dto.assignToSpace === true) {
-    await taskModel.clearAssignments(taskId);
-  }
-
-  const updated = await taskModel.updateTask(taskId, updateData);
+  // Whole-space assignment replaces individual ones, in the same write.
+  const updated = await taskModel.updateTask(taskId, updateData, { clearAssignments: dto.assignToSpace === true });
 
   // Audit log
   let auditDesc = `updated task "${task.title}"`;

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { safeRedirect } from '@/lib/utils';
 import { REFRESH_MARKER_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/lib/auth/constants';
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production'
-);
+// No fallback: a known default secret would let anyone forge a page-gate token.
+const SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? '');
 
 const protectedRoutes = ['/dashboard', '/organizations', '/projects', '/tasks', '/team', '/settings', '/spaces', '/notes', '/notifications', '/boards', '/labels', '/sprints', '/workflows', '/automations', '/integrations', '/saved-filters', '/dashboards', '/issue-types', '/custom-fields', '/reports', '/calendar', '/favorites', '/activity-logs'];
 const authRoutes = ['/login', '/signup', '/forgot-password'];
@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
     try {
       await jwtVerify(token, SECRET);
       // If there's a redirect param, go there instead of dashboard
-      const redirectTo = request.nextUrl.searchParams.get('redirect') || '/dashboard';
+      const redirectTo = safeRedirect(request.nextUrl.searchParams.get('redirect'));
       return NextResponse.redirect(new URL(redirectTo, request.url));
     } catch {
       // Token is invalid, let them access auth pages

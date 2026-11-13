@@ -70,8 +70,9 @@ export async function getMaxPosition(taskId: string) {
 
 export async function reorderSubtasks(taskId: string, subtaskIds: string[]) {
   const updates = subtaskIds.map((id, index) =>
-    prisma.subtask.update({
-      where: { id },
+    // Scoped to taskId: ids from the body must not reorder another task's subtasks.
+    prisma.subtask.updateMany({
+      where: { id, taskId },
       data: { position: index },
     })
   );

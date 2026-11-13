@@ -10,6 +10,7 @@ import { isMfaChallenge, useLoginMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
 import MfaChallengeForm from './MfaChallengeForm';
 import { Eye, EyeOff } from 'lucide-react';
+import { safeRedirect } from '@/lib/utils';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -37,8 +38,7 @@ export default function LoginForm() {
 
   const finishSignIn = () => {
     toast.success('Logged in successfully!');
-    // Same-site paths only: `?redirect=//evil.com` must not bounce a fresh session off-site.
-    window.location.href = redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : '/dashboard';
+    window.location.href = safeRedirect(redirect);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

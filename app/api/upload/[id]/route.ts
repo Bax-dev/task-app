@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, HttpError } from '@/lib/api-response';
+import { requireAttachmentParentWrite } from '@/lib/guards/attachment-guard';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { deleteS3Object } from '@/lib/s3';
 import { prisma } from '@/lib/db/client';
@@ -24,9 +25,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.activityLogId !== undefined) updateData.activityLogId = body.activityLogId;
     if (body.noteId !== undefined) updateData.noteId = body.noteId;
 
+    await requireAttachmentParentWrite(session.userId, updateData);
+
     const updated = await prisma.attachment.update({ where: { id }, data: updateData });
     return successResponse(updated);
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpError) return errorResponse(error.message, error.status);
     return errorResponse('Failed to update attachment', 500);
   }
 }

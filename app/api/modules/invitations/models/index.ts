@@ -60,10 +60,6 @@ export async function updateInvitationStatus(id: string, status: InvitationStatu
   });
 }
 
-export async function createMembership(data: { userId: string; organizationId: string; role: Role }) {
-  return prisma.membership.create({ data });
-}
-
 export async function findExistingMembership(userId: string, organizationId: string) {
   return prisma.membership.findUnique({
     where: { userId_organizationId: { userId, organizationId } },

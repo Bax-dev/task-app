@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { v4 as uuid } from 'uuid';
-import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, HttpError } from '@/lib/api-response';
+import { requireAttachmentParentWrite } from '@/lib/guards/attachment-guard';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { generatePresignedUploadUrl } from '@/lib/s3';
 import { prisma } from '@/lib/db/client';
@@ -13,13 +14,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { fileName, mimeType, fileSize, taskId, activityLogId, noteId } = body;
 
-    if (!fileName || !mimeType || !fileSize) {
-      return errorResponse('fileName, mimeType, and fileSize are required');
+    if (typeof fileName !== 'string' || typeof mimeType !== 'string' || !Number.isInteger(fileSize) || fileSize <= 0) {
+      return errorResponse('fileName, mimeType, and a positive integer fileSize are required');
     }
+    await requireAttachmentParentWrite(session.userId, { taskId, activityLogId, noteId });
 
-    // Generate a unique key
-    const ext = fileName.split('.').pop() || '';
-    const fileKey = `uploads/${uuid()}.${ext}`;
+    // Unique key; the extension is user input, so keep it to a short alphanumeric suffix.
+    const ext = (fileName.includes('.') ? fileName.split('.').pop()! : '').replace(/[^a-z0-9]/gi, '').slice(0, 10);
+    const fileKey = `uploads/${uuid()}${ext ? `.${ext}` : ''}`;
 
     const { uploadUrl, fileUrl } = await generatePresignedUploadUrl(fileKey, mimeType, fileSize);
 
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
 
     return successResponse({ uploadUrl, attachment }, 201);
   } catch (error: any) {
+    if (error instanceof HttpError) return errorResponse(error.message, error.status);
     if (error.message.includes('not allowed') || error.message.includes('5MB')) {
       return errorResponse(error.message, 400);
     }

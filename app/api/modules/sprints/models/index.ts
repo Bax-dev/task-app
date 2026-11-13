@@ -5,7 +5,7 @@ const sprintInclude = {
   sprintTasks: {
     include: {
       task: {
-        select: { id: true, title: true, taskNumber: true, status: true, priority: true, storyPoints: true },
+        select: { id: true, title: true, taskNumber: true, status: true, priority: true, storyPoints: true, project: { select: { spaceId: true } } },
       },
     },
   },

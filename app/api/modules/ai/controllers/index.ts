@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse, rateLimitResponse } from '@/lib/api-response';
+import { aiLimiter } from '@/lib/rate-limit';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { suggestTaskSchema, generateSubtasksSchema, summarizeSchema, chatSchema } from '../types';
@@ -9,6 +10,8 @@ export async function handleSuggestTask(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
+    const limit = await aiLimiter.check(`ai:${session.userId}`);
+    if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
     const validation = validateBody(suggestTaskSchema, body);
@@ -20,7 +23,7 @@ export async function handleSuggestTask(request: NextRequest) {
     console.error('[AI suggest-task]', error);
     if (error.message === 'Project not found') return notFoundResponse('Project not found');
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -28,6 +31,8 @@ export async function handleGenerateSubtasks(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
+    const limit = await aiLimiter.check(`ai:${session.userId}`);
+    if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
     const validation = validateBody(generateSubtasksSchema, body);
@@ -36,7 +41,7 @@ export async function handleGenerateSubtasks(request: NextRequest) {
     const subtasks = await aiService.generateSubtasks(session.userId, validation.data);
     return successResponse(subtasks);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -44,6 +49,8 @@ export async function handleSummarize(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
+    const limit = await aiLimiter.check(`ai:${session.userId}`);
+    if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
     const validation = validateBody(summarizeSchema, body);
@@ -53,7 +60,7 @@ export async function handleSummarize(request: NextRequest) {
     return successResponse(result);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -61,6 +68,8 @@ export async function handleChat(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
+    const limit = await aiLimiter.check(`ai:${session.userId}`);
+    if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
     const validation = validateBody(chatSchema, body);
@@ -71,6 +80,6 @@ export async function handleChat(request: NextRequest) {
   } catch (error: any) {
     console.error('[AI chat]', error);
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

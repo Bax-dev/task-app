@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createCustomFieldSchema, updateCustomFieldSchema, setCustomFieldValueSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateCustomField(request: NextRequest) {
     return successResponse(field, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadCustomField(request: NextRequest, fieldId: string) {
   } catch (error: any) {
     if (error.message === 'Custom field not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadCustomFields(request: NextRequest, organizationId: str
     return successResponse(fields);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -63,7 +63,7 @@ export async function EditCustomField(request: NextRequest, fieldId: string) {
   } catch (error: any) {
     if (error.message === 'Custom field not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -77,7 +77,7 @@ export async function RemoveCustomField(request: NextRequest, fieldId: string) {
   } catch (error: any) {
     if (error.message === 'Custom field not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -95,7 +95,7 @@ export async function SetCustomFieldValue(request: NextRequest, taskId: string) 
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -109,6 +109,6 @@ export async function ReadCustomFieldValues(request: NextRequest, taskId: string
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

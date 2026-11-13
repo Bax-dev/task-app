@@ -1,20 +1,10 @@
-import { requireOrgMembership, requireNonGuest, requireOrgAdmin } from '@/lib/guards/org-guard';
-import { prisma } from '@/lib/db/client';
+import { requireOrgAdmin } from '@/lib/guards/org-guard';
+import { requireTaskAccess, requireTaskWrite } from '@/lib/guards/space-guard';
 import * as commentModel from '../models';
 import { CreateCommentDTO, UpdateCommentDTO } from '../types';
 
-async function getOrgIdFromTask(taskId: string): Promise<string> {
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { project: { select: { space: { select: { organizationId: true } } } } },
-  });
-  if (!task) throw new Error('Task not found');
-  return task.project.space.organizationId;
-}
-
 export async function createComment(userId: string, dto: CreateCommentDTO) {
-  const orgId = await getOrgIdFromTask(dto.taskId);
-  await requireNonGuest(userId, orgId);
+  await requireTaskWrite(userId, dto.taskId);
   return commentModel.createComment({
     content: dto.content,
     taskId: dto.taskId,
@@ -25,14 +15,12 @@ export async function createComment(userId: string, dto: CreateCommentDTO) {
 export async function readComment(commentId: string, userId: string) {
   const comment = await commentModel.findCommentById(commentId);
   if (!comment) throw new Error('Comment not found');
-  const orgId = comment.task.project.space.organizationId;
-  await requireOrgMembership(userId, orgId);
+  await requireTaskAccess(userId, comment.taskId);
   return comment;
 }
 
 export async function readComments(taskId: string, userId: string) {
-  const orgId = await getOrgIdFromTask(taskId);
-  await requireOrgMembership(userId, orgId);
+  await requireTaskAccess(userId, taskId);
   return commentModel.findCommentsByTask(taskId);
 }
 
@@ -40,15 +28,14 @@ export async function editComment(commentId: string, userId: string, dto: Update
   const comment = await commentModel.findCommentById(commentId);
   if (!comment) throw new Error('Comment not found');
   if (comment.createdById !== userId) throw new Error('Only the author can edit this comment');
+  await requireTaskWrite(userId, comment.taskId); // authors who lost access can't keep editing
   return commentModel.updateComment(commentId, { content: dto.content });
 }
 
 export async function removeComment(commentId: string, userId: string) {
   const comment = await commentModel.findCommentById(commentId);
   if (!comment) throw new Error('Comment not found');
-  if (comment.createdById !== userId) {
-    const orgId = comment.task.project.space.organizationId;
-    await requireOrgAdmin(userId, orgId);
-  }
+  const { organizationId } = await requireTaskAccess(userId, comment.taskId);
+  if (comment.createdById !== userId) await requireOrgAdmin(userId, organizationId);
   return commentModel.deleteComment(commentId);
 }

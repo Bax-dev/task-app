@@ -10,6 +10,7 @@
  * Replay and double-use are blocked with conditional updateMany calls (atomic, no row locks).
  */
 import { randomBytes } from 'node:crypto';
+import { loginLimiter } from '@/lib/rate-limit';
 import { prisma } from '@/lib/db/client';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
@@ -115,6 +116,7 @@ export async function status(userId: string) {
     confirmedAt: user.mfaConfirmedAt,
     recoveryCodesRemaining: enabled ? await prisma.mfaRecoveryCode.count({ where: { userId, usedAt: null } }) : 0,
     methods: enabled ? METHODS : [],
+    hasPassword: !!user.passwordHash, // Google-only accounts can't pass the password re-auth step
   };
 }
 
@@ -179,6 +181,9 @@ export async function regenerateRecoveryCodes(userId: string, password: string, 
 /** Returns a challenge when the user has MFA on, else null (caller issues the session). */
 export async function challengeIfEnabled(user: { id: string; mfaConfirmedAt?: Date | null }): Promise<MfaChallengeResponse | null> {
   if (!user.mfaConfirmedAt) return null;
+  // Each challenge allows 5 guesses; capping challenges per user caps guesses per user, whatever the IP.
+  const limit = await loginLimiter.check(`mfa-challenge:${user.id}`);
+  if (!limit.success) throw new MfaError('Too many sign-in attempts. Try again later.', 429);
   // Prune this user's finished challenges so the table doesn't grow with every sign-in.
   await prisma.mfaChallenge.deleteMany({
     where: { userId: user.id, OR: [{ usedAt: { not: null } }, { expiresAt: { lt: new Date() } }] },
@@ -203,16 +208,16 @@ export async function verifyChallenge(
   // MFA turned off after the password step: the password already proved it's them.
   let method: string = 'none';
   if (user.mfaConfirmedAt) {
-    try {
-      method = await checkCode(user, input);
-    } catch (err) {
-      const updated = await prisma.mfaChallenge.update({ where: { id: challenge.id }, data: { attempts: { increment: 1 } } });
-      if (updated.attempts >= MAX_CHALLENGE_ATTEMPTS) {
-        await prisma.mfaChallenge.update({ where: { id: challenge.id }, data: { usedAt: new Date() } });
-        throw new MfaError('Too many wrong codes. Sign in again.', 429);
-      }
-      throw err;
+    // Claim the attempt before checking: parallel guesses must not each slip under the cap.
+    const { count: claimed } = await prisma.mfaChallenge.updateMany({
+      where: { id: challenge.id, usedAt: null, attempts: { lt: MAX_CHALLENGE_ATTEMPTS } },
+      data: { attempts: { increment: 1 } },
+    });
+    if (!claimed) {
+      await prisma.mfaChallenge.updateMany({ where: { id: challenge.id, usedAt: null }, data: { usedAt: new Date() } });
+      throw new MfaError('Too many wrong codes. Sign in again.', 429);
     }
+    method = await checkCode(user, input);
   }
 
   // Single use: only the first concurrent verify wins.

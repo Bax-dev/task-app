@@ -78,12 +78,15 @@ export async function findTasksByProject(projectId: string) {
     where: { projectId },
     include: taskInclude,
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    take: 1000, // shortcut: hard cap against unbounded reads; add pagination when lists grow
   });
 }
 
 export async function findTasksByUser(userId: string) {
   return prisma.task.findMany({
     where: {
+      // Current members only: created/assigned tasks in an org the user has left must not show.
+      project: { space: { organization: { memberships: { some: { userId } } } } },
       OR: [
         { createdById: userId },
         { assignments: { some: { userId } } },
@@ -102,6 +105,7 @@ export async function findTasksByUser(userId: string) {
     },
     include: taskInclude,
     orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    take: 1000, // shortcut: hard cap against unbounded reads; add pagination when lists grow
   });
 }
 
@@ -114,10 +118,10 @@ export async function updateTask(id: string, data: {
   dueDate?: Date | null;
   rejectionReason?: string | null;
   issueTypeId?: string | null;
-}) {
+}, { clearAssignments = false } = {}) {
   return prisma.task.update({
     where: { id },
-    data,
+    data: { ...data, ...(clearAssignments && { assignments: { deleteMany: {} } }) },
     include: taskInclude,
   });
 }
@@ -144,12 +148,6 @@ export async function unassignUser(taskId: string, userId: string) {
 export async function findAssignment(taskId: string, userId: string) {
   return prisma.taskAssignment.findUnique({
     where: { taskId_userId: { taskId, userId } },
-  });
-}
-
-export async function clearAssignments(taskId: string) {
-  return prisma.taskAssignment.deleteMany({
-    where: { taskId },
   });
 }
 

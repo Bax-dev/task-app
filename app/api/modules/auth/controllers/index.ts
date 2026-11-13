@@ -1,18 +1,18 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, rateLimitResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, rateLimitResponse, exceptionResponse } from '@/lib/api-response';
 import { setSessionCookie, deleteSessionCookie } from '@/lib/auth/session';
-import { setRefreshTokenCookie, getRefreshTokenFromCookie, deleteRefreshTokenCookie } from '@/lib/auth/refresh-token';
+import { setRefreshTokenCookie, getRefreshTokenFromCookie, deleteRefreshTokenCookie, revokeAllRefreshTokens, signRefreshToken } from '@/lib/auth/refresh-token';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { loginLimiter } from '@/lib/rate-limit';
+import { loginLimiter, otpLimiter, clientIp } from '@/lib/rate-limit';
 import { registerSchema, loginSchema, forgotPasswordSchema, verifyOTPSchema, resetPasswordSchema, resendOTPSchema, googleAuthSchema, mfaPasswordSchema, mfaEnableSchema, mfaReauthSchema, mfaVerifySchema } from '../types';
 import * as authService from '../services';
 import * as mfaService from '../services/mfa';
 
 export async function handleRegister(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`register:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`register:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
@@ -34,9 +34,10 @@ export async function handleRegister(request: NextRequest) {
 
 export async function handleLogin(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`login:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`login:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
+    if (!isJsonRequest(request)) return errorResponse('Expected application/json', 415);
 
     const body = await request.json();
     const validation = validateBody(loginSchema, body);
@@ -49,6 +50,7 @@ export async function handleLogin(request: NextRequest) {
 
     return successResponse({ user: result.user });
   } catch (error: any) {
+    if (error instanceof mfaService.MfaError) return errorResponse(error.message, error.status);
     if (error.message === 'Invalid email or password') {
       return errorResponse(error.message, 401);
     }
@@ -107,8 +109,8 @@ export async function handleRefresh() {
 
 export async function handleForgotPassword(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`forgot:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`forgot:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
@@ -118,19 +120,22 @@ export async function handleForgotPassword(request: NextRequest) {
     const result = await authService.forgotPassword(validation.data);
     return successResponse(result);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
 export async function handleVerifyOTP(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`verify-otp:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`verify-otp:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
     const validation = validateBody(verifyOTPSchema, body);
     if (!validation.success) return errorResponse(validation.error);
+    // Per email, not just per IP: a 6-digit code falls to a distributed guesser otherwise.
+    const emailLimit = await otpLimiter.check(`otp:${validation.data.purpose}:${validation.data.email.toLowerCase()}`);
+    if (!emailLimit.success) return rateLimitResponse(emailLimit.resetIn);
 
     const result = await authService.verifyOTP(
       validation.data.email,
@@ -142,19 +147,21 @@ export async function handleVerifyOTP(request: NextRequest) {
     if (error.message === 'Invalid or expired OTP') {
       return errorResponse(error.message, 400);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
 export async function handleResetPassword(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`reset:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`reset:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
     const validation = validateBody(resetPasswordSchema, body);
     if (!validation.success) return errorResponse(validation.error);
+    const emailLimit = await otpLimiter.check(`reset:${validation.data.email.toLowerCase()}`);
+    if (!emailLimit.success) return rateLimitResponse(emailLimit.resetIn);
 
     const result = await authService.resetPassword(validation.data);
     return successResponse(result);
@@ -162,14 +169,14 @@ export async function handleResetPassword(request: NextRequest) {
     if (error.message === 'Invalid or expired OTP' || error.message === 'User not found') {
       return errorResponse('Invalid or expired OTP', 400);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
 export async function handleResendOTP(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`resend:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`resend:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
@@ -182,15 +189,16 @@ export async function handleResendOTP(request: NextRequest) {
     if (error.message === 'Please wait before requesting another OTP') {
       return errorResponse(error.message, 429);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
 export async function handleGoogleAuth(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`google:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`google:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
+    if (!isJsonRequest(request)) return errorResponse('Expected application/json', 415);
 
     const body = await request.json();
     const validation = validateBody(googleAuthSchema, body);
@@ -203,6 +211,7 @@ export async function handleGoogleAuth(request: NextRequest) {
 
     return successResponse({ user: result.user });
   } catch (error: any) {
+    if (error instanceof mfaService.MfaError) return errorResponse(error.message, error.status);
     if (error.message === 'Invalid Google token') {
       return errorResponse(error.message, 401);
     }
@@ -218,7 +227,7 @@ export async function handleGetMe(request: NextRequest) {
     const user = await authService.getMe(session.userId);
     return successResponse(user);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -247,7 +256,7 @@ export async function handleMfaSetup(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
-    const limit = loginLimiter.check(`mfa-manage:${session.userId}`); // checks the password
+    const limit = await loginLimiter.check(`mfa-manage:${session.userId}`); // checks the password
     if (!limit.success) return rateLimitResponse(limit.resetIn);
     const validation = validateBody(mfaPasswordSchema, await readJson(request));
     if (!validation.success) return errorResponse(validation.error);
@@ -257,15 +266,28 @@ export async function handleMfaSetup(request: NextRequest) {
   }
 }
 
+/** Login CSRF guard: a cross-site form can't send JSON without a CORS preflight, which we don't allow. */
+const isJsonRequest = (request: NextRequest) =>
+  (request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json');
+
+/** After a 2FA change, a stolen refresh token must stop working; this device gets a fresh one. */
+async function signOutOtherDevices(userId: string, email: string) {
+  await revokeAllRefreshTokens(userId);
+  const { token } = await signRefreshToken(userId, email);
+  await setRefreshTokenCookie(token);
+}
+
 export async function handleMfaEnable(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
-    const limit = loginLimiter.check(`mfa-enable:${session.userId}`);
+    const limit = await loginLimiter.check(`mfa-enable:${session.userId}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
     const validation = validateBody(mfaEnableSchema, await readJson(request));
     if (!validation.success) return errorResponse(validation.error);
-    return successResponse(await mfaService.enable(session.userId, validation.data.code));
+    const result = await mfaService.enable(session.userId, validation.data.code);
+    await signOutOtherDevices(session.userId, session.email);
+    return successResponse(result);
   } catch (error: any) {
     return mfaErrorResponse(error, 'Failed to turn on two-step verification');
   }
@@ -275,11 +297,13 @@ export async function handleMfaDisable(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
-    const limit = loginLimiter.check(`mfa-manage:${session.userId}`);
+    const limit = await loginLimiter.check(`mfa-manage:${session.userId}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
     const validation = validateBody(mfaReauthSchema, await readJson(request));
     if (!validation.success) return errorResponse(validation.error);
-    return successResponse(await mfaService.disable(session.userId, validation.data.password, validation.data.code));
+    const result = await mfaService.disable(session.userId, validation.data.password, validation.data.code);
+    await signOutOtherDevices(session.userId, session.email);
+    return successResponse(result);
   } catch (error: any) {
     return mfaErrorResponse(error, 'Failed to turn off two-step verification');
   }
@@ -289,7 +313,7 @@ export async function handleMfaRecoveryCodes(request: NextRequest) {
   try {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
-    const limit = loginLimiter.check(`mfa-manage:${session.userId}`);
+    const limit = await loginLimiter.check(`mfa-manage:${session.userId}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
     const validation = validateBody(mfaReauthSchema, await readJson(request));
     if (!validation.success) return errorResponse(validation.error);
@@ -303,8 +327,8 @@ export async function handleMfaRecoveryCodes(request: NextRequest) {
 
 export async function handleMfaVerify(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = loginLimiter.check(`mfa-verify:${ip}`);
+    const ip = clientIp(request);
+    const limit = await loginLimiter.check(`mfa-verify:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const validation = validateBody(mfaVerifySchema, await readJson(request));

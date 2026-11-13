@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, rateLimitResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, rateLimitResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { requireOrgAdmin } from '@/lib/guards/org-guard';
 import { validateBody } from '@/lib/guards/validate';
-import { inviteLimiter } from '@/lib/rate-limit';
+import { inviteLimiter, clientIp } from '@/lib/rate-limit';
 import { createInvitationSchema, acceptInvitationSchema } from '../types';
 import * as invitationService from '../services';
 
@@ -12,8 +12,8 @@ export async function handleCreateInvitation(request: NextRequest) {
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    const limit = inviteLimiter.check(`invite:${ip}`);
+    const ip = clientIp(request);
+    const limit = await inviteLimiter.check(`invite:${ip}`);
     if (!limit.success) return rateLimitResponse(limit.resetIn);
 
     const body = await request.json();
@@ -30,7 +30,7 @@ export async function handleCreateInvitation(request: NextRequest) {
     if (error.message.includes('already pending') || error.message.includes('already a member')) {
       return errorResponse(error.message, 409);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -50,7 +50,7 @@ export async function handleAcceptInvitation(request: NextRequest) {
     if (error.message === 'Invitation has expired' || error.message === 'Invitation is no longer valid') {
       return errorResponse(error.message, 410);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -67,7 +67,7 @@ export async function handleGetInvitation(request: NextRequest, token: string) {
     });
   } catch (error: any) {
     if (error.message === 'Invitation not found') return errorResponse(error.message, 404);
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -82,7 +82,7 @@ export async function handleGetOrgInvitations(request: NextRequest, organization
     return successResponse(invitations);
   } catch (error: any) {
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -91,10 +91,12 @@ export async function handleRevokeInvitation(request: NextRequest, invitationId:
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    await invitationService.revokeInvitation(invitationId);
+    await invitationService.revokeInvitation(session.userId, invitationId);
     return successResponse({ message: 'Invitation revoked' });
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    if (error.message === 'Invitation not found') return errorResponse(error.message, 404);
+    if (error.message === 'Admin access required' || error.message === 'Not a member of this organization') return forbiddenResponse();
+    return exceptionResponse(error);
   }
 }
 
@@ -103,11 +105,12 @@ export async function handleResendInvitation(request: NextRequest, invitationId:
     const session = await authenticateRequest(request);
     if (!session) return unauthorizedResponse();
 
-    const result = await invitationService.resendInvitation(invitationId);
+    const result = await invitationService.resendInvitation(session.userId, invitationId);
     return successResponse(result);
   } catch (error: any) {
+    if (error.message === 'Admin access required' || error.message === 'Not a member of this organization') return forbiddenResponse();
     if (error.message === 'Invitation not found') return errorResponse(error.message, 404);
     if (error.message === 'Invitation is no longer pending') return errorResponse(error.message, 410);
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

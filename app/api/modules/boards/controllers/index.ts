@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createBoardSchema, updateBoardSchema, createBoardColumnSchema, updateBoardColumnSchema } from '../types';
@@ -20,7 +20,7 @@ export async function CreateBoard(request: NextRequest) {
     if (error.message === 'Board not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -35,7 +35,7 @@ export async function ReadBoard(request: NextRequest, boardId: string) {
     if (error.message === 'Board not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -50,7 +50,7 @@ export async function ReadBoards(request: NextRequest, projectId: string) {
     if (error.message === 'Board not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -69,7 +69,7 @@ export async function EditBoard(request: NextRequest, boardId: string) {
     if (error.message === 'Board not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -84,7 +84,7 @@ export async function RemoveBoard(request: NextRequest, boardId: string) {
     if (error.message === 'Board not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -103,7 +103,7 @@ export async function CreateBoardColumn(request: NextRequest, boardId: string) {
     if (error.message === 'Board not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -122,7 +122,7 @@ export async function EditBoardColumn(request: NextRequest, columnId: string) {
     if (error.message === 'Board column not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -137,6 +137,6 @@ export async function RemoveBoardColumn(request: NextRequest, columnId: string) 
     if (error.message === 'Board column not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

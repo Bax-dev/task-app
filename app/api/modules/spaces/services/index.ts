@@ -44,8 +44,11 @@ export async function deleteSpace(spaceId: string, userId: string) {
   const space = await spaceModel.findSpaceById(spaceId);
   if (!space) throw new Error('Space not found');
 
+  // Creators may delete only while still a (non-guest) member: this cascades to every project and task.
   if (space.createdBy.id !== userId) {
     await requireOrgAdmin(userId, space.organizationId);
+  } else {
+    await requireNonGuest(userId, space.organizationId);
   }
 
   return spaceModel.deleteSpace(spaceId);

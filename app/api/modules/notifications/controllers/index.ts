@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { markReadSchema } from '../types';
@@ -41,7 +41,7 @@ export async function handleMarkAsRead(request: NextRequest) {
     const result = await notificationService.markAsRead(session.userId, validation.data.notificationIds);
     return successResponse(result);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -53,6 +53,6 @@ export async function handleMarkAllAsRead(request: NextRequest) {
     const result = await notificationService.markAllAsRead(session.userId);
     return successResponse(result);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

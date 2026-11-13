@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { signToken, verifyToken, JWTPayload } from './jwt';
 import { ACCESS_TOKEN_MAX_AGE, SESSION_COOKIE_NAME } from './constants';
+import { useSecureCookies } from './refresh-token';
 
 
 export async function createSession(userId: string, email: string): Promise<string> {
@@ -11,7 +12,7 @@ export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NEXT_PUBLIC_APP_URL?.startsWith('https'),
+    secure: useSecureCookies(),
     sameSite: 'lax',
     maxAge: ACCESS_TOKEN_MAX_AGE,
     path: '/',

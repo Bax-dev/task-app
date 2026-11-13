@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createSavedFilterSchema, updateSavedFilterSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateSavedFilter(request: NextRequest) {
     return successResponse(filter, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadSavedFilter(request: NextRequest, filterId: string) {
   } catch (error: any) {
     if (error.message === 'Saved filter not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadSavedFilters(request: NextRequest, organizationId: str
     return successResponse(filters);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -64,7 +64,7 @@ export async function EditSavedFilter(request: NextRequest, filterId: string) {
     if (error.message === 'Saved filter not found') return notFoundResponse();
     if (error.message === 'Only the owner can edit this filter') return forbiddenResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -80,6 +80,6 @@ export async function RemoveSavedFilter(request: NextRequest, filterId: string) 
     if (error.message === 'Only the owner or an admin can delete this filter' || error.message === 'Not a member of this organization') {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

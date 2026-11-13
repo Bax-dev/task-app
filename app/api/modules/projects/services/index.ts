@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db/client';
 import { requireOrgMembership, requireOrgAdmin, requireNonGuest } from '@/lib/guards/org-guard';
-import { requireSpaceAccess } from '@/lib/guards/space-guard';
+import { requireSpaceAccess, requireProjectWrite } from '@/lib/guards/space-guard';
 import * as projectModel from '../models';
 import { CreateProjectDTO, UpdateProjectDTO } from '../types';
 
@@ -56,9 +56,10 @@ export async function deleteProject(projectId: string, userId: string) {
   const project = await projectModel.findProjectById(projectId);
   if (!project) throw new Error('Project not found');
 
-  const isCreator = project.createdById === userId;
-  if (!isCreator) {
+  if (project.createdById !== userId) {
     await requireOrgAdmin(userId, project.space.organizationId);
+  } else {
+    await requireProjectWrite(userId, projectId); // creator who left the org/space can't cascade-delete
   }
 
   return projectModel.deleteProject(projectId);

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createIntegrationSchema, updateIntegrationSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateIntegration(request: NextRequest) {
     return successResponse(integration, 201);
   } catch (error: any) {
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadIntegration(request: NextRequest, integrationId: strin
   } catch (error: any) {
     if (error.message === 'Integration not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadIntegrations(request: NextRequest, organizationId: str
     return successResponse(integrations);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -63,7 +63,7 @@ export async function EditIntegration(request: NextRequest, integrationId: strin
   } catch (error: any) {
     if (error.message === 'Integration not found') return notFoundResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -77,6 +77,6 @@ export async function RemoveIntegration(request: NextRequest, integrationId: str
   } catch (error: any) {
     if (error.message === 'Integration not found') return notFoundResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

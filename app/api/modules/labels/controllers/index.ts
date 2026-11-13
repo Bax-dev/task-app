@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createLabelSchema, updateLabelSchema, taskLabelSchema } from '../types';
@@ -18,7 +18,7 @@ export async function CreateLabel(request: NextRequest) {
     return successResponse(label, 201);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -32,7 +32,7 @@ export async function ReadLabel(request: NextRequest, labelId: string) {
   } catch (error: any) {
     if (error.message === 'Label not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -45,7 +45,7 @@ export async function ReadLabels(request: NextRequest, organizationId: string) {
     return successResponse(labels);
   } catch (error: any) {
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -63,7 +63,7 @@ export async function EditLabel(request: NextRequest, labelId: string) {
   } catch (error: any) {
     if (error.message === 'Label not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -79,7 +79,7 @@ export async function RemoveLabel(request: NextRequest, labelId: string) {
     if (error.message === 'Not a member of this organization' || error.message === 'Admin access required' || error.message === 'Guest users have read-only access') {
       return forbiddenResponse();
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -97,7 +97,7 @@ export async function AddTaskLabel(request: NextRequest, taskId: string) {
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -111,6 +111,6 @@ export async function RemoveTaskLabel(request: NextRequest, taskId: string, labe
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createIssueLinkSchema } from '../types';
@@ -22,7 +22,7 @@ export async function CreateIssueLink(request: NextRequest) {
     if (error.message === 'Cannot link a task to itself') return errorResponse('Cannot link a task to itself', 400);
     if (error.message === 'Tasks must belong to the same organization') return errorResponse('Tasks must belong to the same organization', 400);
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -36,7 +36,7 @@ export async function ReadIssueLink(request: NextRequest, linkId: string) {
   } catch (error: any) {
     if (error.message === 'Issue link not found') return notFoundResponse('Issue link not found');
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -50,7 +50,7 @@ export async function ReadIssueLinks(request: NextRequest, taskId: string) {
   } catch (error: any) {
     if (error.message === 'Task not found') return notFoundResponse('Task not found');
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -64,6 +64,6 @@ export async function RemoveIssueLink(request: NextRequest, linkId: string) {
   } catch (error: any) {
     if (error.message === 'Issue link not found') return notFoundResponse('Issue link not found');
     if (error.message === 'Not a member of this organization' || error.message === 'Guest users have read-only access') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

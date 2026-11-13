@@ -1,3 +1,4 @@
+import { randomInt, timingSafeEqual } from 'crypto';
 import { redis, safeRedisCall } from './redis';
 
 const OTP_EXPIRY_SECONDS = 300; // 5 minutes
@@ -20,6 +21,11 @@ function memGet(key: string): string | null {
   return entry.value;
 }
 
+function sameCode(stored: string | null, given: string): boolean {
+  if (stored === null || stored.length !== given.length) return false;
+  return timingSafeEqual(Buffer.from(stored), Buffer.from(given));
+}
+
 function memDel(key: string) {
   memoryStore.delete(key);
 }
@@ -28,7 +34,7 @@ function memDel(key: string) {
  * Generate a 6-digit OTP
  */
 export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 /**
@@ -66,7 +72,7 @@ export async function verifyOTP(purpose: string, email: string, otp: string): Pr
 
   const stored = await safeRedisCall(() => redis.get(key));
 
-  if (stored === otp) {
+  if (sameCode(stored, otp)) {
     await safeRedisCall(() => redis.del(key));
     await safeRedisCall(() => redis.del(`otp-cooldown:${purpose}:${email}`));
     return true;
@@ -75,7 +81,7 @@ export async function verifyOTP(purpose: string, email: string, otp: string): Pr
   // Fallback to in-memory
   if (stored === null) {
     const memValue = memGet(key);
-    if (memValue === otp) {
+    if (sameCode(memValue, otp)) {
       memDel(key);
       memDel(`otp-cooldown:${purpose}:${email}`);
       return true;

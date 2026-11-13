@@ -4,6 +4,9 @@ import { setSessionCookie } from '@/lib/auth/session';
 import { setRefreshTokenCookie } from '@/lib/auth/refresh-token';
 import * as authService from '@/app/api/modules/auth/services';
 import { isMfaChallenge } from '@/app/api/modules/auth/services/mfa';
+import { safeRedirect } from '@/lib/utils';
+import { cookies } from 'next/headers';
+import { OAUTH_STATE_COOKIE } from '@/lib/auth/constants';
 
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -20,6 +23,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=missing_code', baseUrl));
   }
 
+  // state = "<nonce>:<redirect>" from /api/auth/google/start; the nonce must match this browser's cookie.
+  const cookieStore = await cookies();
+  const expectedNonce = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
+  cookieStore.delete({ name: OAUTH_STATE_COOKIE, path: '/api/auth/google' });
+  const sep = state?.indexOf(':') ?? -1;
+  const nonce = sep > 0 ? state!.slice(0, sep) : '';
+  if (!expectedNonce || nonce !== expectedNonce) {
+    return NextResponse.redirect(new URL('/login?error=google_state_mismatch', baseUrl));
+  }
+  const redirectPath = state!.slice(sep + 1);
+
   try {
     // Exchange authorization code for tokens
     const { tokens } = await client.getToken(code);
@@ -32,7 +46,7 @@ export async function GET(request: NextRequest) {
     // Use existing googleAuth service which verifies the ID token
     const result = await authService.googleAuth(idToken);
     // Redirect to the original page (e.g. invite link) or dashboard
-    const redirectTo = state && state.startsWith('/') && !state.startsWith('//') ? state : '/dashboard';
+    const redirectTo = safeRedirect(redirectPath);
 
     if (isMfaChallenge(result)) {
       // Fragment, not query: the token never reaches server logs or Referer headers.

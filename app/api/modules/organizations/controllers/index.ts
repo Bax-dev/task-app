@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse } from '@/lib/api-response';
+import { successResponse, errorResponse, unauthorizedResponse, forbiddenResponse, notFoundResponse, exceptionResponse } from '@/lib/api-response';
 import { authenticateRequest } from '@/lib/guards/auth-guard';
 import { validateBody } from '@/lib/guards/validate';
 import { createOrgSchema, updateOrgSchema } from '../types';
@@ -20,7 +20,7 @@ export async function handleCreateOrg(request: NextRequest) {
     if (error.message.includes('slug already exists')) {
       return errorResponse(error.message, 409);
     }
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -34,7 +34,7 @@ export async function handleGetOrg(request: NextRequest, orgId: string) {
   } catch (error: any) {
     if (error.message === 'Organization not found') return notFoundResponse();
     if (error.message === 'Not a member of this organization') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -46,7 +46,7 @@ export async function handleGetUserOrgs(request: NextRequest) {
     const orgs = await orgService.getUserOrganizations(session.userId);
     return successResponse(orgs);
   } catch (error: any) {
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -64,7 +64,7 @@ export async function handleUpdateOrg(request: NextRequest, orgId: string) {
   } catch (error: any) {
     if (error.message === 'Organization not found') return notFoundResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }
 
@@ -78,6 +78,6 @@ export async function handleDeleteOrg(request: NextRequest, orgId: string) {
   } catch (error: any) {
     if (error.message === 'Organization not found') return notFoundResponse();
     if (error.message === 'Admin access required') return forbiddenResponse();
-    return errorResponse(error.message, 500);
+    return exceptionResponse(error);
   }
 }

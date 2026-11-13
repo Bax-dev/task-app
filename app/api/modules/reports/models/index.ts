@@ -31,10 +31,11 @@ export async function getCompletedSprints(organizationId: string, limit: number)
   });
 }
 
-export async function getTasksByOrganization(organizationId: string) {
+/** `spaceIds` null = every space in the org (admins). */
+export async function getTasksByOrganization(organizationId: string, spaceIds: string[] | null) {
   return prisma.task.findMany({
     where: {
-      project: { space: { organizationId } },
+      project: { space: { organizationId }, ...(spaceIds && { spaceId: { in: spaceIds } }) },
     },
     select: { id: true, status: true, createdAt: true, updatedAt: true },
     orderBy: { createdAt: 'asc' },
