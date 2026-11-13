@@ -42,7 +42,12 @@ export default function GoogleSignInButton() {
   async function handleGoogleAuth(idToken: string) {
     setIsPending(true);
     try {
-      await api.post('/api/auth/google', { idToken });
+      const result = await api.post<{ mfaRequired?: boolean; mfaToken?: string }>('/api/auth/google', { idToken });
+      if (result?.mfaRequired && result.mfaToken) {
+        // Second step lives on the login form; the fragment keeps the token out of server logs.
+        window.location.assign(`/login${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}#mfaToken=${result.mfaToken}`);
+        return;
+      }
       toast.success('Signed in with Google!');
       router.push(redirect || '/dashboard');
     } catch (error: any) {

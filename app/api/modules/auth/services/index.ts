@@ -5,6 +5,7 @@ import { generateOTP, storeOTP, verifyOTP as verifyStoredOTP, canResendOTP } fro
 import { sendEmail, buildOTPEmail } from '@/lib/email';
 import { verifyGoogleToken } from '@/lib/google-auth';
 import * as authModel from '../models';
+import { challengeIfEnabled, type MfaChallengeResponse } from './mfa';
 import { RegisterDTO, LoginDTO, ForgotPasswordDTO, ResetPasswordDTO, ResendOTPDTO, AuthResponse } from '../types';
 
 export async function register(dto: RegisterDTO): Promise<AuthResponse> {
@@ -26,7 +27,7 @@ export async function register(dto: RegisterDTO): Promise<AuthResponse> {
   return { user, token, refreshToken };
 }
 
-export async function login(dto: LoginDTO): Promise<AuthResponse> {
+export async function login(dto: LoginDTO): Promise<AuthResponse | MfaChallengeResponse> {
   const user = await authModel.findUserByEmail(dto.email);
   if (!user) {
     throw new Error('Invalid email or password');
@@ -41,6 +42,9 @@ export async function login(dto: LoginDTO): Promise<AuthResponse> {
     throw new Error('Invalid email or password');
   }
 
+  const challenge = await challengeIfEnabled(user);
+  if (challenge) return challenge;
+
   const token = await createSession(user.id, user.email);
   const { token: refreshToken } = await signRefreshToken(user.id, user.email);
 
@@ -51,12 +55,14 @@ export async function login(dto: LoginDTO): Promise<AuthResponse> {
   };
 }
 
-export async function googleAuth(idToken: string): Promise<AuthResponse> {
+export async function googleAuth(idToken: string): Promise<AuthResponse | MfaChallengeResponse> {
   const googleUser = await verifyGoogleToken(idToken);
 
   // Check if user already exists by Google ID
   let user = await authModel.findUserByGoogleId(googleUser.googleId);
   if (user) {
+    const challenge = await challengeIfEnabled(user);
+    if (challenge) return challenge;
     const token = await createSession(user.id, user.email);
     const { token: refreshToken } = await signRefreshToken(user.id, user.email);
     return { user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar }, token, refreshToken };
@@ -66,6 +72,8 @@ export async function googleAuth(idToken: string): Promise<AuthResponse> {
   const existingUser = await authModel.findUserByEmail(googleUser.email);
   if (existingUser) {
     const linked = await authModel.linkGoogleAccount(googleUser.email, googleUser.googleId, googleUser.avatar);
+    const challenge = await challengeIfEnabled(linked);
+    if (challenge) return challenge;
     const token = await createSession(linked.id, linked.email);
     const { token: refreshToken } = await signRefreshToken(linked.id, linked.email);
     return { user: { id: linked.id, name: linked.name, email: linked.email, avatar: linked.avatar }, token, refreshToken };

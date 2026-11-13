@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useLoginMutation } from '@/store/api';
+import { isMfaChallenge, useLoginMutation } from '@/store/api';
 import GoogleSignInButton from './GoogleSignInButton';
+import MfaChallengeForm from './MfaChallengeForm';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginForm() {
@@ -19,17 +20,45 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [login, { isLoading }] = useLoginMutation();
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+
+  // Google sign-in for an account with MFA lands here with the challenge in the URL fragment.
+  useEffect(() => {
+    const readHash = () => {
+      const token = new URLSearchParams(window.location.hash.slice(1)).get('mfaToken');
+      if (!token) return;
+      setMfaToken(token);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    };
+    readHash();
+    window.addEventListener('hashchange', readHash);
+    return () => window.removeEventListener('hashchange', readHash);
+  }, []);
+
+  const finishSignIn = () => {
+    toast.success('Logged in successfully!');
+    // Same-site paths only: `?redirect=//evil.com` must not bounce a fresh session off-site.
+    window.location.href = redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : '/dashboard';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login({ email, password }).unwrap();
-      toast.success('Logged in successfully!');
-      window.location.href = redirect || '/dashboard';
+      const result = await login({ email, password }).unwrap();
+      if (isMfaChallenge(result)) {
+        setMfaToken(result.mfaToken);
+        setPassword('');
+        return;
+      }
+      finishSignIn();
     } catch (error: any) {
       toast.error(error?.data?.message || error?.message || 'Invalid credentials');
     }
   };
+
+  if (mfaToken) {
+    return <MfaChallengeForm mfaToken={mfaToken} onSignedIn={finishSignIn} onRestart={() => setMfaToken(null)} />;
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full">

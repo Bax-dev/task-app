@@ -46,6 +46,28 @@ export const googleAuthSchema = z.object({
   idToken: z.string().min(1, 'Google ID token is required'),
 });
 
+export const mfaPasswordSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+});
+
+export const mfaEnableSchema = z.object({
+  code: z.string().min(6, 'Enter the 6-digit code').max(10),
+});
+
+/** `code` is an authenticator code or a recovery code. */
+export const mfaReauthSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+  code: z.string().min(6, 'Enter a code').max(20),
+});
+
+export const mfaVerifySchema = z
+  .object({
+    mfaToken: z.string().min(1).max(200),
+    code: z.string().max(10).optional(),
+    recoveryCode: z.string().max(20).optional(),
+  })
+  .refine((v) => !!v.code !== !!v.recoveryCode, 'Enter the code from your authenticator app or a recovery code');
+
 export type GoogleAuthDTO = z.infer<typeof googleAuthSchema>;
 export type RegisterDTO = z.infer<typeof registerSchema>;
 export type LoginDTO = z.infer<typeof loginSchema>;

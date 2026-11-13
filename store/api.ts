@@ -87,7 +87,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
     // Login/register failures are expected credential errors. Refresh must also
     // be excluded to prevent a recursive refresh loop. `/auth/me` is deliberately
     // included: it is the auth bootstrap request and must recover an expired access token.
-    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register') {
+    if (url === '/auth/refresh' || url === '/auth/login' || url === '/auth/register' || url === '/auth/mfa/verify') {
       return normalizeError(result);
     }
 
@@ -129,11 +129,19 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   return normalizeError(result);
 };
 
+// Two-step verification: a correct password for an account with MFA returns a challenge instead of a session.
+export type MfaChallenge = { mfaRequired: true; mfaToken: string; methods: ('totp' | 'recovery_code')[]; expiresAt: string };
+export const isMfaChallenge = (v: unknown): v is MfaChallenge => (v as MfaChallenge)?.mfaRequired === true;
+export type MfaStatus = { enabled: boolean; pendingSetup: boolean; confirmedAt: string | null; recoveryCodesRemaining: number; methods: string[] };
+export type MfaSetup = { secret: string; otpauthUrl: string; digits: number; period: number };
+export type MfaRecoveryCodes = MfaStatus & { recoveryCodes: string[] };
+
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery,
   tagTypes: [
     'Auth',
+    'Mfa',
     'Organizations',
     'Members',
     'Projects',
@@ -167,9 +175,36 @@ export const apiSlice = createApi({
       query: () => '/auth/me',
       providesTags: ['Auth'],
     }),
-    login: builder.mutation<{ user: User }, { email: string; password: string }>({
+    login: builder.mutation<{ user: User } | MfaChallenge, { email: string; password: string }>({
       query: (body) => ({ url: '/auth/login', method: 'POST', body }),
       invalidatesTags: ['Auth'],
+    }),
+    verifyMfa: builder.mutation<
+      { user: User; recoveryCodesRemaining: number },
+      { mfaToken: string; code?: string; recoveryCode?: string }
+    >({
+      query: (body) => ({ url: '/auth/mfa/verify', method: 'POST', body }),
+      invalidatesTags: ['Auth'],
+    }),
+    getMfaStatus: builder.query<MfaStatus, void>({
+      query: () => '/auth/mfa',
+      providesTags: ['Mfa'],
+    }),
+    setupMfa: builder.mutation<MfaSetup, { password: string }>({
+      query: (body) => ({ url: '/auth/mfa/setup', method: 'POST', body }),
+      invalidatesTags: ['Mfa'],
+    }),
+    enableMfa: builder.mutation<MfaRecoveryCodes, { code: string }>({
+      query: (body) => ({ url: '/auth/mfa/enable', method: 'POST', body }),
+      invalidatesTags: ['Mfa'],
+    }),
+    disableMfa: builder.mutation<MfaStatus, { password: string; code: string }>({
+      query: (body) => ({ url: '/auth/mfa/disable', method: 'POST', body }),
+      invalidatesTags: ['Mfa'],
+    }),
+    regenerateMfaRecoveryCodes: builder.mutation<MfaRecoveryCodes, { password: string; code: string }>({
+      query: (body) => ({ url: '/auth/mfa/recovery-codes', method: 'POST', body }),
+      invalidatesTags: ['Mfa'],
     }),
     register: builder.mutation<{ user: User }, { name: string; email: string; password: string }>({
       query: (body) => ({ url: '/auth/register', method: 'POST', body }),
@@ -1030,6 +1065,12 @@ export const {
   // Auth
   useGetMeQuery,
   useLoginMutation,
+  useVerifyMfaMutation,
+  useGetMfaStatusQuery,
+  useSetupMfaMutation,
+  useEnableMfaMutation,
+  useDisableMfaMutation,
+  useRegenerateMfaRecoveryCodesMutation,
   useRegisterMutation,
   useLogoutMutation,
   useRefreshTokenMutation,

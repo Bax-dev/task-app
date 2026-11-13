@@ -344,3 +344,15 @@ export function buildInviteEmail(orgName: string, inviteUrl: string): { subject:
     }),
   };
 }
+
+export function buildMfaChangedEmail(enabled: boolean): { subject: string; html: string } {
+  const state = enabled ? 'turned on' : 'turned off';
+  const body = `
+    ${paragraph(`Two-step verification was <strong>${state}</strong> for your ${EMAIL_BRAND.name} account.`)}
+    ${paragraph('If this wasn\'t you, reset your password right away and contact support.', true)}
+  `;
+  return {
+    subject: `Two-step verification ${state}`,
+    html: emailShell({ title: `Two-step verification ${state}`, preheader: `Two-step verification was ${state}.`, body }),
+  };
+}
