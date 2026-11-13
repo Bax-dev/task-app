@@ -31,6 +31,13 @@ export const assignTaskSchema = z.object({
   'Provide either userId or userIds'
 );
 
+export const moveTaskSchema = z.object({
+  boardColumnId: z.string().uuid('Invalid column ID').optional().nullable(),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE', 'REJECTED', 'CANCELLED']).optional(),
+  position: z.number().finite(),
+});
+
+export type MoveTaskDTO = z.infer<typeof moveTaskSchema>;
 export type CreateTaskDTO = z.infer<typeof createTaskSchema>;
 export type UpdateTaskDTO = z.infer<typeof updateTaskSchema>;
 export type AssignTaskDTO = z.infer<typeof assignTaskSchema>;

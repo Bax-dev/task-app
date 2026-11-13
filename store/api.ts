@@ -490,6 +490,36 @@ export const apiSlice = createApi({
           ? [{ type: 'Tasks', id: result.id }, { type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: `project-${result.projectId}` }]
           : [{ type: 'Tasks', id: 'LIST' }],
     }),
+    moveTask: builder.mutation<Task, { id: string; position: number; boardColumnId?: string | null; status?: string }>({
+      query: ({ id, ...body }) => ({ url: `/tasks/${id}/move`, method: 'PATCH', body }),
+      async onQueryStarted({ id, position, boardColumnId, status }, { dispatch, getState, queryFulfilled }) {
+        const state = getState() as any;
+        const queries = Object.values(state.api?.queries ?? {}).filter(
+          (query: any) => query?.endpointName === 'getProjectTasks' && query?.originalArgs !== undefined
+        ) as any[];
+        const patchResults = queries.map((query) =>
+          dispatch(
+            apiSlice.util.updateQueryData('getProjectTasks', query.originalArgs, (draft) => {
+              const task = draft.find((item) => item.id === id);
+              if (!task) return;
+              task.boardPosition = position;
+              if (boardColumnId !== undefined) task.boardColumnId = boardColumnId;
+              if (status !== undefined) task.status = status;
+            })
+          )
+        );
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResults.forEach((result) => result.undo());
+        }
+      },
+      invalidatesTags: (result) =>
+        result
+          ? [{ type: 'Tasks', id: result.id }, { type: 'Tasks', id: 'LIST' }, { type: 'Tasks', id: `project-${result.projectId}` }]
+          : [{ type: 'Tasks', id: 'LIST' }],
+    }),
     deleteTask: builder.mutation<void, string>({
       query: (id) => ({ url: `/tasks/${id}`, method: 'DELETE' }),
       invalidatesTags: [{ type: 'Tasks', id: 'LIST' }, 'Projects'],
@@ -1113,6 +1143,7 @@ export const {
   useGetTaskQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
+  useMoveTaskMutation,
   useDeleteTaskMutation,
   useToggleAssignmentMutation,
   useBulkAssignTaskMembersMutation,

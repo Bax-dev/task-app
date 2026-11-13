@@ -13,7 +13,8 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
-import { useUpdateTaskMutation } from '@/store/api';
+import { useMoveTaskMutation } from '@/store/api';
+import { computeBoardPosition, sortByBoardPosition } from '@/lib/board-position';
 import TaskCard from '@/components/tasks/board/TaskCard';
 import TaskColumn from '@/components/tasks/board/TaskColumn';
 
@@ -24,6 +25,7 @@ interface Task {
   status: string;
   priority: string;
   dueDate: string | null;
+  boardPosition?: number | null;
   assignments?: { user: { id: string; name: string | null; email: string } }[];
   project?: { space?: { organization?: { slug: string } } };
 }
@@ -42,7 +44,7 @@ const columns = [
 
 function buildBoardState(tasksByStatus: Record<string, Task[]>) {
   return columns.reduce<Record<string, Task[]>>((acc, column) => {
-    acc[column.key] = tasksByStatus[column.key] || [];
+    acc[column.key] = sortByBoardPosition(tasksByStatus[column.key] || []);
     return acc;
   }, {});
 }
@@ -54,7 +56,7 @@ export default function TaskBoard({ projectId, tasksByStatus }: TaskBoardProps) 
   );
   const [boardState, setBoardState] = useState<Record<string, Task[]>>(buildBoardState(tasksByStatus));
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [updateTask] = useUpdateTaskMutation();
+  const [moveTask] = useMoveTaskMutation();
 
   useEffect(() => {
     setBoardState(buildBoardState(tasksByStatus));
@@ -68,23 +70,6 @@ export default function TaskBoard({ projectId, tasksByStatus }: TaskBoardProps) 
     return map;
   }, [boardState]);
 
-  function moveTask(taskId: string, fromColumn: string, toColumn: string) {
-    if (fromColumn === toColumn) return;
-
-    setBoardState((prev) => {
-      const sourceTasks = prev[fromColumn] || [];
-      const targetTasks = prev[toColumn] || [];
-      const task = sourceTasks.find((item) => item.id === taskId);
-      if (!task) return prev;
-
-      return {
-        ...prev,
-        [fromColumn]: sourceTasks.filter((item) => item.id !== taskId),
-        [toColumn]: [{ ...task, status: toColumn }, ...targetTasks],
-      };
-    });
-  }
-
   function handleDragStart(event: DragStartEvent) {
     const taskId = String(event.active.id);
     setActiveTask(taskLookup.get(taskId)?.task || null);
@@ -95,20 +80,41 @@ export default function TaskBoard({ projectId, tasksByStatus }: TaskBoardProps) 
     const overId = event.over?.id ? String(event.over.id) : null;
     setActiveTask(null);
 
-    if (!overId) return;
+    if (!overId || overId === taskId) return;
 
     const current = taskLookup.get(taskId);
     if (!current) return;
 
-    const targetColumn = columns.some((column) => column.key === overId) ? overId : current.columnKey;
-    if (targetColumn === current.columnKey) return;
+    // Dropped on a column -> append; dropped on a card -> take that card's slot.
+    const overTask = taskLookup.get(overId);
+    const targetColumn = overTask ? overTask.columnKey : overId;
+    if (!columns.some((column) => column.key === targetColumn)) return;
 
-    moveTask(taskId, current.columnKey, targetColumn);
+    const sourceList = boardState[current.columnKey] || [];
+    const targetList = (boardState[targetColumn] || []).filter((item) => item.id !== taskId);
+    let index = targetList.length;
+    if (overTask) {
+      index = targetList.findIndex((item) => item.id === overId);
+      // Moving down within a column lands after the card it was dropped on.
+      const sameColumn = targetColumn === current.columnKey;
+      if (sameColumn && sourceList.findIndex((item) => item.id === taskId) < sourceList.findIndex((item) => item.id === overId)) index += 1;
+    }
+
+    const position = computeBoardPosition(targetList.map((item) => item.boardPosition), index);
+    const statusChanged = targetColumn !== current.columnKey;
+    const previous = boardState;
+    const nextTarget = [...targetList];
+    nextTarget.splice(index, 0, { ...current.task, status: targetColumn, boardPosition: position });
+    setBoardState({
+      ...boardState,
+      ...(statusChanged && { [current.columnKey]: sourceList.filter((item) => item.id !== taskId) }),
+      [targetColumn]: nextTarget,
+    });
 
     try {
-      await updateTask({ id: taskId, status: targetColumn }).unwrap();
+      await moveTask({ id: taskId, position, ...(statusChanged && { status: targetColumn }) }).unwrap();
     } catch (error: any) {
-      moveTask(taskId, targetColumn, current.columnKey);
+      setBoardState(previous);
       toast.error(error?.data?.message || error?.message || 'Failed to move task');
     }
   }
