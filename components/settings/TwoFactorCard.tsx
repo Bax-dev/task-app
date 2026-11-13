@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { ShieldCheck, Copy, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -115,8 +116,15 @@ function ConfirmSetup({ setup, onEnabled, onCancel }: { setup: MfaSetup; onEnabl
     <form onSubmit={submit} className="space-y-4">
       <ol className="list-decimal space-y-3 pl-5 text-sm">
         <li>
-          In your authenticator app (Google Authenticator, 1Password, Authy…), add an account with this setup key,
-          or <a href={setup.otpauthUrl} className="text-primary hover:underline">open it in your authenticator</a> on this device:
+          Scan this QR code with your authenticator app (Google Authenticator, 1Password, Authy…):
+          {/* white bg + margin so it scans in dark mode */}
+          <div className="mt-2 w-fit rounded bg-white p-2">
+            <QRCodeSVG value={setup.otpauthUrl} size={176} marginSize={1} title="Authenticator setup QR code" />
+          </div>
+          <p className="mt-3">
+            Can&apos;t scan? Enter this setup key, or{' '}
+            <a href={setup.otpauthUrl} className="text-primary hover:underline">open it in your authenticator</a> on this device:
+          </p>
           <div className="mt-2 flex items-center gap-2">
             <code className="rounded bg-muted px-2 py-1 font-mono text-sm tracking-wider">{grouped}</code>
             <Button type="button" size="icon" variant="ghost" aria-label="Copy setup key"
