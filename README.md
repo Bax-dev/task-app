@@ -57,7 +57,7 @@ AWS_* / BEDROCK_*             # AI features (suggest task, subtasks, chat)
 | `yarn dev` | Start the dev server |
 | `yarn build` | Production build |
 | `yarn start` | Run the production build |
-| `yarn lint` | ESLint |
+| `yarn typecheck` | TypeScript type check |
 | `yarn test` | Run Vitest tests |
 | `yarn db:migrate` | Apply Prisma migrations |
 | `yarn db:generate` | Regenerate Prisma client |

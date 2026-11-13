@@ -81,7 +81,7 @@ Each module contains:
 ### Frontend
 
 ```
-/hooks           - React Query hooks (use-auth, use-organizations, etc.)
+/hooks           - React hooks (use-auth, use-sse); data fetching lives in store/api.ts (RTK Query)
 /stores          - Zustand stores (auth-store, org-store)
 /components      - UI components (auth, layout, tasks, organizations)
 ```
